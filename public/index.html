@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brumexa-Edge</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── Header ──────────────────────────────────────────────────────────────── -->
+  <header>
+    <div class="header-top">
+      <h1>Brumexa-Edge</h1>
+      <span class="badge-mode" id="badge-mode">LiveKit</span>
+    </div>
+    <p>Dashboard de voz · LiveKit / Web API / Test Mic</p>
+  </header>
+
+  <!-- ── Panel de alertas (toasts) ───────────────────────────────────────────── -->
+  <div id="alerts-area"></div>
+
+  <!-- ── Grilla de estado: Dispositivo · LiveKit · Micrófono ──────────────── -->
+  <div class="status-grid">
+
+    <div class="status-mini">
+      <div class="sm-header">
+        <span class="sm-icon" id="sm-device-icon">🖥</span>
+        <span class="sm-label">Dispositivo</span>
+        <span class="sm-dot idle" id="sm-device-dot"></span>
+      </div>
+      <div class="sm-value" id="sm-device-val">Detectando…</div>
+      <div class="sm-sub"  id="sm-device-sub"></div>
+    </div>
+
+    <div class="status-mini">
+      <div class="sm-header">
+        <span class="sm-icon">⚡</span>
+        <span class="sm-label">LiveKit</span>
+        <span class="sm-dot idle" id="sm-lk-dot"></span>
+      </div>
+      <div class="sm-value" id="sm-lk-val">Desconectado</div>
+      <div class="sm-sub"  id="sm-lk-sub">sin sala</div>
+    </div>
+
+    <div class="status-mini">
+      <div class="sm-header">
+        <span class="sm-icon">🎙</span>
+        <span class="sm-label">Micrófono</span>
+        <span class="sm-dot idle" id="sm-mic-dot"></span>
+      </div>
+      <div class="sm-value" id="sm-mic-val">Inactivo</div>
+      <div class="sm-sub"  id="sm-mic-sub">—</div>
+    </div>
+
+  </div>
+
+  <!-- ── Pasos del proceso LiveKit ────────────────────────────────────────────── -->
+  <div class="card" id="lk-steps-card">
+    <p class="card-title">Proceso LiveKit</p>
+    <div class="steps-row">
+
+      <div class="step" id="step-token">
+        <div class="step-circle idle" id="step-token-circle">1</div>
+        <div class="step-label">Token</div>
+        <div class="step-status" id="step-token-msg">—</div>
+      </div>
+
+      <div class="step-connector" id="conn-1"></div>
+
+      <div class="step" id="step-connect">
+        <div class="step-circle idle" id="step-connect-circle">2</div>
+        <div class="step-label">Conectar</div>
+        <div class="step-status" id="step-connect-msg">—</div>
+      </div>
+
+      <div class="step-connector" id="conn-2"></div>
+
+      <div class="step" id="step-publish">
+        <div class="step-circle idle" id="step-publish-circle">3</div>
+        <div class="step-label">Publicar</div>
+        <div class="step-status" id="step-publish-msg">—</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Controles ────────────────────────────────────────────────────────────── -->
+  <div class="card">
+    <p class="card-title">Configuración</p>
+    <div class="controls">
+
+      <div>
+        <p class="ctrl-label">Modo de operación</p>
+        <div class="mode-selector">
+          <button class="mode-btn active" data-mode="livekit">LiveKit</button>
+          <button class="mode-btn"        data-mode="mictest">Test Mic</button>
+        </div>
+      </div>
+
+      <button id="btn-mic">Iniciar micrófono</button>
+
+    </div>
+  </div>
+
+  <!-- ── VU Meter (Test Mic / LiveKit activo) ──────────────────────────────────── -->
+  <div class="card" id="vumeter-card" style="display:none">
+    <p class="card-title">Nivel de micrófono</p>
+    <canvas id="vu-canvas" width="440" height="70"></canvas>
+    <div id="vu-bar-wrap">
+      <div id="vu-bar"></div>
+      <span id="vu-db">— dB</span>
+    </div>
+    <p class="vu-hint">Hablá para ver el nivel.</p>
+  </div>
+
+  <!-- ── Log de eventos ────────────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="log-header">
+      <p class="card-title" style="margin:0">Log de eventos</p>
+      <button class="btn-sm" id="btn-clear-log">Limpiar</button>
+    </div>
+    <ul id="log"></ul>
+  </div>
+
+  <footer>Brumexa-Edge · Node.js + Express · LiveKit</footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+  <script src="app.js"></script>
+
+</body>
+</html>
