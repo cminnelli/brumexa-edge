@@ -26,8 +26,6 @@ const ui = {
   modeBtns:  document.querySelectorAll('.mode-btn'),
   badgeMode: document.getElementById('badge-mode'),
   log:       document.getElementById('log'),
-  alertsArea:document.getElementById('alerts-area'),
-
   // Status mini
   smDeviceIcon: document.getElementById('sm-device-icon'),
   smDeviceVal:  document.getElementById('sm-device-val'),
@@ -70,27 +68,6 @@ function deviceLabel(platform, arch) {
   if (platform === 'win32')           return { name: 'Windows',       icon: '💻' };
   if (platform === 'darwin')          return { name: 'macOS',         icon: '🍎' };
   return { name: platform || 'Dispositivo', icon: '🖥' };
-}
-
-// ============================================================
-// TOAST ALERTS
-// ============================================================
-let _toastId = 0;
-function showAlert(msg, type = 'info', duration = 4000) {
-  const id = ++_toastId;
-  const el = document.createElement('div');
-  el.className = `toast toast-${type}`;
-  el.id = `toast-${id}`;
-
-  const icons = { info: 'ℹ️', success: '✅', warn: '⚠️', error: '❌' };
-  el.innerHTML = `<span class="toast-icon">${icons[type] || 'ℹ️'}</span><span class="toast-msg">${msg}</span><button class="toast-close" onclick="this.parentElement.remove()">×</button>`;
-
-  ui.alertsArea.prepend(el);
-
-  if (duration > 0) {
-    setTimeout(() => el.remove(), duration);
-  }
-  return id;
 }
 
 // ============================================================
@@ -162,7 +139,6 @@ async function checkLiveKitHealth() {
     } else {
       setLiveKitStatus('error', h.reason || 'sin respuesta');
       log(`LiveKit no responde: ${h.reason || ''}`, 'warn');
-      showAlert('LiveKit no responde — verificá LIVEKIT_URL', 'warn', 6000);
     }
   } catch {
     setLiveKitStatus('error', 'error de red');
@@ -188,8 +164,7 @@ function setMicStatus(status, sub = '') {
 const LiveKitModule = {
 
   async fetchToken() {
-    const identity = `client-${Date.now()}`;
-    const res = await fetch(`/token?identity=${identity}`);
+    const res = await fetch('/token');
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
     return res.json();
   },
@@ -203,7 +178,7 @@ const LiveKitModule = {
 
   async start() {
     resetSteps();
-    log('Solicitando token al servidor…');
+    log('Solicitando token al servidor central…');
     setLiveKitStatus('connecting');
     setStep('token', 'loading', 'obteniendo…');
 
@@ -212,18 +187,21 @@ const LiveKitModule = {
     try {
       [tokenData, serverUrl] = await Promise.all([
         this.fetchToken(),
-        this.fetchServerUrl(),
+        this.fetchServerUrl(),   // fallback si el servidor central no devuelve url
       ]);
     } catch (err) {
       setStep('token', 'error', 'falló');
       setLiveKitStatus('error', 'error de conexión');
-      showAlert('No se pudo obtener el token. Revisá el .env del servidor.', 'error', 0);
+      log('No se pudo obtener el token — revisá TOKEN_API_URL en .env', 'error');
       throw err;
     }
 
+    // Usar la URL de LiveKit que devuelve el servidor central si está disponible
+    const livekitUrl = tokenData.livekitUrl || serverUrl;
+    log(`Token OK · room: ${tokenData.room} · identity: ${tokenData.identity} · expira: ${tokenData.expiresIn || '?'}`, 'success');
+
     setStep('token', 'ok', tokenData.room);
     activateConnector(1);
-    log(`Token OK · sala: "${tokenData.room}"`);
 
     setStep('connect', 'loading', 'conectando…');
 
@@ -237,21 +215,54 @@ const LiveKitModule = {
       setStep('connect', 'ok', tokenData.room);
       activateConnector(2);
       setLiveKitStatus('connected', `sala: ${tokenData.room}`);
-      showAlert(`Conectado a sala "${tokenData.room}"`, 'success');
     });
 
     room.on(LivekitClient.RoomEvent.Disconnected, (reason) => {
-      log(`Desconectado: ${reason || 'sin razón'}`, 'warn');
-      checkLiveKitHealth();   // vuelve a verificar si el server sigue en línea
+      const why = disconnectReasons[reason] || reason || 'sin razón';
+      log(`Desconectado de LiveKit: ${why}`, 'warn');
+      setLiveKitStatus('idle');
+      checkLiveKitHealth();
       resetSteps();
-      showAlert(`Desconectado de LiveKit${reason ? ': ' + reason : ''}`, 'warn');
       this._resetState();
     });
 
+    room.on(LivekitClient.RoomEvent.Reconnecting, () => {
+      log('LiveKit: reconectando…', 'warn');
+      setLiveKitStatus('connecting', `sala: ${tokenData.room}`);
+      setStep('connect', 'loading', 'reconectando…');
+    });
+
+    room.on(LivekitClient.RoomEvent.Reconnected, () => {
+      log('LiveKit: reconectado', 'success');
+      setLiveKitStatus('recording', `sala: ${tokenData.room}`);
+      setStep('connect', 'ok', tokenData.room);
+    });
+
+    const disconnectReasons = {
+      0: 'desconocido', 1: 'cliente lo cerró', 2: 'identidad duplicada',
+      3: 'servidor apagado', 4: 'participante removido', 5: 'sala eliminada',
+      6: 'estado inconsistente', 7: 'fallo al unirse',
+    };
+
+    room.on(LivekitClient.RoomEvent.ConnectionStateChanged, (s) => {
+      log(`Conexión: ${s}`, 'info');
+    });
+
+    room.on(LivekitClient.RoomEvent.ConnectionQualityChanged, (quality, participant) => {
+      if (participant.isLocal) log(`Calidad de conexión: ${quality}`, 'info');
+    });
+
+    room.on(LivekitClient.RoomEvent.LocalTrackPublished, (pub) => {
+      log(`Track local publicado — kind: ${pub.kind} · muted: ${pub.isMuted}`, 'info');
+    });
+
+    room.on(LivekitClient.RoomEvent.LocalTrackUnpublished, (pub) => {
+      log(`Track local removido — kind: ${pub.kind}`, 'warn');
+    });
+
     room.on(LivekitClient.RoomEvent.MediaDevicesError, (err) => {
-      log(`Error de dispositivo: ${err.message}`, 'error');
+      log(`Error de micrófono: ${err.message}`, 'error');
       setMicStatus('error', err.message);
-      showAlert('Error de micrófono: ' + err.message, 'error', 0);
     });
 
     room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, _pub, participant) => {
@@ -267,12 +278,14 @@ const LiveKitModule = {
       track.detach();
     });
 
+    log(`Conectando a: ${livekitUrl}`, 'info');
+
     try {
-      await room.connect(serverUrl, tokenData.token);
+      await room.connect(livekitUrl, tokenData.token);
     } catch (err) {
       setStep('connect', 'error', 'falló');
       setLiveKitStatus('error', 'error de conexión');
-      showAlert('No se pudo conectar a LiveKit. Verificá la URL y credenciales.', 'error', 0);
+      log(`Error al conectar: ${err.message}`, 'error');
       throw err;
     }
 
@@ -292,7 +305,6 @@ const LiveKitModule = {
     } catch (err) {
       setStep('publish', 'error', 'falló');
       setMicStatus('error', 'sin permiso');
-      showAlert('No se pudo publicar el micrófono: ' + err.message, 'error', 0);
       throw err;
     }
 
@@ -300,7 +312,6 @@ const LiveKitModule = {
     setMicStatus('active', 'LiveKit');
     setLiveKitStatus('recording', `sala: ${tokenData.room}`);
     log('Micrófono publicado en la sala', 'success');
-    showAlert('Micrófono activo en LiveKit', 'success');
 
     state.room       = room;
     state.localTrack = localTrack;
@@ -319,8 +330,7 @@ const LiveKitModule = {
     setMicStatus('idle');
     resetSteps();
     log('Desconectado de LiveKit', 'warn');
-    showAlert('Desconectado de LiveKit', 'warn');
-    checkLiveKitHealth();   // vuelve a mostrar "En línea" si el server sigue up
+    checkLiveKitHealth();
   },
 
   _resetState() {
@@ -357,7 +367,6 @@ const MicTestModule = {
 
     log('Micrófono capturado. Hablá para ver el nivel.', 'success');
     setMicStatus('active', 'Test directo');
-    showAlert('Test de micrófono activo — sin servidor, sin internet', 'success');
     ui.vumeterCard.style.display = 'block';
 
     this._renderLoop();
@@ -535,13 +544,10 @@ function formatError(err) {
   if (!navigator.mediaDevices?.getUserMedia) {
     log('getUserMedia no soportado. Usá un navegador moderno (HTTPS o localhost).', 'error');
     ui.btnMic.disabled = true;
-    showAlert('Navegador no soportado — getUserMedia no disponible', 'error', 0);
     return;
   }
 
   // ─── Obtener config del servidor ──────────────────────────────────────────
-  // El servidor corre en el mismo dispositivo (Raspberry / PC),
-  // así que su info de plataforma es la fuente correcta.
   try {
     const cfg = await fetch('/config').then((r) => r.json());
 
@@ -554,21 +560,19 @@ function formatError(err) {
     }
 
     if (!cfg.livekitUrl) {
-      log('LiveKit no configurado (LIVEKIT_URL faltante)', 'warn');
-      showAlert('LIVEKIT_URL no configurado en el .env', 'warn', 0);
+      log('LIVEKIT_URL no configurado en .env', 'warn');
     } else {
       ui.smLkSub.textContent = cfg.livekitUrl.replace('wss://', '');
     }
 
-    if (!cfg.apiKeyConfigured || !cfg.apiSecretConfigured) {
-      showAlert('API Key o Secret no configurados en el .env', 'error', 0);
+    if (!cfg.tokenApiConfigured) {
+      log('TOKEN_API_URL no configurado en .env', 'warn');
     }
 
   } catch {
-    log('No se pudo contactar al servidor en /config', 'warn');
+    log('No se pudo contactar al servidor Express en /config', 'warn');
     ui.smDeviceVal.textContent = 'Sin respuesta';
     ui.smDeviceDot.className   = 'sm-dot error';
-    showAlert('No se pudo contactar al servidor Express', 'error');
   }
 
   // ─── Nombre del micrófono (si ya hay permiso previo) ─────────────────────

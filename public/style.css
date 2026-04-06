@@ -126,44 +126,6 @@ header p  { color: var(--muted); font-size: 0.85rem; }
   margin-bottom: 1rem;
 }
 
-/* ── Alertas toast ───────────────────────────────────────────────────────── */
-#alerts-area {
-  width: 100%;
-  max-width: 600px;
-  margin-bottom: 0.6rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.toast {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.65rem 0.9rem;
-  border-radius: var(--radius-sm);
-  font-size: 0.82rem;
-  border: 1px solid transparent;
-  animation: slideIn 0.2s ease;
-}
-@keyframes slideIn {
-  from { opacity: 0; transform: translateY(-6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.toast-info    { background: rgba(91,154,240,0.12); border-color: rgba(91,154,240,0.3); color: #8ab6f5; }
-.toast-success { background: rgba(61,186,118,0.12); border-color: rgba(61,186,118,0.3); color: #5dd89a; }
-.toast-warn    { background: rgba(224,160,50,0.12); border-color: rgba(224,160,50,0.3); color: #e0a032; }
-.toast-error   { background: rgba(224,85,85,0.14);  border-color: rgba(224,85,85,0.35); color: #e87070; }
-
-.toast-icon  { font-size: 0.9rem; flex-shrink: 0; }
-.toast-msg   { flex: 1; }
-.toast-close {
-  background: none; border: none; cursor: pointer;
-  color: inherit; opacity: 0.6; font-size: 1rem; padding: 0 0.2rem;
-  flex-shrink: 0;
-}
-.toast-close:hover { opacity: 1; }
-
 /* ── Pasos LiveKit ───────────────────────────────────────────────────────── */
 .steps-row {
   display: flex;
