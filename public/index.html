@@ -14,7 +14,7 @@
       <h1>Brumexa-Edge</h1>
       <span class="badge-mode" id="badge-mode">LiveKit</span>
     </div>
-    <p>Dashboard de voz · LiveKit / Web API / Test Mic</p>
+    <p>Dashboard de voz · LiveKit / Test Mic</p>
   </header>
 
   <!-- ── Grilla de estado: Dispositivo · LiveKit · Micrófono ──────────────── -->
@@ -32,12 +32,22 @@
 
     <div class="status-mini">
       <div class="sm-header">
-        <span class="sm-icon">⚡</span>
+        <span class="sm-icon">☁️</span>
         <span class="sm-label">LiveKit</span>
         <span class="sm-dot idle" id="sm-lk-dot"></span>
       </div>
-      <div class="sm-value" id="sm-lk-val">Desconectado</div>
-      <div class="sm-sub"  id="sm-lk-sub">sin sala</div>
+      <div class="sm-value" id="sm-lk-val">Verificando…</div>
+      <div class="sm-sub"  id="sm-lk-sub">—</div>
+    </div>
+
+    <div class="status-mini" id="sm-canal-card">
+      <div class="sm-header">
+        <span class="sm-icon">📡</span>
+        <span class="sm-label">Canal</span>
+        <span class="sm-dot idle" id="sm-canal-dot"></span>
+      </div>
+      <div class="sm-value" id="sm-canal-val">Cerrado</div>
+      <div class="sm-sub"  id="sm-canal-sub">sin sala</div>
     </div>
 
     <div class="status-mini">
@@ -52,12 +62,20 @@
 
   </div>
 
-  <!-- ── Pasos del proceso LiveKit ────────────────────────────────────────────── -->
+  <!-- ── Pasos del proceso LiveKit ─────────────────────────────────────────── -->
   <div class="card" id="lk-steps-card">
-    <p class="card-title">Proceso LiveKit</p>
+    <div class="steps-card-header">
+      <p class="card-title" style="margin:0">Proceso LiveKit</p>
+      <div class="session-uptime" id="session-uptime" style="display:none">
+        <span class="uptime-dot"></span>
+        <span id="uptime-display">00:00:00</span>
+      </div>
+      <button class="btn-reconectar" id="btn-reconectar" style="display:none">Reconectar</button>
+    </div>
+
     <div class="steps-row">
 
-      <div class="step" id="step-token">
+      <div class="step">
         <div class="step-circle idle" id="step-token-circle">1</div>
         <div class="step-label">Token</div>
         <div class="step-status" id="step-token-msg">—</div>
@@ -65,7 +83,7 @@
 
       <div class="step-connector" id="conn-1"></div>
 
-      <div class="step" id="step-connect">
+      <div class="step">
         <div class="step-circle idle" id="step-connect-circle">2</div>
         <div class="step-label">Conectar</div>
         <div class="step-status" id="step-connect-msg">—</div>
@@ -73,16 +91,23 @@
 
       <div class="step-connector" id="conn-2"></div>
 
-      <div class="step" id="step-publish">
+      <div class="step">
         <div class="step-circle idle" id="step-publish-circle">3</div>
         <div class="step-label">Publicar</div>
         <div class="step-status" id="step-publish-msg">—</div>
       </div>
 
     </div>
+
+    <!-- Mini VU — solo visible cuando el mic está activo en LiveKit -->
+    <div id="mini-vu-wrap" style="display:none">
+      <div id="mini-vu-bar"></div>
+      <span id="mini-vu-db">— dB</span>
+    </div>
+
   </div>
 
-  <!-- ── Controles ────────────────────────────────────────────────────────────── -->
+  <!-- ── Controles ──────────────────────────────────────────────────────────── -->
   <div class="card">
     <p class="card-title">Configuración</p>
     <div class="controls">
@@ -100,7 +125,7 @@
     </div>
   </div>
 
-  <!-- ── VU Meter (Test Mic / LiveKit activo) ──────────────────────────────────── -->
+  <!-- ── VU Meter (Test Mic) ───────────────────────────────────────────────── -->
   <div class="card" id="vumeter-card" style="display:none">
     <p class="card-title">Nivel de micrófono</p>
     <canvas id="vu-canvas" width="440" height="70"></canvas>
@@ -111,7 +136,7 @@
     <p class="vu-hint">Hablá para ver el nivel.</p>
   </div>
 
-  <!-- ── Log de eventos ────────────────────────────────────────────────────────── -->
+  <!-- ── Log de eventos ────────────────────────────────────────────────────── -->
   <div class="card">
     <div class="log-header">
       <p class="card-title" style="margin:0">Log de eventos</p>

@@ -35,7 +35,7 @@ header {
   text-align: center;
   margin-bottom: 1.5rem;
   width: 100%;
-  max-width: 600px;
+  max-width: 760px;
 }
 .header-top {
   display: flex;
@@ -61,10 +61,10 @@ header p  { color: var(--muted); font-size: 0.85rem; }
 /* ── Grilla de estado (4 mini cards) ─────────────────────────────────────── */
 .status-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 0.6rem;
   width: 100%;
-  max-width: 600px;
+  max-width: 760px;
   margin-bottom: 0.8rem;
 }
 
@@ -72,8 +72,9 @@ header p  { color: var(--muted); font-size: 0.85rem; }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 0.75rem 0.8rem;
+  padding: 0.8rem 1rem;
   min-width: 0;
+  transition: border-color 0.18s ease, background 0.18s ease;
 }
 
 .sm-header {
@@ -85,8 +86,21 @@ header p  { color: var(--muted); font-size: 0.85rem; }
 
 .sm-icon   { font-size: 1rem; flex-shrink: 0; }
 .sm-label  { font-size: 0.65rem; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; }
-.sm-value  { font-size: 0.78rem; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sm-sub    { font-size: 0.68rem; color: var(--muted); margin-top: 0.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sm-value  { font-size: 0.82rem; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sm-sub    { font-size: 0.7rem; color: var(--muted); margin-top: 0.25rem; white-space: normal; word-break: break-all; line-height: 1.3; }
+
+/* ── Card de alerta (sin worker) ─────────────────────────────────────────── */
+.status-mini.no-worker {
+  border-color: var(--warn);
+  background: rgba(224, 160, 50, 0.07);
+}
+.status-mini.no-worker .sm-value {
+  color: var(--text);
+}
+.status-mini.no-worker .sm-sub {
+  color: var(--warn);
+  font-weight: 600;
+}
 
 /* ── Status dot ─────────────────────────────────────────────────────────── */
 .sm-dot, .status-dot {
@@ -96,6 +110,7 @@ header p  { color: var(--muted); font-size: 0.85rem; }
   background: var(--muted);
   transition: background var(--transition);
 }
+.sm-dot.available,  .status-dot.available  { background: var(--info); }
 .sm-dot.connected, .status-dot.connected { background: var(--success); }
 .sm-dot.recording,  .status-dot.recording  { background: var(--danger); animation: pulse 1s infinite; }
 .sm-dot.connecting, .status-dot.connecting { background: var(--warn); animation: pulse 0.8s infinite; }
@@ -114,7 +129,7 @@ header p  { color: var(--muted); font-size: 0.85rem; }
   border-radius: var(--radius);
   padding: 1.25rem 1.4rem;
   width: 100%;
-  max-width: 600px;
+  max-width: 760px;
   margin-bottom: 0.8rem;
 }
 .card-title {
@@ -124,6 +139,84 @@ header p  { color: var(--muted); font-size: 0.85rem; }
   text-transform: uppercase;
   color: var(--muted);
   margin-bottom: 1rem;
+}
+
+/* ── Header de la card de pasos ─────────────────────────────────────────── */
+.steps-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.session-uptime {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--success);
+  font-weight: 600;
+  margin-left: auto;
+}
+.uptime-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+  animation: pulse 1.5s infinite;
+}
+
+.btn-reconectar {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+.btn-reconectar:hover { background: var(--accent); color: #fff; }
+
+/* ── Mini VU meter (LiveKit activo) ──────────────────────────────────────── */
+#mini-vu-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.75rem;
+  position: relative;
+  overflow: hidden;
+}
+#mini-vu-wrap::before {
+  content: '';
+  position: absolute;
+  left: 0.75rem; right: 3.5rem;
+  height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+}
+#mini-vu-bar {
+  position: relative; z-index: 1;
+  height: 8px;
+  width: 0%;
+  border-radius: 4px;
+  background: var(--success);
+  transition: width 0.05s linear, background 0.1s;
+  flex: 1;
+  min-width: 0;
+}
+#mini-vu-db {
+  font-size: 0.7rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 3rem;
+  text-align: right;
+  flex-shrink: 0;
 }
 
 /* ── Pasos LiveKit ───────────────────────────────────────────────────────── */
@@ -389,7 +482,7 @@ footer {
 
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 520px) {
-  .status-grid { grid-template-columns: repeat(3, 1fr); }
+  .status-grid { grid-template-columns: repeat(2, 1fr); }
   .card { padding: 1rem 1rem; }
   .steps-row { gap: 0.3rem; }
   .step-connector { width: 16px; }

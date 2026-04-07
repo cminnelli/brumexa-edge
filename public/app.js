@@ -22,10 +22,12 @@ const state = {
 // REFERENCIAS DOM
 // ============================================================
 const ui = {
-  btnMic:    document.getElementById('btn-mic'),
-  modeBtns:  document.querySelectorAll('.mode-btn'),
-  badgeMode: document.getElementById('badge-mode'),
-  log:       document.getElementById('log'),
+  btnMic:        document.getElementById('btn-mic'),
+  btnReconectar: document.getElementById('btn-reconectar'),
+  modeBtns:      document.querySelectorAll('.mode-btn'),
+  badgeMode:     document.getElementById('badge-mode'),
+  log:           document.getElementById('log'),
+
   // Status mini
   smDeviceIcon: document.getElementById('sm-device-icon'),
   smDeviceVal:  document.getElementById('sm-device-val'),
@@ -37,6 +39,10 @@ const ui = {
   smMicVal:     document.getElementById('sm-mic-val'),
   smMicSub:     document.getElementById('sm-mic-sub'),
   smMicDot:     document.getElementById('sm-mic-dot'),
+  smCanalCard:  document.getElementById('sm-canal-card'),
+  smCanalDot:   document.getElementById('sm-canal-dot'),
+  smCanalVal:   document.getElementById('sm-canal-val'),
+  smCanalSub:   document.getElementById('sm-canal-sub'),
 
   // Steps LiveKit
   lkStepsCard:     document.getElementById('lk-steps-card'),
@@ -49,7 +55,16 @@ const ui = {
   conn1:           document.getElementById('conn-1'),
   conn2:           document.getElementById('conn-2'),
 
-  // Cards
+  // Session uptime
+  sessionUptime:  document.getElementById('session-uptime'),
+  uptimeDisplay:  document.getElementById('uptime-display'),
+
+  // Mini VU (LiveKit activo)
+  miniVuWrap: document.getElementById('mini-vu-wrap'),
+  miniVuBar:  document.getElementById('mini-vu-bar'),
+  miniVuDb:   document.getElementById('mini-vu-db'),
+
+  // VU Meter (Test Mic)
   vumeterCard: document.getElementById('vumeter-card'),
   vuCanvas:    document.getElementById('vu-canvas'),
   vuBar:       document.getElementById('vu-bar'),
@@ -85,7 +100,15 @@ function setStep(which, stepState, msg = '') {
   else if (stepState === 'error') circleEl.textContent = '✗';
   else circleEl.textContent = { token: '1', connect: '2', publish: '3' }[which];
 
-  if (msgEl) msgEl.textContent = msg || '';
+  // Timestamp cuando completa o falla
+  if (msgEl) {
+    const ts = (stepState === 'ok' || stepState === 'error')
+      ? new Date().toLocaleTimeString()
+      : (msg || '');
+    msgEl.textContent = stepState === 'ok' || stepState === 'error'
+      ? (msg ? `${msg} · ${ts}` : ts)
+      : msg;
+  }
 }
 
 function resetSteps() {
@@ -104,47 +127,155 @@ function activateConnector(n) {
 // ============================================================
 // ESTADO GLOBAL UI — LiveKit panel
 // ============================================================
+// Cloud availability only — updated by checkLiveKitHealth()
 function setLiveKitStatus(status, sub = '') {
   const labels = {
-    idle:        'Sin conexión',
-    online:      'En línea',
-    connecting:  'Conectando…',
-    connected:   'Conectado',
-    recording:   'Grabando',
-    error:       'Sin respuesta',
+    idle:    'Sin configurar',
+    online:  'Disponible',
+    error:   'Sin respuesta',
   };
   const dotClass = {
-    idle:       'idle',
-    online:     'connected',
-    connecting: 'connecting',
-    connected:  'connected',
-    recording:  'recording',
-    error:      'error',
+    idle:  'idle',
+    online: 'available',   // azul — cloud alcanzable
+    error:  'error',
   };
   ui.smLkVal.textContent = labels[status] || status;
   if (sub) ui.smLkSub.textContent = sub;
   ui.smLkDot.className   = `sm-dot ${dotClass[status] || 'idle'}`;
 }
 
+// Estado del canal/sesión activa de audio
+function setChannelStatus(status, sub = '') {
+  const labels = {
+    closed:     'Cerrado',
+    connecting: 'Conectando…',
+    open:       'Abierto',
+    error:      'Error',
+  };
+  const dotClass = {
+    closed:     'idle',
+    connecting: 'connecting',
+    open:       'recording',   // verde pulsante — canal vivo
+    error:      'error',
+  };
+  ui.smCanalVal.textContent = labels[status] || status;
+  if (sub !== undefined) ui.smCanalSub.textContent = sub || (status === 'closed' ? 'sin sala' : '');
+  ui.smCanalDot.className = `sm-dot ${dotClass[status] || 'idle'}`;
+}
+
 async function checkLiveKitHealth() {
+  if (state.active) return;
   ui.smLkVal.textContent = 'Verificando…';
-  ui.smLkDot.className   = 'sm-dot connecting';
+  ui.smLkDot.className   = 'sm-dot idle';
   try {
     const h = await fetch('/livekit-health').then((r) => r.json());
     if (h.online) {
-      setLiveKitStatus('online', `${ui.smLkSub.textContent} · ${h.latency}ms`);
-      log(`LiveKit en línea · latencia: ${h.latency}ms`, 'success');
+      // Preservar el host en el sub, agregar latencia
+      const host = ui.smLkSub.textContent.split('·')[0].trim();
+      setLiveKitStatus('online', host ? `${host} · ${h.latency}ms` : `${h.latency}ms`);
     } else if (h.reason === 'no-config') {
-      setLiveKitStatus('idle', 'sin configurar');
+      setLiveKitStatus('idle', '');
     } else {
-      setLiveKitStatus('error', h.reason || 'sin respuesta');
-      log(`LiveKit no responde: ${h.reason || ''}`, 'warn');
+      setLiveKitStatus('error', h.reason || '');
+      log(`LiveKit sin respuesta: ${h.reason || ''}`, 'warn');
     }
   } catch {
-    setLiveKitStatus('error', 'error de red');
-    log('No se pudo verificar LiveKit', 'warn');
+    setLiveKitStatus('error', 'Express caído');
+    log('Servidor Express no responde', 'error');
   }
 }
+
+// Health check automático cada 30 segundos
+let _healthInterval = null;
+function startHealthCheck() {
+  stopHealthCheck();
+  _healthInterval = setInterval(checkLiveKitHealth, 10_000);
+}
+function stopHealthCheck() {
+  if (_healthInterval) { clearInterval(_healthInterval); _healthInterval = null; }
+}
+
+// ============================================================
+// UPTIME DE SESIÓN
+// ============================================================
+let _sessionStart  = null;
+let _uptimeInterval = null;
+
+function startSessionTimer() {
+  _sessionStart = Date.now();
+  ui.sessionUptime.style.display = '';
+  ui.btnReconectar.style.display = 'none';
+  _uptimeInterval = setInterval(() => {
+    const s   = Math.floor((Date.now() - _sessionStart) / 1000);
+    const hh  = String(Math.floor(s / 3600)).padStart(2, '0');
+    const mm  = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+    const ss  = String(s % 60).padStart(2, '0');
+    ui.uptimeDisplay.textContent = `${hh}:${mm}:${ss}`;
+  }, 1000);
+}
+
+function stopSessionTimer() {
+  if (_uptimeInterval) { clearInterval(_uptimeInterval); _uptimeInterval = null; }
+  _sessionStart = null;
+  ui.sessionUptime.style.display = 'none';
+  ui.uptimeDisplay.textContent   = '00:00:00';
+}
+
+// ============================================================
+// MINI VU METER (LiveKit activo)
+// ============================================================
+let _miniVuFrame = null;
+
+function startMiniVu(stream) {
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const source   = audioCtx.createMediaStreamSource(stream);
+  const analyser = audioCtx.createAnalyser();
+  analyser.fftSize               = 128;
+  analyser.smoothingTimeConstant = 0.7;
+  source.connect(analyser);
+
+  const dataArr = new Uint8Array(analyser.frequencyBinCount);
+  ui.miniVuWrap.style.display = '';
+
+  const draw = () => {
+    _miniVuFrame = requestAnimationFrame(draw);
+    analyser.getByteFrequencyData(dataArr);
+    let sum = 0;
+    for (let i = 0; i < dataArr.length; i++) sum += dataArr[i];
+    const pct   = (sum / dataArr.length) / 255;
+    const db    = pct > 0 ? (20 * Math.log10(pct)).toFixed(1) : '-∞';
+    const color = pct < 0.6 ? '#3dba76' : pct < 0.85 ? '#e0a032' : '#e05555';
+    ui.miniVuBar.style.width      = `${Math.min(pct * 100, 100)}%`;
+    ui.miniVuBar.style.background = color;
+    ui.miniVuDb.textContent       = `${db} dB`;
+  };
+  draw();
+
+  // Guardar referencia para cerrar el contexto al parar
+  state._miniVuCtx = audioCtx;
+}
+
+function stopMiniVu() {
+  if (_miniVuFrame) { cancelAnimationFrame(_miniVuFrame); _miniVuFrame = null; }
+  state._miniVuCtx?.close();
+  state._miniVuCtx = null;
+  ui.miniVuWrap.style.display = 'none';
+  ui.miniVuBar.style.width    = '0%';
+  ui.miniVuDb.textContent     = '— dB';
+}
+
+// ============================================================
+// BOTÓN RECONECTAR
+// ============================================================
+function showReconectar(show) {
+  ui.btnReconectar.style.display = show ? '' : 'none';
+}
+
+ui.btnReconectar.addEventListener('click', async () => {
+  if (state.active) return;
+  state.mode = 'livekit';
+  ui.btnMic.click();
+});
 
 function setMicStatus(status, sub = '') {
   const labels = {
@@ -179,7 +310,6 @@ const LiveKitModule = {
   async start() {
     resetSteps();
     log('Solicitando token al servidor central…');
-    setLiveKitStatus('connecting');
     setStep('token', 'loading', 'obteniendo…');
 
     let tokenData, serverUrl;
@@ -191,7 +321,7 @@ const LiveKitModule = {
       ]);
     } catch (err) {
       setStep('token', 'error', 'falló');
-      setLiveKitStatus('error', 'error de conexión');
+      setChannelStatus('closed', '');
       log('No se pudo obtener el token — revisá TOKEN_API_URL en .env', 'error');
       throw err;
     }
@@ -202,7 +332,7 @@ const LiveKitModule = {
 
     setStep('token', 'ok', tokenData.room);
     activateConnector(1);
-
+    setChannelStatus('connecting', tokenData.room);   // room name visible desde el token
     setStep('connect', 'loading', 'conectando…');
 
     const room = new LivekitClient.Room({
@@ -210,17 +340,56 @@ const LiveKitModule = {
       dynacast:       true,
     });
 
+    // Actualiza el indicador de Canal según workers en sala
+    const updateWorkerState = () => {
+      const n = room.remoteParticipants.size;
+      ui.smCanalVal.textContent = tokenData.room;
+      if (n === 0) {
+        ui.smCanalSub.textContent = 'sin worker';
+        ui.smCanalDot.className   = 'sm-dot connecting';
+        ui.smCanalCard.classList.add('no-worker');
+      } else {
+        ui.smCanalSub.textContent = n === 1 ? '1 worker activo' : `${n} workers activos`;
+        ui.smCanalDot.className   = 'sm-dot recording';
+        ui.smCanalCard.classList.remove('no-worker');
+      }
+    };
+
     room.on(LivekitClient.RoomEvent.Connected, () => {
       log('Conectado a LiveKit', 'success');
       setStep('connect', 'ok', tokenData.room);
       activateConnector(2);
-      setLiveKitStatus('connected', `sala: ${tokenData.room}`);
+      startSessionTimer();
+      showReconectar(false);
+      stopHealthCheck();
+      updateWorkerState();
+      if (room.remoteParticipants.size === 0) {
+        log('Canal abierto — sin worker. Nadie procesa el audio.', 'warn');
+      }
+    });
+
+    room.on(LivekitClient.RoomEvent.ParticipantConnected, (participant) => {
+      log(`Worker conectado: ${participant.identity}`, 'success');
+      updateWorkerState();
+    });
+
+    room.on(LivekitClient.RoomEvent.ParticipantDisconnected, (participant) => {
+      log(`Worker desconectado: ${participant.identity}`, 'warn');
+      updateWorkerState();
+      if (room.remoteParticipants.size === 0) {
+        log('Sin workers en sala — audio sin destino.', 'warn');
+      }
     });
 
     room.on(LivekitClient.RoomEvent.Disconnected, (reason) => {
       const why = disconnectReasons[reason] || reason || 'sin razón';
       log(`Desconectado de LiveKit: ${why}`, 'warn');
-      setLiveKitStatus('idle');
+      setChannelStatus('closed');
+      ui.smCanalCard.classList.remove('no-worker');
+      stopSessionTimer();
+      stopMiniVu();
+      showReconectar(true);
+      startHealthCheck();
       checkLiveKitHealth();
       resetSteps();
       this._resetState();
@@ -228,14 +397,14 @@ const LiveKitModule = {
 
     room.on(LivekitClient.RoomEvent.Reconnecting, () => {
       log('LiveKit: reconectando…', 'warn');
-      setLiveKitStatus('connecting', `sala: ${tokenData.room}`);
+      setChannelStatus('connecting', tokenData.room);
       setStep('connect', 'loading', 'reconectando…');
     });
 
     room.on(LivekitClient.RoomEvent.Reconnected, () => {
       log('LiveKit: reconectado', 'success');
-      setLiveKitStatus('recording', `sala: ${tokenData.room}`);
       setStep('connect', 'ok', tokenData.room);
+      updateWorkerState();
     });
 
     const disconnectReasons = {
@@ -284,7 +453,7 @@ const LiveKitModule = {
       await room.connect(livekitUrl, tokenData.token);
     } catch (err) {
       setStep('connect', 'error', 'falló');
-      setLiveKitStatus('error', 'error de conexión');
+      setChannelStatus('closed', tokenData.room);   // token OK pero LiveKit no responde
       log(`Error al conectar: ${err.message}`, 'error');
       throw err;
     }
@@ -310,14 +479,19 @@ const LiveKitModule = {
 
     setStep('publish', 'ok', 'activo');
     setMicStatus('active', 'LiveKit');
-    setLiveKitStatus('recording', `sala: ${tokenData.room}`);
+    updateWorkerState();   // refresca sin pisarlo
     log('Micrófono publicado en la sala', 'success');
+    startMiniVu(localTrack.mediaStreamTrack
+      ? new MediaStream([localTrack.mediaStreamTrack])
+      : state.stream);
 
     state.room       = room;
     state.localTrack = localTrack;
   },
 
   async stop() {
+    stopMiniVu();
+    stopSessionTimer();
     if (state.localTrack) {
       await state.room?.localParticipant?.unpublishTrack(state.localTrack);
       state.localTrack.stop();
@@ -328,8 +502,11 @@ const LiveKitModule = {
       state.room = null;
     }
     setMicStatus('idle');
+    setChannelStatus('closed');
     resetSteps();
+    showReconectar(false);
     log('Desconectado de LiveKit', 'warn');
+    startHealthCheck();
     checkLiveKitHealth();
   },
 
@@ -578,8 +755,9 @@ function formatError(err) {
   // ─── Nombre del micrófono (si ya hay permiso previo) ─────────────────────
   updateMicName();
 
-  // ─── Verificar conectividad con LiveKit ───────────────────────────────────
+  // ─── Verificar conectividad con LiveKit + arrancar chequeo periódico ─────
   checkLiveKitHealth();
+  startHealthCheck();
 
   log('Brumexa-Edge listo. Seleccioná modo y presioná "Iniciar micrófono".', 'info');
 })();

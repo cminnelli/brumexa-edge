@@ -37,6 +37,7 @@ app.get('/config', (_req, res) => {
       hostname: os.hostname(),
       platform: process.platform,
       arch:     os.arch(),
+      uptime:   Math.floor(process.uptime()),
     },
   });
 });
