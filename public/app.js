@@ -597,25 +597,27 @@ const LiveKitModule = {
     try {
       if (getSelectedSource() === 'pi') {
         // ── Fuente Pi: WebSocket → AudioWorklet → MediaStream → LiveKit ──────
-        micStream          = await PiMicModule.start(getSelectedAlsaDevice());
-        const [audioTrack] = micStream.getAudioTracks();
-        // userProvidedTrack=true: LiveKit no llama stop() al despublicar
-        localTrack = new LivekitClient.LocalAudioTrack(audioTrack, undefined, true);
+        micStream              = await PiMicModule.start(getSelectedAlsaDevice());
+        const [rawAudioTrack]  = micStream.getAudioTracks();
+        // publishTrack acepta un MediaStreamTrack directo — más confiable que el constructor interno
+        localTrack = await room.localParticipant.publishTrack(rawAudioTrack, {
+          name:   'pi-mic',
+          source: LivekitClient.Track.Source.Microphone,
+        });
 
       } else {
-        // ── Fuente browser: LiveKit crea el track con sus procesadores ────────
+        // ── Fuente browser: API pública de LiveKit con procesadores de audio ──
         localTrack = await LivekitClient.createLocalAudioTrack({
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl:  true,
         });
+        await room.localParticipant.publishTrack(localTrack);
         micStream = localTrack.mediaStreamTrack
           ? new MediaStream([localTrack.mediaStreamTrack])
           : null;
         updateMicName();
       }
-
-      await room.localParticipant.publishTrack(localTrack);
 
     } catch (err) {
       PiMicModule.stop();
@@ -629,7 +631,7 @@ const LiveKitModule = {
     setMicStatus('active', sourceName);
     updateWorkerState();
     log(`Micrófono publicado — fuente: ${sourceName}`, 'success');
-    startMiniVu(micStream);
+    if (micStream) startMiniVu(micStream);
 
     state.room       = room;
     state.localTrack = localTrack;
@@ -1015,18 +1017,32 @@ document.getElementById('btn-rec-stop').addEventListener('click', async () => {
       ui.alsaDeviceSelect.innerHTML = '<option value="">Error al leer ALSA</option>';
     }
 
+    // Actualizar tarjeta Dispositivo según la fuente seleccionada
+    const updateDeviceCard = () => {
+      const isPi = getSelectedSource() === 'pi';
+      if (isPi) {
+        const deviceName = ui.alsaDeviceSelect.options[ui.alsaDeviceSelect.selectedIndex]?.text || 'ALSA';
+        ui.smDeviceSub.textContent = deviceName;
+      } else {
+        updateMicName();   // lee el mic del browser con enumerateDevices
+      }
+    };
+
     // Mostrar/ocultar dropdown ALSA + habilitar grabación según fuente
     const updateSourceState = () => {
       const isPi = getSelectedSource() === 'pi';
-      ui.alsaDeviceWrap.style.display      = isPi ? '' : 'none';
-      // Grabaciones solo tienen sentido con mic Pi (arecord es server-side)
-      ui.btnRecStart.disabled              = !isPi;
-      ui.btnRecStart.title                 = isPi ? '' : 'Solo disponible con Micrófono de la Pi';
+      ui.alsaDeviceWrap.style.display = isPi ? '' : 'none';
+      ui.btnRecStart.disabled         = !isPi;
+      ui.btnRecStart.title            = isPi ? '' : 'Solo disponible con Micrófono de la Pi';
+      updateDeviceCard();
     };
 
     ui.audioSourceRadios.forEach((radio) => {
       radio.addEventListener('change', updateSourceState);
     });
+
+    // También actualizar si cambia el dispositivo ALSA seleccionado
+    ui.alsaDeviceSelect.addEventListener('change', updateDeviceCard);
 
     updateSourceState(); // estado inicial
   }
