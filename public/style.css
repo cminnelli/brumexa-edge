@@ -356,6 +356,73 @@ header p  { color: var(--muted); font-size: 0.85rem; }
 .toggle input:checked ~ .toggle-track { background: var(--accent); }
 .toggle input:checked ~ .toggle-track::after { transform: translateX(20px); }
 
+/* ── Selector de fuente de audio ─────────────────────────────────────────── */
+.source-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.source-opt {
+  cursor: pointer;
+}
+.source-opt input[type="radio"] {
+  /* oculto, el estilo viene del label */
+  position: absolute;
+  opacity: 0;
+  width: 0; height: 0;
+}
+.source-opt-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  transition: border-color var(--transition), background var(--transition);
+}
+.source-opt input:checked + .source-opt-inner {
+  border-color: var(--accent);
+  background: rgba(91, 106, 240, 0.08);
+}
+.source-opt:hover .source-opt-inner {
+  border-color: var(--accent-h);
+}
+.source-opt-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+.source-opt-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.source-opt-text strong {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.source-opt-text small {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+/* Select de dispositivo ALSA */
+#alsa-device-select {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.82rem;
+  cursor: pointer;
+  outline: none;
+  transition: border-color var(--transition);
+}
+#alsa-device-select:focus { border-color: var(--accent); }
+
 /* Botón principal */
 #btn-mic {
   width: 100%;

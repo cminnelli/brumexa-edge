@@ -120,6 +120,42 @@
         </div>
       </div>
 
+      <!-- Fuente de audio: visible solo cuando la Pi tiene dispositivos ALSA -->
+      <div id="audio-source-wrap" style="display:none">
+        <p class="ctrl-label">Fuente de audio</p>
+        <div class="source-selector">
+
+          <label class="source-opt">
+            <input type="radio" name="audio-source" value="browser" checked />
+            <span class="source-opt-inner">
+              <span class="source-opt-icon">🌐</span>
+              <span class="source-opt-text">
+                <strong>Micrófono del browser</strong>
+                <small>getUserMedia — mic del dispositivo que abre esta página</small>
+              </span>
+            </span>
+          </label>
+
+          <label class="source-opt">
+            <input type="radio" name="audio-source" value="pi" />
+            <span class="source-opt-inner">
+              <span class="source-opt-icon">🍓</span>
+              <span class="source-opt-text">
+                <strong>Micrófono de la Raspberry Pi</strong>
+                <small>Captura ALSA server-side</small>
+              </span>
+            </span>
+          </label>
+
+        </div>
+
+        <!-- Selector de dispositivo ALSA (visible solo con fuente = pi) -->
+        <div id="alsa-device-wrap" style="display:none">
+          <p class="ctrl-label" style="margin-top:0.75rem">Dispositivo ALSA</p>
+          <select id="alsa-device-select"></select>
+        </div>
+      </div>
+
       <button id="btn-mic">Iniciar micrófono</button>
 
     </div>

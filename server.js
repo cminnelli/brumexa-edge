@@ -2,9 +2,12 @@
 
 require('dotenv').config();
 
+const http    = require('http');
 const express = require('express');
 const path    = require('path');
 const os      = require('os');
+
+const { setupAudio } = require('./lib/audio');
 
 const {
   LIVEKIT_URL,
@@ -127,7 +130,11 @@ app.get('/token', async (_req, res) => {
 });
 
 // ─── Inicio ───────────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
+// Usamos http.createServer para que el WebSocket de audio comparta el mismo puerto
+const httpServer = http.createServer(app);
+setupAudio(app, httpServer);
+
+httpServer.listen(PORT, () => {
   console.log(`\n  Brumexa-Edge corriendo en → http://localhost:${PORT}`);
   console.log(`  LiveKit URL             → ${LIVEKIT_URL || '(no configurado)'}`);
   console.log(`  Token API               → ${TOKEN_API_URL || '(no configurado)'}`);

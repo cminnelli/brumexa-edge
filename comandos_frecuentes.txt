@@ -1,0 +1,36 @@
+# ─── Red ───────────────────────────────────────────────────
+ip addr show                    # todas las IPs (eth0, wlan0, usb0)
+hostname -I                     # IPs en una línea
+iwconfig wlan0                  # WiFi — SSID conectado, señal
+ping -c 3 8.8.8.8               # internet OK?
+curl -s http://192.168.0.110:3000/health  # servidor central up?
+
+# ─── Sistema ───────────────────────────────────────────────
+uname -m                        # arquitectura (armv7l = 32bit)
+uname -r                        # kernel
+cat /etc/os-release             # versión del OS
+vcgencmd measure_temp           # temperatura GPU/CPU
+free -h                         # RAM disponible
+df -h /                         # espacio en disco
+
+# ─── Node.js ───────────────────────────────────────────────
+node --version                  # debe ser v20.x.x
+npm --version
+which node                      # dónde está instalado
+
+# ─── Audio ALSA ────────────────────────────────────────────
+arecord -l                      # dispositivos de captura conectados
+aplay -l                        # dispositivos de reproducción
+cat /proc/asound/cards          # tarjetas de sonido del kernel
+arecord -D default -f S16_LE -r 16000 -c 1 -d 3 test.wav && aplay test.wav  # grabar 3s y escuchar
+
+# ─── GPIO / I2S (para INMP441 cuando lo conectes) ──────────
+gpio readall 2>/dev/null || pinout   # mapa de pines
+cat /boot/config.txt | grep -E "i2s|dtoverlay|dtparam"   # overlays activos
+lsmod | grep snd                # módulos de audio cargados
+
+# ─── Proceso Brumexa ───────────────────────────────────────
+pm2 list 2>/dev/null || echo "sin pm2"  # si usás pm2
+ps aux | grep node              # proceso node corriendo?
+curl -s localhost:3000/config   # responde el server?
+curl -s localhost:3000/livekit-health
