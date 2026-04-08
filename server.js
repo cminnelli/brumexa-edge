@@ -25,6 +25,12 @@ if (!TOKEN_API_URL) {
 
 // ─── App ─────────────────────────────────────────────────────────────────────
 const app = express();
+// ─── Log de cada petición HTTP ────────────────────────────────────────────────
+app.use((req, _res, next) => {
+  console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url}`);
+  next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ─── GET / ───────────────────────────────────────────────────────────────────
