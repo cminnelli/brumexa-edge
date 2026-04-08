@@ -29,7 +29,7 @@ Debe aparecer algo como:
 
 card 0: sndrpigooglevoi ...
 🎙️ Grabar audio (PRUEBA REAL)
-arecord -D plughw:0,0 -f S16_LE -r 16000 -c 1 test.wav
+arecord -D plughw:0,0 -f cd test.wav
 Hablá 5–10 segundos
 Ctrl + C para cortar
 🔊 Escuchar audio
