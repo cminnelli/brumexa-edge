@@ -70,6 +70,14 @@ const ui = {
   vuBar:       document.getElementById('vu-bar'),
   vuDb:        document.getElementById('vu-db'),
 
+  // Grabaciones
+  recordingsCard:   document.getElementById('recordings-card'),
+  recTimer:         document.getElementById('rec-timer'),
+  recSeconds:       document.getElementById('rec-seconds'),
+  btnRecStart:      document.getElementById('btn-rec-start'),
+  btnRecStop:       document.getElementById('btn-rec-stop'),
+  recordingsList:   document.getElementById('recordings-list'),
+
   // Fuente de audio (browser / Pi)
   audioSourceWrap:  document.getElementById('audio-source-wrap'),
   audioSourceRadios: document.querySelectorAll('input[name="audio-source"]'),
@@ -661,12 +669,12 @@ const LiveKitModule = {
 const MicTestModule = {
 
   async start() {
-    log('Solicitando micrófono para test…');
-    setMicStatus('requesting', 'getUserMedia');
+    log('Iniciando test de micrófono…');
+    setMicStatus('requesting', 'obteniendo fuente…');
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    const { stream, source: src } = await getAudioTrack();
     state.stream = stream;
-    updateMicName();
+    if (src === 'browser') updateMicName();
 
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const source   = audioCtx.createMediaStreamSource(stream);
@@ -678,8 +686,9 @@ const MicTestModule = {
     state.audioCtx = audioCtx;
     state.analyser = analyser;
 
-    log('Micrófono capturado. Hablá para ver el nivel.', 'success');
-    setMicStatus('active', 'Test directo');
+    const label = src === 'pi' ? 'Pi ALSA' : 'Browser';
+    log(`Micrófono capturado — fuente: ${label}. Hablá para ver el nivel.`, 'success');
+    setMicStatus('active', label);
     ui.vumeterCard.style.display = 'block';
 
     this._renderLoop();
@@ -726,6 +735,7 @@ const MicTestModule = {
   },
 
   stop() {
+    PiMicModule.stop();
     if (state.animFrame) {
       cancelAnimationFrame(state.animFrame);
       state.animFrame = null;
@@ -849,6 +859,91 @@ function formatError(err) {
 }
 
 // ============================================================
+// MÓDULO GRABACIONES (solo Pi — requiere ALSA)
+// ============================================================
+const RecorderModule = {
+  _interval: null,
+  _elapsed:  0,
+
+  // Mostrar la card y cargar la lista inicial
+  async show() {
+    ui.recordingsCard.style.display = '';
+    await this.refreshList();
+  },
+
+  // Iniciar grabación en el servidor
+  async start() {
+    const device = getSelectedAlsaDevice();
+    const res    = await fetch('/record/start', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ device }),
+    }).then((r) => r.json());
+
+    if (!res.ok) throw new Error(res.error);
+
+    log(`Grabando en la Pi — ${res.filename}`, 'success');
+    ui.btnRecStart.style.display = 'none';
+    ui.btnRecStop.style.display  = '';
+    ui.recTimer.style.display    = '';
+    this._elapsed = 0;
+    this._interval = setInterval(() => {
+      this._elapsed++;
+      ui.recSeconds.textContent = this._elapsed;
+    }, 1000);
+  },
+
+  // Detener grabación
+  async stop() {
+    const res = await fetch('/record/stop', { method: 'POST' }).then((r) => r.json());
+    if (!res.ok) throw new Error(res.error);
+
+    clearInterval(this._interval);
+    this._interval = null;
+    ui.btnRecStop.style.display  = 'none';
+    ui.btnRecStart.style.display = '';
+    ui.recTimer.style.display    = 'none';
+    ui.recSeconds.textContent    = '0';
+
+    log(`Grabación guardada: ${res.filename} (${res.duration}s)`, 'success');
+    await this.refreshList();
+  },
+
+  // Refrescar la lista de archivos guardados
+  async refreshList() {
+    try {
+      const { files } = await fetch('/recordings').then((r) => r.json());
+      if (files.length === 0) {
+        ui.recordingsList.innerHTML = '<li class="rec-empty">Sin grabaciones aún.</li>';
+        return;
+      }
+      ui.recordingsList.innerHTML = files.map((f) => {
+        const kb   = (f.size / 1024).toFixed(1);
+        const date = new Date(f.created).toLocaleString();
+        return `
+          <li class="rec-item">
+            <span class="rec-item-name" title="${f.filename}">${f.filename}</span>
+            <span class="rec-item-size">${kb} KB · ${date}</span>
+            <a class="rec-item-dl" href="/recordings/${f.filename}" download>↓ WAV</a>
+          </li>`;
+      }).join('');
+    } catch (err) {
+      log(`Error cargando grabaciones: ${err.message}`, 'error');
+    }
+  },
+};
+
+// Botones de grabación
+document.getElementById('btn-rec-start').addEventListener('click', async () => {
+  try { await RecorderModule.start(); }
+  catch (err) { log(`Error al grabar: ${err.message}`, 'error'); }
+});
+document.getElementById('btn-rec-stop').addEventListener('click', async () => {
+  try { await RecorderModule.stop(); }
+  catch (err) { log(`Error al detener: ${err.message}`, 'error'); }
+});
+
+// ============================================================
 // INIT
 // ============================================================
 (async function init() {
@@ -900,9 +995,10 @@ function formatError(err) {
         .map((d) => `<option value="${d.id}">${d.name} (${d.id})</option>`)
         .join('');
 
-      // Mostrar la sección de fuente
+      // Mostrar selector de fuente y card de grabaciones
       ui.audioSourceWrap.style.display = '';
       log(`${devices.length} dispositivo(s) ALSA detectado(s)`, 'info');
+      RecorderModule.show();
     }
   } catch {
     // Sin ALSA o error de red — el selector permanece oculto

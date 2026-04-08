@@ -172,6 +172,23 @@
     <p class="vu-hint">Hablá para ver el nivel.</p>
   </div>
 
+  <!-- ── Grabaciones (solo visible cuando hay ALSA) ───────────────────────── -->
+  <div class="card" id="recordings-card" style="display:none">
+    <div class="log-header">
+      <p class="card-title" style="margin:0">Grabaciones</p>
+      <div style="display:flex;gap:0.5rem;align-items:center">
+        <span id="rec-timer" class="rec-timer" style="display:none">⏺ <span id="rec-seconds">0</span>s</span>
+        <button class="btn-sm btn-rec-start" id="btn-rec-start">⏺ Grabar</button>
+        <button class="btn-sm btn-rec-stop"  id="btn-rec-stop"  style="display:none">⏹ Detener</button>
+      </div>
+    </div>
+
+    <!-- Lista de archivos grabados -->
+    <ul id="recordings-list" class="recordings-list">
+      <li class="rec-empty">Sin grabaciones aún.</li>
+    </ul>
+  </div>
+
   <!-- ── Log de eventos ────────────────────────────────────────────────────── -->
   <div class="card">
     <div class="log-header">

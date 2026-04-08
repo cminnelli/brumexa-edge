@@ -539,6 +539,76 @@ header p  { color: var(--muted); font-size: 0.85rem; }
 }
 .vu-hint { font-size: 0.72rem; color: var(--muted); text-align: center; }
 
+/* ── Grabaciones ─────────────────────────────────────────────────────────── */
+.rec-timer {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--danger);
+  animation: pulse 1s infinite;
+  font-variant-numeric: tabular-nums;
+}
+
+.btn-rec-start { border-color: var(--danger); color: var(--danger); }
+.btn-rec-start:hover { border-color: var(--danger); background: var(--danger); color: #fff; }
+.btn-rec-stop  { border-color: var(--warn);   color: var(--warn); }
+.btn-rec-stop:hover  { border-color: var(--warn);   background: var(--warn);   color: #fff; }
+
+.recordings-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.recordings-list::-webkit-scrollbar { width: 4px; }
+.recordings-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+.rec-empty {
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-align: center;
+  padding: 0.75rem 0;
+}
+
+.rec-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.7rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+}
+.rec-item-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-family: 'Consolas', monospace;
+}
+.rec-item-size {
+  font-size: 0.7rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.rec-item-dl {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  flex-shrink: 0;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  transition: background var(--transition), color var(--transition);
+}
+.rec-item-dl:hover { background: var(--accent); color: #fff; }
+
 /* ── Pie ──────────────────────────────────────────────────────────────────── */
 footer {
   margin-top: 1.5rem;

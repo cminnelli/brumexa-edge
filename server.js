@@ -7,7 +7,9 @@ const express = require('express');
 const path    = require('path');
 const os      = require('os');
 
-const { setupAudio } = require('./lib/audio');
+const { setupAudio }                                    = require('./lib/audio');
+const { startRecording, stopRecording, getStatus,
+        listRecordings, RECORDINGS_DIR }               = require('./lib/recorder');
 
 const {
   LIVEKIT_URL,
@@ -127,6 +129,47 @@ app.get('/token', async (_req, res) => {
     console.error('[token] Error de red contactando servidor central:', err.message);
     res.status(500).json({ error: 'No se pudo contactar al servidor central', detail: err.message });
   }
+});
+
+// ─── POST /record/start — iniciar grabación en la Pi ─────────────────────────
+app.post('/record/start', express.json(), (req, res) => {
+  try {
+    const device = req.body?.device || 'default';
+    const info   = startRecording(device);
+    res.json({ ok: true, ...info });
+  } catch (err) {
+    res.status(409).json({ ok: false, error: err.message });
+  }
+});
+
+// ─── POST /record/stop — detener grabación en curso ──────────────────────────
+app.post('/record/stop', (_req, res) => {
+  try {
+    const info = stopRecording();
+    res.json({ ok: true, ...info });
+  } catch (err) {
+    res.status(409).json({ ok: false, error: err.message });
+  }
+});
+
+// ─── GET /record/status — estado de la grabación actual ──────────────────────
+app.get('/record/status', (_req, res) => {
+  res.json(getStatus());
+});
+
+// ─── GET /recordings — listar archivos grabados ───────────────────────────────
+app.get('/recordings', (_req, res) => {
+  res.json({ files: listRecordings() });
+});
+
+// ─── GET /recordings/:file — descargar un archivo WAV ────────────────────────
+app.get('/recordings/:file', (req, res) => {
+  // Sanitizar: solo letras, números, guiones, puntos — sin path traversal
+  const name = req.params.file.replace(/[^a-zA-Z0-9_\-\.]/g, '');
+  const filePath = `${RECORDINGS_DIR}/${name}`;
+  res.download(filePath, name, (err) => {
+    if (err) res.status(404).json({ error: 'Archivo no encontrado' });
+  });
 });
 
 // ─── Inicio ───────────────────────────────────────────────────────────────────
