@@ -458,6 +458,7 @@ const LiveKitModule = {
     // Usar la URL de LiveKit que devuelve el servidor central si está disponible
     const livekitUrl = tokenData.livekitUrl || serverUrl;
     log(`Token OK · room: ${tokenData.room} · identity: ${tokenData.identity} · expira: ${tokenData.expiresIn || '?'}`, 'success');
+    log(`LiveKit URL: ${livekitUrl}`, 'info');
 
     setStep('token', 'ok', tokenData.room);
     activateConnector(1);
@@ -485,7 +486,7 @@ const LiveKitModule = {
     };
 
     room.on(LivekitClient.RoomEvent.Connected, () => {
-      log('Conectado a LiveKit', 'success');
+      log(`Conectado a LiveKit · sala: ${tokenData.room} · participantes: ${room.remoteParticipants.size}`, 'success');
       setStep('connect', 'ok', tokenData.room);
       activateConnector(2);
       startSessionTimer();
@@ -493,7 +494,10 @@ const LiveKitModule = {
       stopHealthCheck();
       updateWorkerState();
       if (room.remoteParticipants.size === 0) {
-        log('Canal abierto — sin worker. Nadie procesa el audio.', 'warn');
+        log('Sin worker en sala — el agente brumexa-api no se unió. Verificá que esté corriendo.', 'warn');
+      } else {
+        const ids = [...room.remoteParticipants.values()].map(p => p.identity).join(', ');
+        log(`Workers en sala: ${ids}`, 'success');
       }
     });
 
@@ -511,6 +515,8 @@ const LiveKitModule = {
     });
 
     room.on(LivekitClient.RoomEvent.Disconnected, (reason) => {
+      // Si stop() ya limpió state.room, esta desconexión fue manual — no hacer nada
+      if (state.room !== room) return;
       const why = disconnectReasons[reason] || reason || 'sin razón';
       log(`Desconectado de LiveKit: ${why}`, 'warn');
       setChannelStatus('closed');
@@ -543,7 +549,8 @@ const LiveKitModule = {
     };
 
     room.on(LivekitClient.RoomEvent.ConnectionStateChanged, (s) => {
-      log(`Conexión: ${s}`, 'info');
+      const stateEmoji = { connecting: '🔄', connected: '✅', disconnected: '❌', reconnecting: '🔁' };
+      log(`Estado conexión: ${stateEmoji[s] || ''} ${s}`, s === 'connected' ? 'success' : 'info');
     });
 
     room.on(LivekitClient.RoomEvent.ConnectionQualityChanged, (quality, participant) => {
@@ -599,11 +606,13 @@ const LiveKitModule = {
         // ── Fuente Pi: WebSocket → AudioWorklet → MediaStream → LiveKit ──────
         micStream              = await PiMicModule.start(getSelectedAlsaDevice());
         const [rawAudioTrack]  = micStream.getAudioTracks();
-        // publishTrack acepta un MediaStreamTrack directo — más confiable que el constructor interno
-        localTrack = await room.localParticipant.publishTrack(rawAudioTrack, {
+        // publishTrack devuelve LocalTrackPublication — guardamos pub.track (LocalAudioTrack)
+        // que sí tiene .stop() para la limpieza en stop()
+        const pub = await room.localParticipant.publishTrack(rawAudioTrack, {
           name:   'pi-mic',
           source: LivekitClient.Track.Source.Microphone,
         });
+        localTrack = pub.track ?? pub;
 
       } else {
         // ── Fuente browser: API pública de LiveKit con procesadores de audio ──
@@ -647,8 +656,9 @@ const LiveKitModule = {
       state.localTrack = null;
     }
     if (state.room) {
-      await state.room.disconnect();
-      state.room = null;
+      const r  = state.room;
+      state.room = null;   // marcar antes de disconnect para que el handler Disconnected no interfiera
+      await r.disconnect();
     }
     setMicStatus('idle');
     setChannelStatus('closed');
@@ -764,9 +774,16 @@ const MicTestModule = {
 // ============================================================
 // BOTÓN PRINCIPAL
 // ============================================================
+let _hadSession = false;   // true después de la primera sesión
+
 function updateMicButton(active) {
-  ui.btnMic.textContent = active ? 'Detener' : 'Iniciar micrófono';
-  ui.btnMic.classList.toggle('recording', active);
+  if (active) {
+    ui.btnMic.textContent = 'Detener';
+    ui.btnMic.classList.add('recording');
+  } else {
+    ui.btnMic.textContent = _hadSession ? 'Seguir' : 'Iniciar micrófono';
+    ui.btnMic.classList.remove('recording');
+  }
 }
 
 ui.btnMic.addEventListener('click', async () => {
@@ -774,6 +791,7 @@ ui.btnMic.addEventListener('click', async () => {
   try {
     if (!state.active) {
       state.active = true;
+      _hadSession  = true;
       updateMicButton(true);
       if (state.mode === 'livekit') await LiveKitModule.start();
       else                          await MicTestModule.start();
