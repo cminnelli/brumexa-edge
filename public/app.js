@@ -586,34 +586,33 @@ const LiveKitModule = {
     setMicStatus('requesting', 'obteniendo fuente…');
 
     let localTrack;
-    let micStream;   // guardado para el mini VU
+    let micStream;   // para el mini VU meter
 
     try {
-      const { stream, source } = await getAudioTrack();
-      micStream  = stream;
+      if (getSelectedSource() === 'pi') {
+        // ── Fuente Pi: WebSocket → AudioWorklet → MediaStream → LiveKit ──────
+        micStream          = await PiMicModule.start(getSelectedAlsaDevice());
+        const [audioTrack] = micStream.getAudioTracks();
+        // userProvidedTrack=true: LiveKit no llama stop() al despublicar
+        localTrack = new LivekitClient.LocalAudioTrack(audioTrack, undefined, true);
 
-      if (source === 'pi') {
-        // Fuente Pi: publicar el MediaStream del WebSocket directamente
-        const [audioTrack] = stream.getAudioTracks();
-        localTrack = await LivekitClient.LocalAudioTrack.createAudioTrack(
-          'pi-mic',
-          audioTrack,
-        );
-        setMicStatus('requesting', 'publicando stream Pi…');
       } else {
-        // Fuente browser: crear track con los procesadores de LiveKit
+        // ── Fuente browser: LiveKit crea el track con sus procesadores ────────
         localTrack = await LivekitClient.createLocalAudioTrack({
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl:  true,
         });
+        micStream = localTrack.mediaStreamTrack
+          ? new MediaStream([localTrack.mediaStreamTrack])
+          : null;
         updateMicName();
       }
 
       await room.localParticipant.publishTrack(localTrack);
 
     } catch (err) {
-      PiMicModule.stop();   // limpiar WebSocket si falló en medio
+      PiMicModule.stop();
       setStep('publish', 'error', 'falló');
       setMicStatus('error', 'sin permiso');
       throw err;
@@ -624,9 +623,7 @@ const LiveKitModule = {
     setMicStatus('active', sourceName);
     updateWorkerState();
     log(`Micrófono publicado — fuente: ${sourceName}`, 'success');
-    startMiniVu(micStream || (localTrack.mediaStreamTrack
-      ? new MediaStream([localTrack.mediaStreamTrack])
-      : state.stream));
+    startMiniVu(micStream);
 
     state.room       = room;
     state.localTrack = localTrack;
@@ -956,6 +953,7 @@ document.getElementById('btn-rec-stop').addEventListener('click', async () => {
   }
 
   // ─── Obtener config del servidor ──────────────────────────────────────────
+  let isRaspberry = false;
   try {
     const cfg = await fetch('/config').then((r) => r.json());
 
@@ -965,6 +963,9 @@ document.getElementById('btn-rec-stop').addEventListener('click', async () => {
       ui.smDeviceVal.textContent  = dev.name;
       ui.smDeviceDot.className    = 'sm-dot connected';
       log(`Dispositivo: ${dev.name} (${cfg.server.hostname} · ${cfg.server.arch})`, 'info');
+
+      // Detectar Raspberry por platform+arch (fuente autoritativa: Node.js en el servidor)
+      isRaspberry = cfg.server.platform === 'linux' && /arm/i.test(cfg.server.arch);
     }
 
     if (!cfg.livekitUrl) {
@@ -986,30 +987,35 @@ document.getElementById('btn-rec-stop').addEventListener('click', async () => {
   // ─── Nombre del micrófono (si ya hay permiso previo) ─────────────────────
   updateMicName();
 
-  // ─── Dispositivos ALSA — mostrar selector si la Pi tiene micrófonos ──────
-  try {
-    const { devices } = await fetch('/audio-devices').then((r) => r.json());
-    if (devices.length > 0) {
-      // Poblar el select
-      ui.alsaDeviceSelect.innerHTML = devices
-        .map((d) => `<option value="${d.id}">${d.name} (${d.id})</option>`)
-        .join('');
+  // ─── Selector de fuente de audio (siempre visible en Raspberry) ──────────
+  if (isRaspberry) {
+    ui.audioSourceWrap.style.display = '';
 
-      // Mostrar selector de fuente y card de grabaciones
-      ui.audioSourceWrap.style.display = '';
-      log(`${devices.length} dispositivo(s) ALSA detectado(s)`, 'info');
-      RecorderModule.show();
+    // Cargar dispositivos ALSA en el dropdown
+    try {
+      const { devices } = await fetch('/audio-devices').then((r) => r.json());
+      if (devices.length > 0) {
+        ui.alsaDeviceSelect.innerHTML = devices
+          .map((d) => `<option value="${d.id}">${d.name} (${d.id})</option>`)
+          .join('');
+        log(`${devices.length} dispositivo(s) ALSA: ${devices.map((d) => d.id).join(', ')}`, 'info');
+        RecorderModule.show();
+      } else {
+        // Raspberry detectada pero sin dispositivos ALSA aún
+        ui.alsaDeviceSelect.innerHTML = '<option value="">Sin dispositivos ALSA</option>';
+        log('Raspberry detectada — sin dispositivos ALSA conectados', 'warn');
+      }
+    } catch {
+      ui.alsaDeviceSelect.innerHTML = '<option value="">Error al leer ALSA</option>';
     }
-  } catch {
-    // Sin ALSA o error de red — el selector permanece oculto
-  }
 
-  // Mostrar/ocultar selector de dispositivo ALSA según fuente elegida
-  ui.audioSourceRadios.forEach((radio) => {
-    radio.addEventListener('change', () => {
-      ui.alsaDeviceWrap.style.display = radio.value === 'pi' ? '' : 'none';
+    // Mostrar/ocultar dropdown ALSA según fuente elegida
+    ui.audioSourceRadios.forEach((radio) => {
+      radio.addEventListener('change', () => {
+        ui.alsaDeviceWrap.style.display = radio.value === 'pi' ? '' : 'none';
+      });
     });
-  });
+  }
 
   // ─── Verificar conectividad con LiveKit + arrancar chequeo periódico ─────
   checkLiveKitHealth();
