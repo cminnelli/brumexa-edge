@@ -549,6 +549,7 @@ header p  { color: var(--muted); font-size: 0.85rem; }
 }
 
 .btn-rec-start { border-color: var(--danger); color: var(--danger); }
+.btn-rec-start:disabled { opacity: 0.35; cursor: not-allowed; }
 .btn-rec-start:hover { border-color: var(--danger); background: var(--danger); color: #fff; }
 .btn-rec-stop  { border-color: var(--warn);   color: var(--warn); }
 .btn-rec-stop:hover  { border-color: var(--warn);   background: var(--warn);   color: #fff; }

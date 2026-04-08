@@ -324,17 +324,23 @@ const PiMicModule = {
    * @returns {Promise<MediaStream>}
    */
   async start(device) {
-    // Cargar el AudioWorklet (solo la primera vez)
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)({
-      sampleRate: 16000,   // coincide con arecord en el servidor
-    });
+    // AudioContext mono a 16kHz — coincide con arecord
+    const audioCtx = new AudioContext({ sampleRate: 16000 });
 
+    // Chrome arranca el AudioContext en "suspended" — hay que resumirlo
+    // explícitamente dentro del handler del click del usuario
+    await audioCtx.resume();
+
+    // Cargar el procesador PCM como AudioWorklet
     await audioCtx.audioWorklet.addModule('/worklets/pcm-processor.js');
 
-    // Nodo que recibe los chunks PCM y los convierte a Float32
-    const workletNode = new AudioWorkletNode(audioCtx, 'pcm-processor');
+    // outputChannelCount: [1] fuerza salida mono — sin esto puede ser silencio
+    const workletNode = new AudioWorkletNode(audioCtx, 'pcm-processor', {
+      numberOfOutputs:    1,
+      outputChannelCount: [1],
+    });
 
-    // Capturar la salida del worklet en un MediaStreamDestination
+    // Capturar salida del worklet como MediaStream
     const destination = audioCtx.createMediaStreamDestination();
     workletNode.connect(destination);
 
@@ -345,7 +351,6 @@ const PiMicModule = {
     const wsUrl    = `${protocol}//${location.host}/ws/audio?device=${encodeURIComponent(device)}`;
     const ws       = new WebSocket(wsUrl);
     ws.binaryType  = 'arraybuffer';
-
     this._ws = ws;
 
     await new Promise((resolve, reject) => {
@@ -353,16 +358,17 @@ const PiMicModule = {
         log(`WebSocket abierto — dispositivo: ${device}`, 'success');
         resolve();
       };
-      ws.onerror = () => reject(new Error(`No se pudo conectar al WebSocket de audio (${device})`));
+      ws.onerror = () => reject(new Error(`WebSocket de audio falló (${device})`));
     });
 
-    // Cada chunk PCM que llega se manda al AudioWorklet
-    ws.onmessage = (e) => workletNode.port.postMessage(e.data, [e.data]);
+    let chunkCount = 0;
+    ws.onmessage = (e) => {
+      workletNode.port.postMessage(e.data, [e.data]);
+      if (++chunkCount === 5) log('PCM recibiendo datos del mic Pi…', 'info');
+    };
 
     ws.onclose = (e) => {
-      if (state.active) {
-        log(`WebSocket de audio cerrado: ${e.reason || 'sin razón'}`, 'warn');
-      }
+      if (state.active) log(`WebSocket cerrado: ${e.reason || 'sin razón'}`, 'warn');
     };
 
     return destination.stream;
@@ -1009,12 +1015,20 @@ document.getElementById('btn-rec-stop').addEventListener('click', async () => {
       ui.alsaDeviceSelect.innerHTML = '<option value="">Error al leer ALSA</option>';
     }
 
-    // Mostrar/ocultar dropdown ALSA según fuente elegida
+    // Mostrar/ocultar dropdown ALSA + habilitar grabación según fuente
+    const updateSourceState = () => {
+      const isPi = getSelectedSource() === 'pi';
+      ui.alsaDeviceWrap.style.display      = isPi ? '' : 'none';
+      // Grabaciones solo tienen sentido con mic Pi (arecord es server-side)
+      ui.btnRecStart.disabled              = !isPi;
+      ui.btnRecStart.title                 = isPi ? '' : 'Solo disponible con Micrófono de la Pi';
+    };
+
     ui.audioSourceRadios.forEach((radio) => {
-      radio.addEventListener('change', () => {
-        ui.alsaDeviceWrap.style.display = radio.value === 'pi' ? '' : 'none';
-      });
+      radio.addEventListener('change', updateSourceState);
     });
+
+    updateSourceState(); // estado inicial
   }
 
   // ─── Verificar conectividad con LiveKit + arrancar chequeo periódico ─────
