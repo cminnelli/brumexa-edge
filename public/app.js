@@ -774,14 +774,12 @@ const MicTestModule = {
 // ============================================================
 // BOTÓN PRINCIPAL
 // ============================================================
-let _hadSession = false;   // true después de la primera sesión
-
 function updateMicButton(active) {
   if (active) {
-    ui.btnMic.textContent = 'Detener';
+    ui.btnMic.textContent = 'Desconectar';
     ui.btnMic.classList.add('recording');
   } else {
-    ui.btnMic.textContent = _hadSession ? 'Seguir' : 'Iniciar micrófono';
+    ui.btnMic.textContent = 'Conectar';
     ui.btnMic.classList.remove('recording');
   }
 }
@@ -791,7 +789,6 @@ ui.btnMic.addEventListener('click', async () => {
   try {
     if (!state.active) {
       state.active = true;
-      _hadSession  = true;
       updateMicButton(true);
       if (state.mode === 'livekit') await LiveKitModule.start();
       else                          await MicTestModule.start();
