@@ -879,6 +879,94 @@ function formatError(err) {
 }
 
 // ============================================================
+// MÓDULO BLUETOOTH (solo Raspberry / Linux)
+// ============================================================
+const BluetoothModule = {
+  _card:   document.getElementById('bluetooth-card'),
+  _list:   document.getElementById('bt-device-list'),
+  _refresh: document.getElementById('btn-bt-refresh'),
+
+  init() {
+    this._card.style.display = '';
+    this.load();
+    this._refresh.addEventListener('click', () => this.load());
+  },
+
+  async load() {
+    this._list.innerHTML = '<li class="bt-empty">Buscando…</li>';
+    try {
+      const { devices } = await fetch('/bluetooth/devices').then(r => r.json());
+      if (!devices || devices.length === 0) {
+        this._list.innerHTML = '<li class="bt-empty">Sin dispositivos pareados. Pareá el speaker primero con <code>bluetoothctl</code>.</li>';
+        return;
+      }
+      this._list.innerHTML = '';
+      for (const d of devices) {
+        this._list.appendChild(this._renderItem(d));
+      }
+    } catch {
+      this._list.innerHTML = '<li class="bt-empty">Error al leer dispositivos Bluetooth.</li>';
+    }
+  },
+
+  _renderItem({ mac, name, connected }) {
+    const li  = document.createElement('li');
+    li.className = 'bt-item';
+    li.dataset.mac = mac;
+
+    const dot = document.createElement('span');
+    dot.className = `bt-item-dot${connected ? ' connected' : ''}`;
+
+    const nameEl = document.createElement('span');
+    nameEl.className   = 'bt-item-name';
+    nameEl.textContent = name;
+
+    const macEl = document.createElement('span');
+    macEl.className   = 'bt-item-mac';
+    macEl.textContent = mac;
+
+    const btn = document.createElement('button');
+    btn.className   = connected ? 'bt-item-btn disconnect' : 'bt-item-btn';
+    btn.textContent = connected ? 'Desconectar' : 'Conectar';
+    btn.addEventListener('click', () => this._toggle(mac, connected, btn, dot));
+
+    li.append(dot, nameEl, macEl, btn);
+    return li;
+  },
+
+  async _toggle(mac, connected, btn, dot) {
+    btn.disabled    = true;
+    btn.textContent = connected ? 'Desconectando…' : 'Conectando…';
+    const endpoint  = connected ? '/bluetooth/disconnect' : '/bluetooth/connect';
+    try {
+      const res = await fetch(endpoint, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ mac }),
+      }).then(r => r.json());
+
+      if (res.ok) {
+        const nowConnected = !connected;
+        dot.className      = `bt-item-dot${nowConnected ? ' connected' : ''}`;
+        btn.className      = nowConnected ? 'bt-item-btn disconnect' : 'bt-item-btn';
+        btn.textContent    = nowConnected ? 'Desconectar' : 'Conectar';
+        btn.disabled       = false;
+        btn.onclick        = () => this._toggle(mac, nowConnected, btn, dot);
+        log(`Bluetooth: ${res.message} — ${mac}`, 'success');
+      } else {
+        log(`Bluetooth error: ${res.message}`, 'error');
+        btn.textContent = connected ? 'Desconectar' : 'Conectar';
+        btn.disabled    = false;
+      }
+    } catch (err) {
+      log(`Bluetooth error: ${err.message}`, 'error');
+      btn.textContent = connected ? 'Desconectar' : 'Conectar';
+      btn.disabled    = false;
+    }
+  },
+};
+
+// ============================================================
 // MÓDULO GRABACIONES (solo Pi — requiere ALSA)
 // ============================================================
 const RecorderModule = {
@@ -977,6 +1065,7 @@ document.getElementById('btn-rec-stop').addEventListener('click', async () => {
 
   // ─── Obtener config del servidor ──────────────────────────────────────────
   let isRaspberry = false;
+  let isLinux     = false;
   try {
     const cfg = await fetch('/config').then((r) => r.json());
 
@@ -987,8 +1076,9 @@ document.getElementById('btn-rec-stop').addEventListener('click', async () => {
       ui.smDeviceDot.className    = 'sm-dot connected';
       log(`Dispositivo: ${dev.name} (${cfg.server.hostname} · ${cfg.server.arch})`, 'info');
 
-      // Detectar Raspberry por platform+arch (fuente autoritativa: Node.js en el servidor)
-      isRaspberry = cfg.server.platform === 'linux' && /arm/i.test(cfg.server.arch);
+      isLinux     = cfg.server.platform === 'linux';
+      isRaspberry = isLinux && /arm/i.test(cfg.server.arch);
+      log(`Debug: platform=${cfg.server.platform} arch=${cfg.server.arch} isLinux=${isLinux} isRaspberry=${isRaspberry}`, 'info');
     }
 
     if (!cfg.livekitUrl) {
@@ -1060,6 +1150,12 @@ document.getElementById('btn-rec-stop').addEventListener('click', async () => {
     ui.alsaDeviceSelect.addEventListener('change', updateDeviceCard);
 
     updateSourceState(); // estado inicial
+
+  }
+
+  // ─── Bluetooth (cualquier Linux — no depende de ARM) ─────────────────────
+  if (isLinux) {
+    BluetoothModule.init();
   }
 
   // ─── Verificar conectividad con LiveKit + arrancar chequeo periódico ─────

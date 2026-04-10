@@ -610,6 +610,69 @@ header p  { color: var(--muted); font-size: 0.85rem; }
 }
 .rec-item-dl:hover { background: var(--accent); color: #fff; }
 
+/* ── Bluetooth ────────────────────────────────────────────────────────────── */
+.bt-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.bt-list::-webkit-scrollbar { width: 4px; }
+.bt-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+.bt-empty {
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-align: center;
+  padding: 0.75rem 0;
+}
+
+.bt-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+}
+.bt-item-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+  transition: background var(--transition);
+}
+.bt-item-dot.connected { background: var(--ok); }
+.bt-item-name {
+  flex: 1;
+  font-weight: 500;
+}
+.bt-item-mac {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-family: monospace;
+}
+.bt-item-btn {
+  padding: 0.2rem 0.65rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+  white-space: nowrap;
+}
+.bt-item-btn:hover            { background: var(--accent); color: #fff; border-color: var(--accent); }
+.bt-item-btn.disconnect       { border-color: var(--ok); color: var(--ok); }
+.bt-item-btn.disconnect:hover { background: var(--ok); color: #fff; border-color: var(--ok); }
+.bt-item-btn:disabled         { opacity: 0.5; cursor: default; }
+
 /* ── Pie ──────────────────────────────────────────────────────────────────── */
 footer {
   margin-top: 1.5rem;

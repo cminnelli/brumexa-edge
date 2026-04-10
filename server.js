@@ -10,6 +10,7 @@ const os      = require('os');
 const { setupAudio }                                    = require('./lib/audio');
 const { startRecording, stopRecording, getStatus,
         listRecordings, RECORDINGS_DIR }               = require('./lib/recorder');
+const { setupBluetooth }                               = require('./lib/bluetooth');
 
 const {
   LIVEKIT_URL,
@@ -51,6 +52,38 @@ app.get('/config', (_req, res) => {
       uptime:   Math.floor(process.uptime()),
     },
   });
+});
+
+// ─── GET /debug — info completa del dispositivo para diagnóstico ─────────────
+app.get('/debug', (_req, res) => {
+  const { execSync } = require('child_process');
+  const info = {
+    platform: process.platform,
+    arch:     os.arch(),
+    hostname: os.hostname(),
+    isLinux:  process.platform === 'linux',
+  };
+
+  // ALSA
+  try {
+    info.arecord = execSync('arecord -l 2>&1', { timeout: 3000 }).toString().trim();
+  } catch (e) { info.arecord = `ERROR: ${e.message}`; }
+
+  // Bluetooth
+  try {
+    info.bluetoothDevices = execSync('bluetoothctl devices Paired 2>&1', { timeout: 4000 }).toString().trim();
+  } catch {
+    try {
+      info.bluetoothDevices = execSync("echo -e 'paired-devices\\nquit' | bluetoothctl 2>&1", { timeout: 4000, shell: true }).toString().trim();
+    } catch (e) { info.bluetoothDevices = `ERROR: ${e.message}`; }
+  }
+
+  // BT connected
+  try {
+    info.bluetoothConnected = execSync("bluetoothctl devices Connected 2>&1", { timeout: 3000 }).toString().trim();
+  } catch (e) { info.bluetoothConnected = `ERROR: ${e.message}`; }
+
+  res.json(info);
 });
 
 // ─── GET /livekit-health — verifica que el host LiveKit responde ──────────────
@@ -182,6 +215,7 @@ app.get('/recordings/:file', (req, res) => {
 // Usamos http.createServer para que el WebSocket de audio comparta el mismo puerto
 const httpServer = http.createServer(app);
 setupAudio(app, httpServer);
+setupBluetooth(app, express);
 
 httpServer.listen(PORT, () => {
   console.log(`\n  Brumexa-Edge corriendo en → http://localhost:${PORT}`);
