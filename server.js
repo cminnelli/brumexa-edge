@@ -9,7 +9,8 @@ const os      = require('os');
 
 const { setupAudio }                                    = require('./lib/audio');
 const { startRecording, stopRecording, getStatus,
-        listRecordings, RECORDINGS_DIR }               = require('./lib/recorder');
+        listRecordings, RECORDINGS_DIR,
+        reserveBrowserFilename, saveBrowserRecording } = require('./lib/recorder');
 const { setupBluetooth }                               = require('./lib/bluetooth');
 
 const {
@@ -199,6 +200,28 @@ app.get('/record/status', (_req, res) => {
 // ─── GET /recordings — listar archivos grabados ───────────────────────────────
 app.get('/recordings', (_req, res) => {
   res.json({ files: listRecordings() });
+});
+
+// ─── POST /record/reserve-browser — reservar nombre para grabación del browser ─
+app.post('/record/reserve-browser', (_req, res) => {
+  const filename = reserveBrowserFilename();
+  res.json({ ok: true, filename });
+});
+
+// ─── POST /record/upload — recibir blob WAV del browser ──────────────────────
+app.post('/record/upload/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const chunks   = [];
+  req.on('data', chunk => chunks.push(chunk));
+  req.on('end', () => {
+    try {
+      const buffer = Buffer.concat(chunks);
+      const result = saveBrowserRecording(filename, buffer);
+      res.json({ ok: true, ...result });
+    } catch (err) {
+      res.status(400).json({ ok: false, error: err.message });
+    }
+  });
 });
 
 // ─── GET /recordings/:file — descargar un archivo WAV ────────────────────────

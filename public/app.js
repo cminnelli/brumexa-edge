@@ -1028,45 +1028,75 @@ const BluetoothModule = {
 };
 
 // ============================================================
-// MÓDULO GRABACIONES (solo Pi — requiere ALSA)
+// MÓDULO GRABACIONES — ALSA (Pi) + Browser MediaRecorder
 // ============================================================
 const RecorderModule = {
-  _interval: null,
-  _elapsed:  0,
+  _interval:   null,
+  _elapsed:    0,
+  // Browser recording state
+  _mediaRec:   null,
+  _chunks:     [],
+  _brFilename: null,
 
-  // Mostrar la card y cargar la lista inicial
   async show() {
     ui.recordingsCard.style.display = '';
     await this.refreshList();
   },
 
-  // Iniciar grabación en el servidor
+  // ── Arrancar: elige ALSA o browser según la fuente activa ────────────────
   async start() {
-    const device = getSelectedAlsaDevice();
-    const res    = await fetch('/record/start', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ device }),
-    }).then((r) => r.json());
+    const source = getSelectedSource();
 
-    if (!res.ok) throw new Error(res.error);
+    if (source === 'pi') {
+      // ── ALSA: arecord server-side ──────────────────────────────────────
+      const device = getSelectedAlsaDevice();
+      console.log(`[rec] Iniciando grabación ALSA — device: ${device}`);
+      log(`[Debug] Grabación ALSA — device: ${device}`, 'info');
 
-    log(`Grabando en la Pi — ${res.filename}`, 'success');
+      const res = await fetch('/record/start', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ device }),
+      }).then(r => r.json());
+
+      if (!res.ok) throw new Error(res.error);
+      log(`⏺ Grabando Pi ALSA — ${res.filename}`, 'success');
+
+    } else {
+      // ── Browser: MediaRecorder client-side ────────────────────────────
+      console.log('[rec] Iniciando grabación Browser — getUserMedia');
+      log('[Debug] Grabación Browser — getUserMedia (mic del dispositivo que abre la página)', 'info');
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // Obtener nombre reservado del servidor
+      const { filename } = await fetch('/record/reserve-browser', { method: 'POST' }).then(r => r.json());
+      this._brFilename = filename;
+      this._chunks     = [];
+
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus' : 'audio/webm';
+
+      this._mediaRec = new MediaRecorder(stream, { mimeType });
+      this._mediaRec.ondataavailable = (e) => { if (e.data.size > 0) this._chunks.push(e.data); };
+      this._mediaRec.start(500);
+
+      log(`⏺ Grabando Browser — ${filename}`, 'success');
+    }
+
+    // Timer común
     ui.btnRecStart.style.display = 'none';
     ui.btnRecStop.style.display  = '';
     ui.recTimer.style.display    = '';
-    this._elapsed = 0;
+    this._elapsed  = 0;
     this._interval = setInterval(() => {
       this._elapsed++;
       ui.recSeconds.textContent = this._elapsed;
     }, 1000);
   },
 
-  // Detener grabación
+  // ── Detener ───────────────────────────────────────────────────────────────
   async stop() {
-    const res = await fetch('/record/stop', { method: 'POST' }).then((r) => r.json());
-    if (!res.ok) throw new Error(res.error);
-
     clearInterval(this._interval);
     this._interval = null;
     ui.btnRecStop.style.display  = 'none';
@@ -1074,26 +1104,55 @@ const RecorderModule = {
     ui.recTimer.style.display    = 'none';
     ui.recSeconds.textContent    = '0';
 
-    log(`Grabación guardada: ${res.filename} (${res.duration}s)`, 'success');
+    if (this._mediaRec) {
+      // ── Browser: subir blob al servidor ──────────────────────────────
+      await new Promise(resolve => {
+        this._mediaRec.onstop = resolve;
+        this._mediaRec.stop();
+        this._mediaRec.stream.getTracks().forEach(t => t.stop());
+      });
+
+      const blob    = new Blob(this._chunks, { type: this._mediaRec.mimeType });
+      const buffer  = await blob.arrayBuffer();
+      console.log(`[rec] Subiendo grabación browser — ${this._brFilename} (${(buffer.byteLength/1024).toFixed(1)} KB)`);
+
+      const res = await fetch(`/record/upload/${this._brFilename}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body:   buffer,
+      }).then(r => r.json());
+
+      this._mediaRec   = null;
+      this._chunks     = [];
+      log(`✔ Guardado browser: ${res.filename}`, 'success');
+
+    } else {
+      // ── ALSA: detener arecord ─────────────────────────────────────────
+      const res = await fetch('/record/stop', { method: 'POST' }).then(r => r.json());
+      if (!res.ok) throw new Error(res.error);
+      log(`✔ Guardado ALSA: ${res.filename} (${res.duration}s)`, 'success');
+    }
+
     await this.refreshList();
   },
 
-  // Refrescar la lista de archivos guardados
   async refreshList() {
     try {
-      const { files } = await fetch('/recordings').then((r) => r.json());
+      const { files } = await fetch('/recordings').then(r => r.json());
       if (files.length === 0) {
         ui.recordingsList.innerHTML = '<li class="rec-empty">Sin grabaciones aún.</li>';
         return;
       }
-      ui.recordingsList.innerHTML = files.map((f) => {
+      ui.recordingsList.innerHTML = files.map(f => {
         const kb   = (f.size / 1024).toFixed(1);
         const date = new Date(f.created).toLocaleString();
+        const src  = f.filename.includes('_browser_') ? '🌐' : '🍓';
         return `
           <li class="rec-item">
+            <span title="${f.filename.includes('_browser_') ? 'Browser mic' : 'Pi ALSA mic'}">${src}</span>
             <span class="rec-item-name" title="${f.filename}">${f.filename}</span>
             <span class="rec-item-size">${kb} KB · ${date}</span>
-            <a class="rec-item-dl" href="/recordings/${f.filename}" download>↓ WAV</a>
+            <a class="rec-item-dl" href="/recordings/${f.filename}" download>↓</a>
           </li>`;
       }).join('');
     } catch (err) {
@@ -1173,12 +1232,11 @@ document.getElementById('btn-rec-stop').addEventListener('click', async () => {
           .map((d) => `<option value="${d.id}">${d.name} (${d.id})</option>`)
           .join('');
         log(`${devices.length} dispositivo(s) ALSA: ${devices.map((d) => d.id).join(', ')}`, 'info');
-        RecorderModule.show();
       } else {
-        // Raspberry detectada pero sin dispositivos ALSA aún
         ui.alsaDeviceSelect.innerHTML = '<option value="">Sin dispositivos ALSA</option>';
         log('Raspberry detectada — sin dispositivos ALSA conectados', 'warn');
       }
+      RecorderModule.show();  // siempre visible en Linux (graba browser o ALSA)
     } catch {
       ui.alsaDeviceSelect.innerHTML = '<option value="">Error al leer ALSA</option>';
     }
@@ -1194,12 +1252,12 @@ document.getElementById('btn-rec-stop').addEventListener('click', async () => {
       }
     };
 
-    // Mostrar/ocultar dropdown ALSA + habilitar grabación según fuente
+    // Mostrar/ocultar dropdown ALSA — grabación disponible en ambas fuentes
     const updateSourceState = () => {
       const isPi = getSelectedSource() === 'pi';
       ui.alsaDeviceWrap.style.display = isPi ? '' : 'none';
-      ui.btnRecStart.disabled         = !isPi;
-      ui.btnRecStart.title            = isPi ? '' : 'Solo disponible con Micrófono de la Pi';
+      ui.btnRecStart.disabled         = false;
+      ui.btnRecStart.title            = '';
       updateDeviceCard();
     };
 
