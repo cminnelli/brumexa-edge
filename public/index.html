@@ -193,10 +193,16 @@
   <div class="card" id="bluetooth-card" style="display:none">
     <div class="log-header">
       <p class="card-title" style="margin:0">🔵 Bluetooth</p>
-      <button class="btn-sm" id="btn-bt-refresh">Actualizar</button>
+      <div style="display:flex;gap:0.5rem">
+        <button class="btn-sm" id="btn-bt-scan">📡 Buscar</button>
+        <button class="btn-sm" id="btn-bt-refresh">↺ Pareados</button>
+      </div>
+    </div>
+    <div id="bt-scan-status" style="display:none" class="bt-scan-status">
+      Escaneando… <span id="bt-scan-countdown">8</span>s
     </div>
     <ul id="bt-device-list" class="bt-list">
-      <li class="bt-empty">Buscando dispositivos pareados…</li>
+      <li class="bt-empty">Presioná "Buscar" para escanear o "Pareados" para ver dispositivos ya conectados.</li>
     </ul>
   </div>
 

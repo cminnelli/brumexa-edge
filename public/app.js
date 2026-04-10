@@ -879,40 +879,91 @@ function formatError(err) {
 }
 
 // ============================================================
-// MÓDULO BLUETOOTH (solo Raspberry / Linux)
+// MÓDULO BLUETOOTH (solo Linux / Raspberry)
 // ============================================================
 const BluetoothModule = {
-  _card:   document.getElementById('bluetooth-card'),
-  _list:   document.getElementById('bt-device-list'),
-  _refresh: document.getElementById('btn-bt-refresh'),
+  _card:      document.getElementById('bluetooth-card'),
+  _list:      document.getElementById('bt-device-list'),
+  _scanBtn:   document.getElementById('btn-bt-scan'),
+  _refreshBtn:document.getElementById('btn-bt-refresh'),
+  _scanStatus:document.getElementById('bt-scan-status'),
+  _countdown: document.getElementById('bt-scan-countdown'),
+  _scanning:  false,
 
   init() {
     this._card.style.display = '';
-    this.load();
-    this._refresh.addEventListener('click', () => this.load());
+    this._scanBtn.addEventListener('click',    () => this.scan());
+    this._refreshBtn.addEventListener('click', () => this.loadPaired());
+    this.loadPaired();
   },
 
-  async load() {
-    this._list.innerHTML = '<li class="bt-empty">Buscando…</li>';
+  async loadPaired() {
+    this._list.innerHTML = '<li class="bt-empty">Cargando…</li>';
     try {
       const { devices } = await fetch('/bluetooth/devices').then(r => r.json());
       if (!devices || devices.length === 0) {
-        this._list.innerHTML = '<li class="bt-empty">Sin dispositivos pareados. Pareá el speaker primero con <code>bluetoothctl</code>.</li>';
+        this._list.innerHTML = '<li class="bt-empty">Sin dispositivos pareados. Usá "Buscar" para encontrar speakers.</li>';
         return;
       }
-      this._list.innerHTML = '';
-      for (const d of devices) {
-        this._list.appendChild(this._renderItem(d));
-      }
+      this._renderList(devices);
     } catch {
-      this._list.innerHTML = '<li class="bt-empty">Error al leer dispositivos Bluetooth.</li>';
+      this._list.innerHTML = '<li class="bt-empty">Error leyendo Bluetooth.</li>';
     }
   },
 
-  _renderItem({ mac, name, connected }) {
-    const li  = document.createElement('li');
+  async scan() {
+    if (this._scanning) return;
+    this._scanning = true;
+    this._scanBtn.disabled = true;
+    this._scanStatus.style.display = '';
+    this._list.innerHTML = '<li class="bt-empty">Escaneando…</li>';
+
+    const SECS = 8;
+    let remaining = SECS;
+    this._countdown.textContent = remaining;
+    const timer = setInterval(() => {
+      remaining--;
+      this._countdown.textContent = remaining;
+      if (remaining <= 0) clearInterval(timer);
+    }, 1000);
+
+    log('Bluetooth: escaneando 8 segundos…', 'info');
+    try {
+      const { devices } = await fetch('/bluetooth/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seconds: SECS }),
+      }).then(r => r.json());
+
+      clearInterval(timer);
+      this._scanStatus.style.display = 'none';
+      this._scanning = false;
+      this._scanBtn.disabled = false;
+
+      if (!devices || devices.length === 0) {
+        this._list.innerHTML = '<li class="bt-empty">No se encontraron dispositivos con nombre. Acercá el speaker y volvé a buscar.</li>';
+        return;
+      }
+      log(`Bluetooth: ${devices.length} dispositivo(s) encontrado(s)`, 'success');
+      this._renderList(devices);
+    } catch (err) {
+      clearInterval(timer);
+      this._scanStatus.style.display = 'none';
+      this._scanning = false;
+      this._scanBtn.disabled = false;
+      this._list.innerHTML = '<li class="bt-empty">Error durante el escaneo.</li>';
+      log(`Bluetooth scan error: ${err.message}`, 'error');
+    }
+  },
+
+  _renderList(devices) {
+    this._list.innerHTML = '';
+    for (const d of devices) this._list.appendChild(this._renderItem(d));
+  },
+
+  _renderItem({ mac, name, connected, paired }) {
+    const li = document.createElement('li');
     li.className = 'bt-item';
-    li.dataset.mac = mac;
 
     const dot = document.createElement('span');
     dot.className = `bt-item-dot${connected ? ' connected' : ''}`;
@@ -926,18 +977,27 @@ const BluetoothModule = {
     macEl.textContent = mac;
 
     const btn = document.createElement('button');
-    btn.className   = connected ? 'bt-item-btn disconnect' : 'bt-item-btn';
-    btn.textContent = connected ? 'Desconectar' : 'Conectar';
-    btn.addEventListener('click', () => this._toggle(mac, connected, btn, dot));
+    if (connected) {
+      btn.className   = 'bt-item-btn disconnect';
+      btn.textContent = 'Desconectar';
+      btn.onclick = () => this._action('/bluetooth/disconnect', mac, 'Desconectando…', btn, dot, false);
+    } else if (paired) {
+      btn.className   = 'bt-item-btn';
+      btn.textContent = 'Conectar';
+      btn.onclick = () => this._action('/bluetooth/connect', mac, 'Conectando…', btn, dot, true);
+    } else {
+      btn.className   = 'bt-item-btn';
+      btn.textContent = 'Parear y conectar';
+      btn.onclick = () => this._action('/bluetooth/pair-connect', mac, 'Pareando…', btn, dot, true);
+    }
 
     li.append(dot, nameEl, macEl, btn);
     return li;
   },
 
-  async _toggle(mac, connected, btn, dot) {
+  async _action(endpoint, mac, loadingText, btn, dot, willConnect) {
     btn.disabled    = true;
-    btn.textContent = connected ? 'Desconectando…' : 'Conectando…';
-    const endpoint  = connected ? '/bluetooth/disconnect' : '/bluetooth/connect';
+    btn.textContent = loadingText;
     try {
       const res = await fetch(endpoint, {
         method:  'POST',
@@ -946,22 +1006,23 @@ const BluetoothModule = {
       }).then(r => r.json());
 
       if (res.ok) {
-        const nowConnected = !connected;
-        dot.className      = `bt-item-dot${nowConnected ? ' connected' : ''}`;
-        btn.className      = nowConnected ? 'bt-item-btn disconnect' : 'bt-item-btn';
-        btn.textContent    = nowConnected ? 'Desconectar' : 'Conectar';
+        dot.className      = `bt-item-dot${willConnect ? ' connected' : ''}`;
+        btn.className      = willConnect ? 'bt-item-btn disconnect' : 'bt-item-btn';
+        btn.textContent    = willConnect ? 'Desconectar' : 'Conectar';
         btn.disabled       = false;
-        btn.onclick        = () => this._toggle(mac, nowConnected, btn, dot);
-        log(`Bluetooth: ${res.message} — ${mac}`, 'success');
+        btn.onclick        = willConnect
+          ? () => this._action('/bluetooth/disconnect', mac, 'Desconectando…', btn, dot, false)
+          : () => this._action('/bluetooth/connect',    mac, 'Conectando…',    btn, dot, true);
+        log(`Bluetooth: ${res.message} — ${name || mac}`, 'success');
       } else {
-        log(`Bluetooth error: ${res.message}`, 'error');
-        btn.textContent = connected ? 'Desconectar' : 'Conectar';
+        log(`Bluetooth: ${res.message}`, 'error');
         btn.disabled    = false;
+        btn.textContent = willConnect ? 'Conectar' : 'Desconectar';
       }
     } catch (err) {
       log(`Bluetooth error: ${err.message}`, 'error');
-      btn.textContent = connected ? 'Desconectar' : 'Conectar';
       btn.disabled    = false;
+      btn.textContent = willConnect ? 'Conectar' : 'Desconectar';
     }
   },
 };
