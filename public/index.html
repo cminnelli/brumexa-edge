@@ -17,208 +17,254 @@
     <p>Dashboard de voz · LiveKit / Test Mic</p>
   </header>
 
-  <!-- ── Grilla de estado: Dispositivo · LiveKit · Micrófono ──────────────── -->
-  <div class="status-grid">
+  <!-- ── Tab nav (Panel / Terminal) — solo Linux ─────────────────────────── -->
+  <nav id="tab-nav" class="tab-nav" style="display:none">
+    <button class="tab-btn active" data-tab="panel">Panel</button>
+    <button class="tab-btn"        data-tab="terminal">Terminal Pi</button>
+  </nav>
 
-    <div class="status-mini">
-      <div class="sm-header">
-        <span class="sm-icon" id="sm-device-icon">🖥</span>
-        <span class="sm-label">Dispositivo</span>
-        <span class="sm-dot idle" id="sm-device-dot"></span>
-      </div>
-      <div class="sm-value" id="sm-device-val">Detectando…</div>
-      <div class="sm-sub"  id="sm-device-sub"></div>
-    </div>
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <!-- Panel principal                                                         -->
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <div id="panel-section">
 
-    <div class="status-mini">
-      <div class="sm-header">
-        <span class="sm-icon">☁️</span>
-        <span class="sm-label">LiveKit</span>
-        <span class="sm-dot idle" id="sm-lk-dot"></span>
-      </div>
-      <div class="sm-value" id="sm-lk-val">Verificando…</div>
-      <div class="sm-sub"  id="sm-lk-sub">—</div>
-    </div>
+    <!-- ── Grilla de estado: Dispositivo · LiveKit · Canal · Micrófono ──── -->
+    <div class="status-grid">
 
-    <div class="status-mini" id="sm-canal-card">
-      <div class="sm-header">
-        <span class="sm-icon">📡</span>
-        <span class="sm-label">Canal</span>
-        <span class="sm-dot idle" id="sm-canal-dot"></span>
-      </div>
-      <div class="sm-value" id="sm-canal-val">Cerrado</div>
-      <div class="sm-sub"  id="sm-canal-sub">sin sala</div>
-    </div>
-
-    <div class="status-mini">
-      <div class="sm-header">
-        <span class="sm-icon">🎙</span>
-        <span class="sm-label">Micrófono</span>
-        <span class="sm-dot idle" id="sm-mic-dot"></span>
-      </div>
-      <div class="sm-value" id="sm-mic-val">Inactivo</div>
-      <div class="sm-sub"  id="sm-mic-sub">—</div>
-    </div>
-
-  </div>
-
-  <!-- ── Pasos del proceso LiveKit ─────────────────────────────────────────── -->
-  <div class="card" id="lk-steps-card">
-    <div class="steps-card-header">
-      <p class="card-title" style="margin:0">Proceso LiveKit</p>
-      <div class="session-uptime" id="session-uptime" style="display:none">
-        <span class="uptime-dot"></span>
-        <span id="uptime-display">00:00:00</span>
-      </div>
-      <button class="btn-reconectar" id="btn-reconectar" style="display:none">Reconectar</button>
-    </div>
-
-    <div class="steps-row">
-
-      <div class="step">
-        <div class="step-circle idle" id="step-token-circle">1</div>
-        <div class="step-label">Token</div>
-        <div class="step-status" id="step-token-msg">—</div>
-      </div>
-
-      <div class="step-connector" id="conn-1"></div>
-
-      <div class="step">
-        <div class="step-circle idle" id="step-connect-circle">2</div>
-        <div class="step-label">Conectar</div>
-        <div class="step-status" id="step-connect-msg">—</div>
-      </div>
-
-      <div class="step-connector" id="conn-2"></div>
-
-      <div class="step">
-        <div class="step-circle idle" id="step-publish-circle">3</div>
-        <div class="step-label">Publicar</div>
-        <div class="step-status" id="step-publish-msg">—</div>
-      </div>
-
-    </div>
-
-    <!-- Mini VU — solo visible cuando el mic está activo en LiveKit -->
-    <div id="mini-vu-wrap" style="display:none">
-      <div id="mini-vu-bar"></div>
-      <span id="mini-vu-db">— dB</span>
-    </div>
-
-  </div>
-
-  <!-- ── Controles ──────────────────────────────────────────────────────────── -->
-  <div class="card">
-    <p class="card-title">Configuración</p>
-    <div class="controls">
-
-      <div>
-        <p class="ctrl-label">Modo de operación</p>
-        <div class="mode-selector">
-          <button class="mode-btn active" data-mode="livekit">LiveKit</button>
-          <button class="mode-btn"        data-mode="mictest">Test Mic</button>
+      <div class="status-mini">
+        <div class="sm-header">
+          <span class="sm-icon" id="sm-device-icon">🖥</span>
+          <span class="sm-label">Dispositivo</span>
+          <span class="sm-dot idle" id="sm-device-dot"></span>
         </div>
+        <div class="sm-value" id="sm-device-val">Detectando…</div>
+        <div class="sm-sub"  id="sm-device-sub"></div>
       </div>
 
-      <!-- Fuente de audio: visible solo cuando la Pi tiene dispositivos ALSA -->
-      <div id="audio-source-wrap" style="display:none">
-        <p class="ctrl-label">Fuente de audio</p>
-        <div class="source-selector">
+      <div class="status-mini">
+        <div class="sm-header">
+          <span class="sm-icon">☁️</span>
+          <span class="sm-label">LiveKit</span>
+          <span class="sm-dot idle" id="sm-lk-dot"></span>
+        </div>
+        <div class="sm-value" id="sm-lk-val">Verificando…</div>
+        <div class="sm-sub"  id="sm-lk-sub">—</div>
+      </div>
 
-          <label class="source-opt">
-            <input type="radio" name="audio-source" value="browser" checked />
-            <span class="source-opt-inner">
-              <span class="source-opt-icon">🌐</span>
-              <span class="source-opt-text">
-                <strong>Micrófono del browser</strong>
-                <small>getUserMedia — mic del dispositivo que abre esta página</small>
+      <div class="status-mini" id="sm-canal-card">
+        <div class="sm-header">
+          <span class="sm-icon">📡</span>
+          <span class="sm-label">Canal</span>
+          <span class="sm-dot idle" id="sm-canal-dot"></span>
+        </div>
+        <div class="sm-value" id="sm-canal-val">Cerrado</div>
+        <div class="sm-sub"  id="sm-canal-sub">sin sala</div>
+      </div>
+
+      <div class="status-mini">
+        <div class="sm-header">
+          <span class="sm-icon">🎙</span>
+          <span class="sm-label">Micrófono</span>
+          <span class="sm-dot idle" id="sm-mic-dot"></span>
+        </div>
+        <div class="sm-value" id="sm-mic-val">Inactivo</div>
+        <div class="sm-sub"  id="sm-mic-sub">—</div>
+      </div>
+
+    </div>
+
+    <!-- ── Pasos del proceso LiveKit ──────────────────────────────────────── -->
+    <div class="card" id="lk-steps-card">
+      <div class="steps-card-header">
+        <p class="card-title" style="margin:0">Proceso LiveKit</p>
+        <div class="session-uptime" id="session-uptime" style="display:none">
+          <span class="uptime-dot"></span>
+          <span id="uptime-display">00:00:00</span>
+        </div>
+        <button class="btn-reconectar" id="btn-reconectar" style="display:none">Reconectar</button>
+      </div>
+
+      <div class="steps-row">
+
+        <div class="step">
+          <div class="step-circle idle" id="step-token-circle">1</div>
+          <div class="step-label">Token</div>
+          <div class="step-status" id="step-token-msg">—</div>
+        </div>
+
+        <div class="step-connector" id="conn-1"></div>
+
+        <div class="step">
+          <div class="step-circle idle" id="step-connect-circle">2</div>
+          <div class="step-label">Conectar</div>
+          <div class="step-status" id="step-connect-msg">—</div>
+        </div>
+
+        <div class="step-connector" id="conn-2"></div>
+
+        <div class="step">
+          <div class="step-circle idle" id="step-publish-circle">3</div>
+          <div class="step-label">Publicar</div>
+          <div class="step-status" id="step-publish-msg">—</div>
+        </div>
+
+      </div>
+
+      <!-- Mini VU — solo visible cuando el mic está activo en LiveKit -->
+      <div id="mini-vu-wrap" style="display:none">
+        <div id="mini-vu-bar"></div>
+        <span id="mini-vu-db">— dB</span>
+      </div>
+
+    </div>
+
+    <!-- ── Controles ────────────────────────────────────────────────────────── -->
+    <div class="card">
+      <p class="card-title">Configuración</p>
+      <div class="controls">
+
+        <div>
+          <p class="ctrl-label">Modo de operación</p>
+          <div class="mode-selector">
+            <button class="mode-btn active" data-mode="livekit">LiveKit</button>
+            <button class="mode-btn"        data-mode="mictest">Test Mic</button>
+          </div>
+        </div>
+
+        <!-- Fuente de audio: visible solo cuando la Pi tiene dispositivos ALSA -->
+        <div id="audio-source-wrap" style="display:none">
+          <p class="ctrl-label">Fuente de audio</p>
+          <div class="source-selector">
+
+            <label class="source-opt">
+              <input type="radio" name="audio-source" value="browser" checked />
+              <span class="source-opt-inner">
+                <span class="source-opt-icon">🌐</span>
+                <span class="source-opt-text">
+                  <strong>Micrófono del browser</strong>
+                  <small>getUserMedia — mic del dispositivo que abre esta página</small>
+                </span>
               </span>
-            </span>
-          </label>
+            </label>
 
-          <label class="source-opt">
-            <input type="radio" name="audio-source" value="pi" />
-            <span class="source-opt-inner">
-              <span class="source-opt-icon">🍓</span>
-              <span class="source-opt-text">
-                <strong>Micrófono de la Raspberry Pi</strong>
-                <small>Captura ALSA server-side</small>
+            <label class="source-opt">
+              <input type="radio" name="audio-source" value="pi" />
+              <span class="source-opt-inner">
+                <span class="source-opt-icon">🍓</span>
+                <span class="source-opt-text">
+                  <strong>Micrófono de la Raspberry Pi</strong>
+                  <small>Captura ALSA server-side</small>
+                </span>
               </span>
-            </span>
-          </label>
+            </label>
 
+          </div>
+
+          <!-- Selector de dispositivo ALSA (visible solo con fuente = pi) -->
+          <div id="alsa-device-wrap" style="display:none">
+            <p class="ctrl-label" style="margin-top:0.75rem">Dispositivo ALSA</p>
+            <select id="alsa-device-select"></select>
+          </div>
         </div>
 
-        <!-- Selector de dispositivo ALSA (visible solo con fuente = pi) -->
-        <div id="alsa-device-wrap" style="display:none">
-          <p class="ctrl-label" style="margin-top:0.75rem">Dispositivo ALSA</p>
-          <select id="alsa-device-select"></select>
+        <button id="btn-mic">Conectar</button>
+
+      </div>
+    </div>
+
+    <!-- ── VU Meter (Test Mic) ─────────────────────────────────────────────── -->
+    <div class="card" id="vumeter-card" style="display:none">
+      <p class="card-title">Nivel de micrófono</p>
+      <canvas id="vu-canvas" width="440" height="70"></canvas>
+      <div id="vu-bar-wrap">
+        <div id="vu-bar"></div>
+        <span id="vu-db">— dB</span>
+      </div>
+      <p class="vu-hint">Hablá para ver el nivel.</p>
+    </div>
+
+    <!-- ── Grabaciones (solo visible cuando hay ALSA) ─────────────────────── -->
+    <div class="card" id="recordings-card" style="display:none">
+      <div class="log-header">
+        <p class="card-title" style="margin:0">Grabaciones</p>
+        <div style="display:flex;gap:0.5rem;align-items:center">
+          <span id="rec-timer" class="rec-timer" style="display:none">⏺ <span id="rec-seconds">0</span>s</span>
+          <button class="btn-sm btn-rec-start" id="btn-rec-start">⏺ Grabar</button>
+          <button class="btn-sm btn-rec-stop"  id="btn-rec-stop"  style="display:none">⏹ Detener</button>
         </div>
       </div>
-
-      <button id="btn-mic">Conectar</button>
-
+      <ul id="recordings-list" class="recordings-list">
+        <li class="rec-empty">Sin grabaciones aún.</li>
+      </ul>
     </div>
-  </div>
 
-  <!-- ── VU Meter (Test Mic) ───────────────────────────────────────────────── -->
-  <div class="card" id="vumeter-card" style="display:none">
-    <p class="card-title">Nivel de micrófono</p>
-    <canvas id="vu-canvas" width="440" height="70"></canvas>
-    <div id="vu-bar-wrap">
-      <div id="vu-bar"></div>
-      <span id="vu-db">— dB</span>
+    <!-- ── Bluetooth (solo visible en Linux) ──────────────────────────────── -->
+    <div class="card" id="bluetooth-card" style="display:none">
+      <div class="log-header">
+        <p class="card-title" style="margin:0">🔵 Bluetooth</p>
+        <div style="display:flex;gap:0.5rem">
+          <button class="btn-sm" id="btn-bt-scan">📡 Buscar</button>
+          <button class="btn-sm" id="btn-bt-refresh">↺ Pareados</button>
+        </div>
+      </div>
+      <div id="bt-scan-status" style="display:none" class="bt-scan-status">
+        Escaneando… <span id="bt-scan-countdown">8</span>s
+      </div>
+      <ul id="bt-device-list" class="bt-list">
+        <li class="bt-empty">Presioná "Buscar" para escanear o "Pareados" para ver dispositivos ya conectados.</li>
+      </ul>
     </div>
-    <p class="vu-hint">Hablá para ver el nivel.</p>
-  </div>
 
-  <!-- ── Grabaciones (solo visible cuando hay ALSA) ───────────────────────── -->
-  <div class="card" id="recordings-card" style="display:none">
-    <div class="log-header">
-      <p class="card-title" style="margin:0">Grabaciones</p>
-      <div style="display:flex;gap:0.5rem;align-items:center">
-        <span id="rec-timer" class="rec-timer" style="display:none">⏺ <span id="rec-seconds">0</span>s</span>
-        <button class="btn-sm btn-rec-start" id="btn-rec-start">⏺ Grabar</button>
-        <button class="btn-sm btn-rec-stop"  id="btn-rec-stop"  style="display:none">⏹ Detener</button>
+    <!-- ── Log de eventos ──────────────────────────────────────────────────── -->
+    <div class="card">
+      <div class="log-header">
+        <p class="card-title" style="margin:0">Log de eventos</p>
+        <button class="btn-sm" id="btn-clear-log">Limpiar</button>
+      </div>
+      <ul id="log"></ul>
+    </div>
+
+    <footer>Brumexa-Edge · Node.js + Express · LiveKit</footer>
+
+  </div><!-- #panel-section -->
+
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <!-- Terminal Pi                                                              -->
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <div id="terminal-section" style="display:none">
+
+    <!-- Quick commands -->
+    <div class="card">
+      <p class="card-title">Comandos rápidos</p>
+      <div id="term-groups"></div>
+    </div>
+
+    <!-- Custom input -->
+    <div class="card">
+      <p class="card-title">Comando personalizado</p>
+      <div class="term-input-row">
+        <span class="term-prompt-char">$</span>
+        <input type="text" id="term-input" class="term-input"
+               placeholder="escribí un comando…"
+               autocomplete="off" spellcheck="false" />
+        <button id="btn-term-run" class="btn-term-run">Ejecutar</button>
       </div>
     </div>
 
-    <!-- Lista de archivos grabados -->
-    <ul id="recordings-list" class="recordings-list">
-      <li class="rec-empty">Sin grabaciones aún.</li>
-    </ul>
-  </div>
-
-  <!-- ── Bluetooth (solo visible en Raspberry / Linux) ───────────────────── -->
-  <div class="card" id="bluetooth-card" style="display:none">
-    <div class="log-header">
-      <p class="card-title" style="margin:0">🔵 Bluetooth</p>
-      <div style="display:flex;gap:0.5rem">
-        <button class="btn-sm" id="btn-bt-scan">📡 Buscar</button>
-        <button class="btn-sm" id="btn-bt-refresh">↺ Pareados</button>
+    <!-- Output -->
+    <div class="card">
+      <div class="log-header">
+        <p class="card-title" style="margin:0">Output</p>
+        <button class="btn-sm" id="btn-term-clear">Limpiar</button>
       </div>
+      <div id="term-output" class="term-output"></div>
     </div>
-    <div id="bt-scan-status" style="display:none" class="bt-scan-status">
-      Escaneando… <span id="bt-scan-countdown">8</span>s
-    </div>
-    <ul id="bt-device-list" class="bt-list">
-      <li class="bt-empty">Presioná "Buscar" para escanear o "Pareados" para ver dispositivos ya conectados.</li>
-    </ul>
-  </div>
 
-  <!-- ── Log de eventos ────────────────────────────────────────────────────── -->
-  <div class="card">
-    <div class="log-header">
-      <p class="card-title" style="margin:0">Log de eventos</p>
-      <button class="btn-sm" id="btn-clear-log">Limpiar</button>
-    </div>
-    <ul id="log"></ul>
-  </div>
-
-  <footer>Brumexa-Edge · Node.js + Express · LiveKit</footer>
+  </div><!-- #terminal-section -->
 
   <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
   <script src="app.js"></script>
+  <script src="terminal.js"></script>
 
 </body>
 </html>

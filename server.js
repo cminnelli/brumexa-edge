@@ -234,6 +234,31 @@ app.get('/recordings/:file', (req, res) => {
   });
 });
 
+// ─── POST /terminal/run — ejecutar comando en la Pi ──────────────────────────
+app.post('/terminal/run', express.json(), (req, res) => {
+  const { command } = req.body || {};
+  if (!command || typeof command !== 'string') {
+    return res.status(400).json({ ok: false, output: 'Comando inválido' });
+  }
+
+  // Bloquear comandos destructivos
+  const blocked = /rm\s+-rf\s+\/|mkfs|dd\s+if=|shutdown|reboot|halt|>\s*\/dev\/sd/i;
+  if (blocked.test(command)) {
+    return res.status(403).json({ ok: false, output: 'Comando bloqueado por seguridad' });
+  }
+
+  const { exec } = require('child_process');
+  const start = Date.now();
+  console.log(`[terminal] $ ${command}`);
+
+  exec(command, { timeout: 15000, shell: true, cwd: process.cwd() }, (err, stdout, stderr) => {
+    const ms     = Date.now() - start;
+    const output = (stdout + stderr).trim() || '(sin output)';
+    console.log(`[terminal] done (${ms}ms) exit=${err?.code ?? 0}`);
+    res.json({ ok: !err || err.code === 0, output, exitCode: err?.code ?? 0, ms });
+  });
+});
+
 // ─── Inicio ───────────────────────────────────────────────────────────────────
 // Usamos http.createServer para que el WebSocket de audio comparta el mismo puerto
 const httpServer = http.createServer(app);

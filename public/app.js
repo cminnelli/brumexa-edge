@@ -355,20 +355,36 @@ const PiMicModule = {
 
     await new Promise((resolve, reject) => {
       ws.onopen  = () => {
-        log(`WebSocket abierto — dispositivo: ${device}`, 'success');
+        log(`[mic-pi] WebSocket abierto — ALSA device: ${device}`, 'success');
+        console.log(`[PiMic] WS open — device: ${device} — sampleRate: 16000 Hz mono`);
         resolve();
       };
-      ws.onerror = () => reject(new Error(`WebSocket de audio falló (${device})`));
+      ws.onerror = (ev) => {
+        console.error('[PiMic] WS error', ev);
+        reject(new Error(`WebSocket de audio falló (${device})`));
+      };
     });
 
     let chunkCount = 0;
+    let _lastLogAt = 0;
     ws.onmessage = (e) => {
       workletNode.port.postMessage(e.data, [e.data]);
-      if (++chunkCount === 5) log('PCM recibiendo datos del mic Pi…', 'info');
+      chunkCount++;
+      // Log al primer chunk y luego cada 5 segundos (~200 chunks a 16kHz/512 bytes)
+      if (chunkCount === 1) {
+        console.log(`[PiMic] ▶ primer chunk recibido (${e.data.byteLength} bytes)`);
+        log('[mic-pi] Capturando audio — primer frame recibido', 'success');
+      }
+      const now = Date.now();
+      if (now - _lastLogAt > 5000 && chunkCount > 1) {
+        _lastLogAt = now;
+        console.log(`[PiMic] streaming — chunk #${chunkCount} (${e.data.byteLength} B/frame)`);
+      }
     };
 
     ws.onclose = (e) => {
-      if (state.active) log(`WebSocket cerrado: ${e.reason || 'sin razón'}`, 'warn');
+      console.log(`[PiMic] WS cerrado — code: ${e.code}  reason: "${e.reason || '—'}"  chunks: ${chunkCount}`);
+      if (state.active) log(`[mic-pi] WebSocket cerrado: ${e.reason || 'sin razón'}`, 'warn');
     };
 
     return destination.stream;
@@ -437,8 +453,9 @@ const LiveKitModule = {
   },
 
   async start() {
+    console.log('[LiveKit] ── start() ──────────────────────────────────');
     resetSteps();
-    log('Solicitando token al servidor central…');
+    log('[lk] Solicitando token al servidor central…');
     setStep('token', 'loading', 'obteniendo…');
 
     let tokenData, serverUrl;
@@ -486,31 +503,36 @@ const LiveKitModule = {
     };
 
     room.on(LivekitClient.RoomEvent.Connected, () => {
-      log(`Conectado a LiveKit · sala: ${tokenData.room} · participantes: ${room.remoteParticipants.size}`, 'success');
+      const n   = room.remoteParticipants.size;
+      const ids = [...room.remoteParticipants.values()].map(p => p.identity).join(', ') || '—';
+      console.log(`[LiveKit] ✔ Connected — room: ${tokenData.room}  sid: ${room.localParticipant?.sid}  remote: ${n}`);
+      log(`[lk] Conectado — sala: ${tokenData.room} · ${n} participante(s) remoto(s)`, 'success');
       setStep('connect', 'ok', tokenData.room);
       activateConnector(2);
       startSessionTimer();
       showReconectar(false);
       stopHealthCheck();
       updateWorkerState();
-      if (room.remoteParticipants.size === 0) {
-        log('Sin worker en sala — el agente brumexa-api no se unió. Verificá que esté corriendo.', 'warn');
+      if (n === 0) {
+        log('[lk] Sin worker en sala — brumexa-api no se unió todavía.', 'warn');
       } else {
-        const ids = [...room.remoteParticipants.values()].map(p => p.identity).join(', ');
-        log(`Workers en sala: ${ids}`, 'success');
+        log(`[lk] Workers en sala: ${ids}`, 'success');
+        console.log(`[LiveKit] workers: ${ids}`);
       }
     });
 
     room.on(LivekitClient.RoomEvent.ParticipantConnected, (participant) => {
-      log(`Worker conectado: ${participant.identity}`, 'success');
+      console.log(`[LiveKit] 👤 participante conectado: ${participant.identity} (sid: ${participant.sid})`);
+      log(`[lk] Participante conectado: ${participant.identity}`, 'success');
       updateWorkerState();
     });
 
     room.on(LivekitClient.RoomEvent.ParticipantDisconnected, (participant) => {
-      log(`Worker desconectado: ${participant.identity}`, 'warn');
+      console.log(`[LiveKit] 👤 participante desconectado: ${participant.identity}`);
+      log(`[lk] Participante desconectado: ${participant.identity}`, 'warn');
       updateWorkerState();
       if (room.remoteParticipants.size === 0) {
-        log('Sin workers en sala — audio sin destino.', 'warn');
+        log('[lk] Sin workers en sala — audio sin destino.', 'warn');
       }
     });
 
@@ -583,48 +605,68 @@ const LiveKitModule = {
       track.detach();
     });
 
-    log(`Conectando a: ${livekitUrl}`, 'info');
+    log(`[lk] Conectando a room "${tokenData.room}" → ${livekitUrl}`, 'info');
+    console.log(`[LiveKit] → connect  room: ${tokenData.room}  identity: ${tokenData.identity}  url: ${livekitUrl}`);
 
     try {
       await room.connect(livekitUrl, tokenData.token);
+      console.log(`[LiveKit] ✔ conectado  sid: ${room.localParticipant?.sid}`);
     } catch (err) {
       setStep('connect', 'error', 'falló');
-      setChannelStatus('closed', tokenData.room);   // token OK pero LiveKit no responde
-      log(`Error al conectar: ${err.message}`, 'error');
+      setChannelStatus('closed', tokenData.room);
+      log(`[lk] Error al conectar: ${err.message}`, 'error');
+      console.error('[LiveKit] ✘ connect error:', err);
       throw err;
     }
 
-    log('Publicando micrófono…');
+    log('[lk] Conectado — obteniendo fuente de audio…');
     setStep('publish', 'loading', 'publicando…');
     setMicStatus('requesting', 'obteniendo fuente…');
 
     let localTrack;
     let micStream;   // para el mini VU meter
 
+    const selectedSrc = getSelectedSource();
+    console.log(`[LiveKit] fuente seleccionada: ${selectedSrc}`);
+
     try {
-      if (getSelectedSource() === 'pi') {
+      if (selectedSrc === 'pi') {
         // ── Fuente Pi: WebSocket → AudioWorklet → MediaStream → LiveKit ──────
-        micStream              = await PiMicModule.start(getSelectedAlsaDevice());
+        const alsaDevice = getSelectedAlsaDevice();
+        log(`[mic-pi] Iniciando captura ALSA — device: ${alsaDevice}`, 'info');
+        console.log(`[LiveKit] ▶ PiMic.start() — ALSA: ${alsaDevice}`);
+
+        micStream              = await PiMicModule.start(alsaDevice);
         const [rawAudioTrack]  = micStream.getAudioTracks();
-        // publishTrack devuelve LocalTrackPublication — guardamos pub.track (LocalAudioTrack)
-        // que sí tiene .stop() para la limpieza en stop()
+        console.log(`[LiveKit] audio track: id=${rawAudioTrack.id} label="${rawAudioTrack.label}" state=${rawAudioTrack.readyState}`);
+
+        log('[lk] Publicando track Pi → LiveKit…', 'info');
+        console.log('[LiveKit] → publishTrack (pi-mic)');
         const pub = await room.localParticipant.publishTrack(rawAudioTrack, {
           name:   'pi-mic',
           source: LivekitClient.Track.Source.Microphone,
         });
         localTrack = pub.track ?? pub;
+        console.log(`[LiveKit] ✔ publicado — trackSid: ${pub.trackSid}  muted: ${pub.isMuted}`);
 
       } else {
         // ── Fuente browser: API pública de LiveKit con procesadores de audio ──
+        log('[mic-browser] getUserMedia — solicitando micrófono…', 'info');
+        console.log('[LiveKit] ▶ createLocalAudioTrack (browser getUserMedia)');
+
         localTrack = await LivekitClient.createLocalAudioTrack({
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl:  true,
         });
-        await room.localParticipant.publishTrack(localTrack);
-        micStream = localTrack.mediaStreamTrack
-          ? new MediaStream([localTrack.mediaStreamTrack])
-          : null;
+        const mt = localTrack.mediaStreamTrack;
+        console.log(`[LiveKit] audio track: id=${mt?.id} label="${mt?.label}" state=${mt?.readyState}`);
+
+        console.log('[LiveKit] → publishTrack (browser-mic)');
+        const pub = await room.localParticipant.publishTrack(localTrack);
+        console.log(`[LiveKit] ✔ publicado — trackSid: ${pub?.trackSid}  muted: ${pub?.isMuted}`);
+
+        micStream = mt ? new MediaStream([mt]) : null;
         updateMicName();
       }
 
@@ -632,14 +674,17 @@ const LiveKitModule = {
       PiMicModule.stop();
       setStep('publish', 'error', 'falló');
       setMicStatus('error', 'sin permiso');
+      console.error('[LiveKit] ✘ publish error:', err);
+      log(`[lk] Error al publicar: ${err.message}`, 'error');
       throw err;
     }
 
-    const sourceName = getSelectedSource() === 'pi' ? 'Pi ALSA' : 'Browser';
+    const sourceName = selectedSrc === 'pi' ? 'Pi ALSA' : 'Browser';
     setStep('publish', 'ok', 'activo');
     setMicStatus('active', sourceName);
     updateWorkerState();
-    log(`Micrófono publicado — fuente: ${sourceName}`, 'success');
+    log(`[lk] Micrófono activo — fuente: ${sourceName}`, 'success');
+    console.log(`[LiveKit] ▶ streaming activo — fuente: ${sourceName}`);
     if (micStream) startMiniVu(micStream);
 
     state.room       = room;
@@ -647,24 +692,29 @@ const LiveKitModule = {
   },
 
   async stop() {
+    console.log('[LiveKit] ⏹ stop() iniciado');
     PiMicModule.stop();
     stopMiniVu();
     stopSessionTimer();
     if (state.localTrack) {
+      console.log('[LiveKit] → unpublishTrack');
       await state.room?.localParticipant?.unpublishTrack(state.localTrack);
       state.localTrack.stop();
       state.localTrack = null;
+      console.log('[LiveKit] ✔ track detenido y removido');
     }
     if (state.room) {
       const r  = state.room;
       state.room = null;   // marcar antes de disconnect para que el handler Disconnected no interfiera
+      console.log('[LiveKit] → room.disconnect()');
       await r.disconnect();
+      console.log('[LiveKit] ✔ room desconectada');
     }
     setMicStatus('idle');
     setChannelStatus('closed');
     resetSteps();
     showReconectar(false);
-    log('Desconectado de LiveKit', 'warn');
+    log('[lk] Desconectado de LiveKit', 'warn');
     startHealthCheck();
     checkLiveKitHealth();
   },
@@ -961,9 +1011,10 @@ const BluetoothModule = {
     for (const d of devices) this._list.appendChild(this._renderItem(d));
   },
 
-  _renderItem({ mac, name, connected, paired }) {
+  _renderItem({ mac, name, connected, paired, audioCapable }) {
     const li = document.createElement('li');
     li.className = 'bt-item';
+    if (audioCapable) li.classList.add('bt-audio');
 
     const dot = document.createElement('span');
     dot.className = `bt-item-dot${connected ? ' connected' : ''}`;
@@ -971,6 +1022,11 @@ const BluetoothModule = {
     const nameEl = document.createElement('span');
     nameEl.className   = 'bt-item-name';
     nameEl.textContent = name;
+
+    const badge = document.createElement('span');
+    badge.className   = 'bt-item-badge';
+    badge.textContent = audioCapable ? '🔊 audio' : '';
+    badge.title       = audioCapable ? 'Perfil A2DP detectado — apto para audio' : '';
 
     const macEl = document.createElement('span');
     macEl.className   = 'bt-item-mac';
@@ -980,22 +1036,72 @@ const BluetoothModule = {
     if (connected) {
       btn.className   = 'bt-item-btn disconnect';
       btn.textContent = 'Desconectar';
-      btn.onclick = () => this._action('/bluetooth/disconnect', mac, 'Desconectando…', btn, dot, false);
+      btn.onclick = () => this._action('/bluetooth/disconnect', mac, name, 'Desconectando…', btn, dot, false);
     } else if (paired) {
       btn.className   = 'bt-item-btn';
       btn.textContent = 'Conectar';
-      btn.onclick = () => this._action('/bluetooth/connect', mac, 'Conectando…', btn, dot, true);
+      btn.onclick = () => this._action('/bluetooth/connect', mac, name, 'Conectando…', btn, dot, true);
     } else {
       btn.className   = 'bt-item-btn';
-      btn.textContent = 'Parear y conectar';
-      btn.onclick = () => this._action('/bluetooth/pair-connect', mac, 'Pareando…', btn, dot, true);
+      btn.textContent = 'Parear';
+      btn.onclick = () => this._pair(mac, name, btn, dot);
     }
 
-    li.append(dot, nameEl, macEl, btn);
+    li.append(dot, nameEl, badge, macEl, btn);
     return li;
   },
 
-  async _action(endpoint, mac, loadingText, btn, dot, willConnect) {
+  // Pairing con botón cancelar
+  async _pair(mac, name, btn, dot) {
+    btn.disabled    = true;
+    btn.textContent = 'Pareando…';
+
+    // Agregar botón cancelar al lado
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className   = 'bt-item-btn bt-cancel';
+    cancelBtn.textContent = 'Cancelar';
+    cancelBtn.onclick     = async () => {
+      cancelBtn.disabled = true;
+      await fetch('/bluetooth/cancel-pairing', { method: 'POST' });
+      log('Bluetooth: pairing cancelado', 'warn');
+      btn.disabled    = false;
+      btn.textContent = 'Parear';
+      cancelBtn.remove();
+    };
+    btn.insertAdjacentElement('afterend', cancelBtn);
+
+    log(`Bluetooth: iniciando pairing con ${name || mac} — puede pedir confirmación en el dispositivo…`, 'info');
+
+    try {
+      const res = await fetch('/bluetooth/pair-connect', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ mac }),
+      }).then(r => r.json());
+
+      cancelBtn.remove();
+
+      if (res.ok) {
+        dot.className   = 'bt-item-dot connected';
+        btn.className   = 'bt-item-btn disconnect';
+        btn.textContent = 'Desconectar';
+        btn.disabled    = false;
+        btn.onclick     = () => this._action('/bluetooth/disconnect', mac, name, 'Desconectando…', btn, dot, false);
+        log(`Bluetooth: ${res.message} — ${name || mac}`, 'success');
+      } else {
+        btn.disabled    = false;
+        btn.textContent = 'Parear';
+        log(`Bluetooth: ${res.message}`, 'error');
+      }
+    } catch (err) {
+      cancelBtn.remove();
+      btn.disabled    = false;
+      btn.textContent = 'Parear';
+      log(`Bluetooth error: ${err.message}`, 'error');
+    }
+  },
+
+  async _action(endpoint, mac, name, loadingText, btn, dot, willConnect) {
     btn.disabled    = true;
     btn.textContent = loadingText;
     try {
@@ -1006,13 +1112,13 @@ const BluetoothModule = {
       }).then(r => r.json());
 
       if (res.ok) {
-        dot.className      = `bt-item-dot${willConnect ? ' connected' : ''}`;
-        btn.className      = willConnect ? 'bt-item-btn disconnect' : 'bt-item-btn';
-        btn.textContent    = willConnect ? 'Desconectar' : 'Conectar';
-        btn.disabled       = false;
-        btn.onclick        = willConnect
-          ? () => this._action('/bluetooth/disconnect', mac, 'Desconectando…', btn, dot, false)
-          : () => this._action('/bluetooth/connect',    mac, 'Conectando…',    btn, dot, true);
+        dot.className   = `bt-item-dot${willConnect ? ' connected' : ''}`;
+        btn.className   = willConnect ? 'bt-item-btn disconnect' : 'bt-item-btn';
+        btn.textContent = willConnect ? 'Desconectar' : 'Conectar';
+        btn.disabled    = false;
+        btn.onclick     = willConnect
+          ? () => this._action('/bluetooth/disconnect', mac, name, 'Desconectando…', btn, dot, false)
+          : () => this._action('/bluetooth/connect',    mac, name, 'Conectando…',    btn, dot, true);
         log(`Bluetooth: ${res.message} — ${name || mac}`, 'success');
       } else {
         log(`Bluetooth: ${res.message}`, 'error');
@@ -1275,6 +1381,28 @@ document.getElementById('btn-rec-stop').addEventListener('click', async () => {
   // ─── Bluetooth (cualquier Linux — no depende de ARM) ─────────────────────
   if (isLinux) {
     BluetoothModule.init();
+  }
+
+  // ─── Terminal (solo Linux) ────────────────────────────────────────────────
+  if (isLinux) {
+    const tabNav = document.getElementById('tab-nav');
+    if (tabNav) {
+      tabNav.style.display = 'flex';
+      let terminalInited = false;
+      tabNav.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          tabNav.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          const tab = btn.dataset.tab;
+          document.getElementById('panel-section').style.display    = tab === 'panel'    ? '' : 'none';
+          document.getElementById('terminal-section').style.display = tab === 'terminal' ? '' : 'none';
+          if (tab === 'terminal' && !terminalInited) {
+            terminalInited = true;
+            TerminalModule.init();
+          }
+        });
+      });
+    }
   }
 
   // ─── Verificar conectividad con LiveKit + arrancar chequeo periódico ─────

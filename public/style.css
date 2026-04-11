@@ -688,7 +688,213 @@ header p  { color: var(--muted); font-size: 0.85rem; }
 .bt-item-btn:hover            { background: var(--accent); color: #fff; border-color: var(--accent); }
 .bt-item-btn.disconnect       { border-color: var(--ok); color: var(--ok); }
 .bt-item-btn.disconnect:hover { background: var(--ok); color: #fff; border-color: var(--ok); }
+.bt-item-btn.bt-cancel        { border-color: var(--warn); color: var(--warn); }
+.bt-item-btn.bt-cancel:hover  { background: var(--warn); color: #fff; border-color: var(--warn); }
 .bt-item-btn:disabled         { opacity: 0.5; cursor: default; }
+
+.bt-item-badge {
+  font-size: 0.68rem;
+  color: var(--ok);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.bt-item.bt-audio {
+  border-color: color-mix(in srgb, var(--ok) 40%, var(--border));
+  background: color-mix(in srgb, var(--ok) 5%, var(--bg));
+}
+
+/* ── Tab nav ──────────────────────────────────────────────────────────────── */
+.tab-nav {
+  display: flex;
+  gap: 0.4rem;
+  width: 100%;
+  max-width: 760px;
+  margin-bottom: 0.8rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.3rem;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+  letter-spacing: 0.03em;
+}
+.tab-btn:hover:not(.active) { background: var(--surface2); color: var(--text); }
+.tab-btn.active { background: var(--accent); color: #fff; }
+
+/* ── Terminal section wrapper ─────────────────────────────────────────────── */
+#terminal-section {
+  width: 100%;
+  max-width: 760px;
+}
+
+/* ── Grupos de comandos rápidos ───────────────────────────────────────────── */
+.term-group {
+  margin-bottom: 1rem;
+}
+.term-group:last-child { margin-bottom: 0; }
+
+.term-group-label {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.45rem;
+}
+
+.term-btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.btn-term {
+  padding: 0.28rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.75rem;
+  font-family: 'Consolas', 'Fira Code', monospace;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition), color var(--transition);
+  white-space: nowrap;
+}
+.btn-term:hover  { border-color: var(--accent); color: var(--accent); background: rgba(91,106,240,0.08); }
+.btn-term:active { transform: scale(0.97); }
+
+/* ── Input de comando personalizado ──────────────────────────────────────── */
+.term-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.75rem;
+  transition: border-color var(--transition);
+}
+.term-input-row:focus-within { border-color: var(--accent); }
+
+.term-prompt-char {
+  font-family: 'Consolas', 'Fira Code', monospace;
+  font-size: 0.85rem;
+  color: var(--accent);
+  font-weight: 700;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.term-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-family: 'Consolas', 'Fira Code', monospace;
+  outline: none;
+  min-width: 0;
+}
+.term-input::placeholder { color: var(--muted); }
+
+.btn-term-run {
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.btn-term-run:hover    { background: var(--accent); color: #fff; }
+.btn-term-run:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Output area ─────────────────────────────────────────────────────────── */
+.term-output {
+  background: #0a0c14;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem;
+  max-height: 420px;
+  overflow-y: auto;
+  font-family: 'Consolas', 'Fira Code', monospace;
+  font-size: 0.78rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.term-output::-webkit-scrollbar { width: 4px; }
+.term-output::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+.term-entry {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.term-entry-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.6rem;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.term-cmd-text {
+  flex: 1;
+  color: var(--text);
+  font-weight: 600;
+  word-break: break-all;
+  font-size: 0.8rem;
+}
+
+.term-meta {
+  font-size: 0.68rem;
+  border-radius: 3px;
+  padding: 0.1rem 0.4rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.term-ok      { background: rgba(61,186,118,0.15); color: var(--success); }
+.term-err     { background: rgba(224,85,85,0.15);  color: var(--danger); }
+.term-pending { color: var(--warn); animation: pulse 1s infinite; }
+
+.term-time {
+  font-size: 0.66rem;
+  color: var(--muted);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.term-entry-body {
+  padding: 0.55rem 0.7rem;
+  color: #c9d1e8;
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.55;
+  font-size: 0.77rem;
+  margin: 0;
+}
+.term-body-err { color: var(--danger); }
 
 /* ── Pie ──────────────────────────────────────────────────────────────────── */
 footer {
