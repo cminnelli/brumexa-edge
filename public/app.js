@@ -1016,17 +1016,32 @@ const BluetoothModule = {
     li.className = 'bt-item';
     if (audioCapable) li.classList.add('bt-audio');
 
+    // Dot de conexión
     const dot = document.createElement('span');
     dot.className = `bt-item-dot${connected ? ' connected' : ''}`;
+
+    // Icono de tipo de dispositivo
+    const typeIcon = document.createElement('span');
+    typeIcon.className = 'bt-item-type';
+    if (audioCapable) {
+      typeIcon.textContent = '🔊';
+      typeIcon.title = 'Perfil A2DP detectado — apto para audio (altavoz / auriculares)';
+    } else {
+      typeIcon.textContent = '📱';
+      typeIcon.title = 'Dispositivo genérico — sin perfil de audio detectado';
+    }
 
     const nameEl = document.createElement('span');
     nameEl.className   = 'bt-item-name';
     nameEl.textContent = name;
 
+    // Badge de audio — solo si es capaz
     const badge = document.createElement('span');
-    badge.className   = 'bt-item-badge';
-    badge.textContent = audioCapable ? '🔊 audio' : '';
-    badge.title       = audioCapable ? 'Perfil A2DP detectado — apto para audio' : '';
+    if (audioCapable) {
+      badge.className   = 'bt-item-badge bt-item-badge--audio';
+      badge.textContent = 'A2DP';
+      badge.title       = 'Perfil Advanced Audio Distribution — listo para reproducir audio';
+    }
 
     const macEl = document.createElement('span');
     macEl.className   = 'bt-item-mac';
@@ -1047,7 +1062,7 @@ const BluetoothModule = {
       btn.onclick = () => this._pair(mac, name, btn, dot);
     }
 
-    li.append(dot, nameEl, badge, macEl, btn);
+    li.append(dot, typeIcon, nameEl, badge, macEl, btn);
     return li;
   },
 
