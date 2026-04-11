@@ -1,240 +1,234 @@
 'use strict';
 
-/**
- * TerminalModule — ejecuta comandos en la Pi desde el browser
- * Requiere: endpoint POST /terminal/run en el servidor
- */
 const TerminalModule = (() => {
-
-  // ── Grupos de comandos ────────────────────────────────────────────────────
 
   const PORT = window.location.port || '3000';
 
+  // ── Grupos de comandos ───────────────────────────────────────────────────
   const GROUPS = [
     {
       label: 'Red',
       icon: '🌐',
+      desc: 'Conectividad y configuración de red',
       cmds: [
-        { label: 'IP local',     cmd: 'hostname -I' },
-        { label: 'Interfaces',   cmd: 'ip addr show' },
-        { label: 'Ruta defecto', cmd: 'ip route show default' },
-        { label: 'WiFi',         cmd: 'iwconfig 2>/dev/null || echo "(iwconfig no disponible)"' },
-        { label: 'DNS',          cmd: 'cat /etc/resolv.conf' },
+        { name: 'IP de la Pi',          desc: 'Todas las IPs asignadas (WiFi + Ethernet)',         cmd: 'hostname -I' },
+        { name: 'Interfaces de red',    desc: 'Estado detallado de cada interfaz de red',          cmd: 'ip addr show' },
+        { name: 'Puerta de enlace',     desc: 'Router y ruta de salida a internet',                cmd: 'ip route show default' },
+        { name: 'WiFi — SSID y señal',  desc: 'Red WiFi conectada, calidad de señal y frecuencia', cmd: 'iwconfig wlan0 2>/dev/null || echo "(iwconfig no disponible)"' },
+        { name: 'Servidores DNS',       desc: 'Servidores de nombre configurados',                 cmd: 'cat /etc/resolv.conf | grep -v "^#"' },
+        { name: 'Ping internet',        desc: 'Verifica acceso a internet con 4 pings a Google',   cmd: 'ping -c 4 8.8.8.8' },
+        { name: 'Puertos abiertos',     desc: 'Servicios escuchando en red (ss = socket stats)',    cmd: 'ss -tlnp' },
+        { name: 'Conexiones activas',   desc: 'Conexiones TCP establecidas en este momento',        cmd: 'ss -tnp state established' },
       ],
     },
     {
       label: 'Sistema',
       icon: '🖥',
+      desc: 'Hardware, recursos y estado del SO',
       cmds: [
-        { label: 'Kernel',    cmd: 'uname -a' },
-        { label: 'OS',        cmd: 'cat /etc/os-release 2>/dev/null || echo "(no disponible)"' },
-        { label: 'Temp CPU',  cmd: 'cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null | awk \'{printf "%.1f °C\\n", $1/1000}\' || echo "(no disponible)"' },
-        { label: 'RAM',       cmd: 'free -h' },
-        { label: 'Disco',     cmd: 'df -h /' },
-        { label: 'Uptime',    cmd: 'uptime' },
-        { label: 'Procesos',  cmd: 'ps aux --sort=-%cpu | head -12' },
+        { name: 'Kernel y arquitectura',  desc: 'Versión del kernel Linux y arquitectura del CPU',         cmd: 'uname -a' },
+        { name: 'Sistema operativo',      desc: 'Nombre y versión de la distribución Linux',               cmd: 'cat /etc/os-release | grep -E "^(NAME|VERSION|ID)="' },
+        { name: 'Temperatura CPU',        desc: 'Temperatura del procesador (crítico si >80 °C)',          cmd: 'cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null | awk \'{printf "CPU: %.1f °C\\n", $1/1000}\' || echo "sensor no disponible"' },
+        { name: 'Uso de RAM',             desc: 'Memoria total, usada y libre (h = formato legible)',      cmd: 'free -h' },
+        { name: 'Espacio en disco',       desc: 'Uso del disco en partición raíz y boot',                  cmd: 'df -h / /boot/firmware 2>/dev/null || df -h /' },
+        { name: 'Tiempo encendida',       desc: 'Hace cuánto arrancó la Pi y carga promedio del CPU',     cmd: 'uptime' },
+        { name: 'Procesos por CPU',       desc: 'Top 10 procesos ordenados por consumo de CPU',           cmd: 'ps aux --sort=-%cpu | head -11' },
+        { name: 'Procesos por RAM',       desc: 'Top 10 procesos ordenados por consumo de memoria',       cmd: 'ps aux --sort=-%mem | head -11' },
+        { name: 'Carga del CPU',          desc: 'Uso de CPU por núcleo (1 segundo de muestra)',            cmd: 'mpstat 1 1 2>/dev/null || top -bn1 | head -20' },
+        { name: 'Logs del sistema',       desc: 'Últimos 30 mensajes del log del sistema (journald)',      cmd: 'journalctl -n 30 --no-pager 2>/dev/null | tail -30' },
       ],
     },
     {
-      label: 'Node.js',
+      label: 'Brumexa · Servidor',
       icon: '⬡',
+      desc: 'Estado del proceso Node.js y configuración',
       cmds: [
-        { label: 'node -v',   cmd: 'node --version' },
-        { label: 'npm -v',    cmd: 'npm --version' },
-        { label: 'which node',cmd: 'which node' },
-        { label: 'pm2 list',  cmd: 'pm2 list 2>/dev/null || echo "(pm2 no encontrado)"' },
-        { label: 'pm2 logs',  cmd: 'pm2 logs --lines 30 --nostream 2>/dev/null || echo "(pm2 no encontrado)"' },
+        { name: 'Proceso Node activo',    desc: 'Procesos node/brumexa corriendo ahora mismo',              cmd: 'ps aux | grep -E "node|brumexa" | grep -v grep' },
+        { name: 'Versión Node.js',        desc: 'Versión de Node.js y npm instaladas',                      cmd: 'node --version && npm --version' },
+        { name: 'Config del servidor',    desc: 'Respuesta del endpoint /config (plataforma, LiveKit URL)', cmd: `curl -s http://localhost:${PORT}/config | python3 -m json.tool 2>/dev/null || curl -s http://localhost:${PORT}/config` },
+        { name: 'Debug completo',         desc: 'Diagnóstico: ALSA, Bluetooth, sistema operativo',          cmd: `curl -s http://localhost:${PORT}/debug | python3 -m json.tool 2>/dev/null || curl -s http://localhost:${PORT}/debug` },
+        { name: 'Variables LiveKit',      desc: 'Variables de entorno relacionadas con LiveKit y la API',   cmd: 'env | grep -E "LIVEKIT|TOKEN|PORT|BRUMEXA" | sort' },
+        { name: 'pm2 — estado',           desc: 'Estado de procesos gestionados por pm2 (si está instalado)', cmd: 'pm2 list 2>/dev/null || echo "(pm2 no instalado)"' },
+        { name: 'pm2 — logs recientes',   desc: 'Últimas 50 líneas del log de pm2',                        cmd: 'pm2 logs --lines 50 --nostream 2>/dev/null || echo "(pm2 no instalado)"' },
+        { name: 'Token de sesión',        desc: 'Pide un token al servidor central (prueba E2E completa)',  cmd: `curl -s http://localhost:${PORT}/token | python3 -m json.tool 2>/dev/null || curl -s http://localhost:${PORT}/token` },
+        { name: 'Health de LiveKit',      desc: 'Verifica si el servidor LiveKit responde',                 cmd: `curl -s http://localhost:${PORT}/livekit-health` },
+        { name: 'Archivos de grabación',  desc: 'Lista archivos WAV guardados con tamaños',                 cmd: 'ls -lh recordings/ 2>/dev/null || echo "carpeta recordings/ no encontrada"' },
       ],
     },
     {
       label: 'Audio ALSA',
       icon: '🎙',
+      desc: 'Micrófono, altavoces y subsistema de audio',
       cmds: [
-        { label: 'Capturas',   cmd: 'arecord -l 2>&1' },
-        { label: 'Playbacks',  cmd: 'aplay -l 2>&1' },
-        { label: 'Cards',      cmd: 'cat /proc/asound/cards 2>/dev/null || echo "(no disponible)"' },
-        { label: 'Módulos snd',cmd: 'lsmod | grep snd' },
-        { label: 'amixer',     cmd: 'amixer 2>/dev/null || echo "(amixer no disponible)"' },
-        { label: 'pactl',      cmd: 'pactl info 2>/dev/null || echo "(pulseaudio no disponible)"' },
-        { label: 'sinks',      cmd: 'pactl list sinks short 2>/dev/null || echo "(pulseaudio no disponible)"' },
-      ],
-    },
-    {
-      label: 'Proceso',
-      icon: '⚙',
-      cmds: [
-        { label: 'Brumexa ps',  cmd: 'ps aux | grep -E "node|brumexa" | grep -v grep' },
-        { label: 'Puertos',     cmd: 'ss -tlnp' },
-        { label: '/health',     cmd: `curl -s http://localhost:${PORT}/config` },
-        { label: '/debug',      cmd: `curl -s http://localhost:${PORT}/debug` },
-        { label: 'env NODE',    cmd: 'env | grep -E "NODE|LIVEKIT|PORT|TOKEN" | sort' },
+        { name: 'Micrófonos disponibles', desc: 'Lista todos los dispositivos de captura ALSA (arecord -l)', cmd: 'arecord -l 2>&1' },
+        { name: 'Altavoces disponibles',  desc: 'Lista todos los dispositivos de reproducción ALSA',         cmd: 'aplay -l 2>&1' },
+        { name: 'Tarjetas de sonido',     desc: 'Resumen de tarjetas detectadas por el kernel Linux',        cmd: 'cat /proc/asound/cards 2>/dev/null || echo "sin tarjetas"' },
+        { name: 'Módulos de audio',       desc: 'Módulos del kernel relacionados con sonido (snd_*)',        cmd: 'lsmod | grep snd | sort' },
+        { name: 'Controles de volumen',   desc: 'Controles del mixer ALSA disponibles',                     cmd: 'amixer scontrols 2>/dev/null || echo "(amixer no disponible)"' },
+        { name: 'Volúmenes actuales',     desc: 'Niveles de volumen configurados en el mixer',               cmd: 'amixer 2>/dev/null | grep -E "Simple|dB" | head -20 || echo "(amixer no disponible)"' },
+        { name: 'PulseAudio — info',      desc: 'Estado del servidor PulseAudio (si está corriendo)',        cmd: 'pactl info 2>/dev/null || echo "(PulseAudio no corre — sistema usa ALSA directo)"' },
+        { name: 'PulseAudio — sinks',     desc: 'Destinos de audio: altavoces, BT, HDMI',                   cmd: 'pactl list sinks short 2>/dev/null || echo "(PulseAudio no corre)"' },
+        { name: 'PulseAudio — sources',   desc: 'Fuentes de audio disponibles (micrófonos)',                 cmd: 'pactl list sources short 2>/dev/null || echo "(PulseAudio no corre)"' },
+        { name: 'Grabar 3 segundos',      desc: 'Test: graba 3s del mic default y confirma que funciona',   cmd: 'arecord -d 3 -f S16_LE -r 16000 -c 1 /tmp/test_brumexa.wav 2>&1 && ls -lh /tmp/test_brumexa.wav && echo "OK — mic funciona"' },
       ],
     },
     {
       label: 'Bluetooth',
       icon: '🔵',
+      desc: 'Altavoces BT y conectividad inalámbrica',
       cmds: [
-        { label: 'Pareados',      cmd: 'bluetoothctl devices Paired 2>&1' },
-        { label: 'Conectados',    cmd: 'bluetoothctl devices Connected 2>&1' },
-        { label: 'hciconfig',     cmd: 'hciconfig -a 2>/dev/null || echo "(no disponible)"' },
-        { label: 'rfkill',        cmd: 'rfkill list' },
-        { label: 'pactl sinks',   cmd: 'pactl list sinks short 2>/dev/null || echo "(no disponible)"' },
-        { label: 'bt status',     cmd: 'systemctl status bluetooth --no-pager 2>&1 | head -20' },
+        { name: 'Dispositivos pareados',   desc: 'Todos los dispositivos ya vinculados con la Pi',           cmd: 'bluetoothctl devices Paired 2>&1' },
+        { name: 'Dispositivos conectados', desc: 'Dispositivos activos en este momento',                     cmd: 'bluetoothctl devices Connected 2>&1' },
+        { name: 'Info del adaptador BT',   desc: 'MAC, nombre y estado del adaptador Bluetooth de la Pi',   cmd: 'bluetoothctl show 2>&1 | head -20' },
+        { name: 'rfkill — bloqueos radio', desc: 'Si el WiFi o BT están bloqueados por software',           cmd: 'rfkill list' },
+        { name: 'Servicio Bluetooth',      desc: 'Estado del daemon bluetoothd del sistema',                 cmd: 'systemctl status bluetooth --no-pager 2>&1 | head -25' },
+        { name: 'BT como audio sink',      desc: 'Si algún dispositivo BT es reconocido como altavoz',      cmd: 'pactl list sinks 2>/dev/null | grep -A8 "bluez" || echo "No hay sinks BT en PulseAudio"' },
+        { name: 'Logs de Bluetooth',       desc: 'Errores y eventos BT recientes del sistema',              cmd: 'journalctl -u bluetooth --no-pager -n 40 2>/dev/null | tail -40' },
+        { name: 'hciconfig',               desc: 'Estado del adaptador HCI Bluetooth (bajo nivel)',          cmd: 'hciconfig hci0 2>/dev/null || echo "(hciconfig no disponible)"' },
       ],
     },
     {
-      label: 'GPIO / I2S',
+      label: 'GPIO · I2S · Boot',
       icon: '📌',
+      desc: 'Pines, overlays de audio y config de arranque',
       cmds: [
-        { label: 'gpio readall',  cmd: 'gpio readall 2>/dev/null || echo "(gpio no disponible)"' },
-        { label: 'config.txt',    cmd: 'cat /boot/firmware/config.txt 2>/dev/null || cat /boot/config.txt 2>/dev/null || echo "(no encontrado)"' },
-        { label: 'lsmod snd',     cmd: 'lsmod | grep snd' },
-        { label: 'dtoverlay -l',  cmd: 'dtoverlay -l 2>/dev/null || echo "(dtoverlay no disponible)"' },
-        { label: 'I2C devices',   cmd: 'ls /dev/i2c* 2>/dev/null || echo "(no encontrado)"' },
+        { name: 'Config de boot',          desc: 'Overlays I2S, HDMI y parámetros del firmware en /boot',   cmd: 'cat /boot/firmware/config.txt 2>/dev/null || cat /boot/config.txt 2>/dev/null || echo "no encontrado"' },
+        { name: 'Overlays activos',        desc: 'Device Tree overlays cargados en este boot',              cmd: 'dtoverlay -l 2>/dev/null || echo "(dtoverlay no disponible)"' },
+        { name: 'Módulos I2S cargados',    desc: 'Módulos snd_soc y PCM activos (para I2S HATs)',           cmd: 'lsmod | grep -E "^snd" | sort' },
+        { name: 'GPIO — estado de pines',  desc: 'Lectura de todos los pines GPIO (requiere wiringpi)',      cmd: 'gpio readall 2>/dev/null || echo "(wiringpi/gpio no disponible)"' },
+        { name: 'Dispositivos I2C',        desc: 'Buses I2C disponibles en /dev/i2c-*',                     cmd: 'ls -la /dev/i2c* 2>/dev/null || echo "sin dispositivos I2C"' },
+        { name: 'Dispositivos SPI',        desc: 'Buses SPI disponibles en /dev/spidev*',                   cmd: 'ls -la /dev/spi* 2>/dev/null || echo "sin dispositivos SPI"' },
+        { name: 'cmdline.txt',             desc: 'Parámetros pasados al kernel en el arranque',             cmd: 'cat /boot/firmware/cmdline.txt 2>/dev/null || cat /boot/cmdline.txt 2>/dev/null || echo "no encontrado"' },
       ],
     },
   ];
 
-  // ── Estado ────────────────────────────────────────────────────────────────
-
-  let _running  = false;
-  let _inited   = false;
-
-  // ── DOM refs ──────────────────────────────────────────────────────────────
+  // ── Estado ───────────────────────────────────────────────────────────────
+  let _running = false;
+  let _inited  = false;
 
   const $ = id => document.getElementById(id);
 
-  // ── Render grupos ─────────────────────────────────────────────────────────
-
-  function _buildGroups() {
+  // ── Construir sidebar ────────────────────────────────────────────────────
+  function _build() {
     const container = $('term-groups');
     if (!container) return;
 
-    GROUPS.forEach(group => {
-      const section = document.createElement('div');
-      section.className = 'term-group';
+    for (const group of GROUPS) {
+      const sec = document.createElement('div');
+      sec.className = 'term-group';
 
-      const label = document.createElement('div');
-      label.className = 'term-group-label';
-      label.textContent = `${group.icon} ${group.label}`;
-      section.appendChild(label);
+      sec.innerHTML =
+        `<div class="term-group__hdr">` +
+          `<span class="term-group__icon">${group.icon}</span>` +
+          `<span class="term-group__name">${group.label}</span>` +
+        `</div>` +
+        `<div class="term-group__desc">${group.desc}</div>`;
 
-      const row = document.createElement('div');
-      row.className = 'term-btn-row';
+      const ul = document.createElement('ul');
+      ul.className = 'term-cmd-list';
 
-      group.cmds.forEach(({ label: btnLabel, cmd }) => {
-        const btn = document.createElement('button');
-        btn.className = 'btn-term';
-        btn.textContent = btnLabel;
-        btn.title = cmd;
-        btn.addEventListener('click', () => run(cmd));
-        row.appendChild(btn);
-      });
+      for (const cmd of group.cmds) {
+        const li = document.createElement('li');
+        li.className = 'term-cmd-item';
+        li.title = cmd.cmd;
+        li.innerHTML =
+          `<span class="term-cmd-item__name">${cmd.name}</span>` +
+          `<span class="term-cmd-item__desc">${cmd.desc}</span>`;
+        li.addEventListener('click', () => run(cmd.cmd, cmd.name));
+        ul.appendChild(li);
+      }
 
-      section.appendChild(row);
-      container.appendChild(section);
-    });
+      sec.appendChild(ul);
+      container.appendChild(sec);
+    }
   }
 
-  // ── Ejecutar comando ──────────────────────────────────────────────────────
-
-  async function run(cmd) {
+  // ── Ejecutar ─────────────────────────────────────────────────────────────
+  async function run(cmd, label) {
     if (_running) return;
     _running = true;
 
-    const runBtn   = $('btn-term-run');
-    const inputEl  = $('term-input');
-    if (runBtn)  runBtn.disabled = true;
+    const runBtn  = $('btn-term-run');
+    const inputEl = $('term-input');
+    if (runBtn) runBtn.disabled = true;
 
-    _appendEntry(cmd, null, null);  // "pending" entry
+    const pendingId = 'term-entry-pending';
+    _addEntry({ cmd, label: label || cmd, output: null, exitCode: null, ms: null, id: pendingId });
 
     try {
       const res  = await fetch('/terminal/run', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: cmd }),
+        body:    JSON.stringify({ command: cmd }),
       });
       const data = await res.json();
-      _appendEntry(cmd, data.output, data.exitCode, data.ms);
+      _addEntry({ cmd, label: label || cmd, output: data.output, exitCode: data.exitCode, ms: data.ms, replace: pendingId });
     } catch (err) {
-      _appendEntry(cmd, `Error de red: ${err.message}`, -1, null);
+      _addEntry({ cmd, label: label || cmd, output: `Error de red: ${err.message}`, exitCode: -1, ms: null, replace: pendingId });
     } finally {
       _running = false;
-      if (runBtn)  runBtn.disabled = false;
+      if (runBtn) runBtn.disabled = false;
       if (inputEl) inputEl.focus();
     }
   }
 
-  // ── Render output ─────────────────────────────────────────────────────────
-
-  function _appendEntry(cmd, output, exitCode, ms) {
+  // ── Render entrada ───────────────────────────────────────────────────────
+  function _addEntry({ cmd, label, output, exitCode, ms, id, replace }) {
     const out = $('term-output');
     if (!out) return;
 
-    const entry = document.createElement('div');
-    entry.className = 'term-entry';
-
-    // Header: prompt + command + meta
-    const header = document.createElement('div');
-    header.className = 'term-entry-header';
-
-    const time = new Date().toLocaleTimeString('es-AR', { hour12: false });
     const ok   = exitCode === null || exitCode === 0;
+    const time = new Date().toLocaleTimeString('es-AR', { hour12: false });
 
-    header.innerHTML =
-      `<span class="term-prompt-char">$</span>` +
-      `<span class="term-cmd-text">${_esc(cmd)}</span>` +
-      (exitCode !== null
-        ? `<span class="term-meta ${ok ? 'term-ok' : 'term-err'}">` +
-          `exit ${exitCode}${ms != null ? ` · ${ms}ms` : ''}` +
-          `</span>`
-        : `<span class="term-meta term-pending">ejecutando…</span>`) +
-      `<span class="term-time">${time}</span>`;
+    const badge = exitCode !== null
+      ? `<span class="term-badge ${ok ? 'term-badge--ok' : 'term-badge--err'}">${ok ? 'OK' : `exit ${exitCode}`}${ms != null ? ` · ${ms}ms` : ''}</span>`
+      : `<span class="term-badge term-badge--run">ejecutando…</span>`;
 
-    entry.appendChild(header);
+    const entry = document.createElement('div');
+    if (id) entry.id = id;
+    entry.className = `term-entry${ok ? '' : ' term-entry--err'}`;
+    entry.innerHTML =
+      `<div class="term-entry__hdr">` +
+        `<span class="term-entry__prompt">$</span>` +
+        `<span class="term-entry__name">${_esc(label)}</span>` +
+        `<span class="term-entry__cmd">${_esc(cmd)}</span>` +
+        badge +
+        `<span class="term-entry__time">${time}</span>` +
+      `</div>` +
+      (output !== null
+        ? `<pre class="term-entry__body${ok ? '' : ' term-entry__body--err'}">${_esc(output)}</pre>`
+        : '');
 
-    // Body: output text
-    if (output !== null) {
-      const body = document.createElement('pre');
-      body.className = 'term-entry-body' + (ok ? '' : ' term-body-err');
-      body.textContent = output;
-      entry.appendChild(body);
+    if (replace) {
+      const old = $(replace);
+      old ? old.replaceWith(entry) : out.appendChild(entry);
     } else {
-      // placeholder while pending — will be replaced when complete
-      entry.id = 'term-pending-entry';
+      out.appendChild(entry);
     }
 
-    // If there was a pending entry, remove it
-    const pending = $('term-pending-entry');
-    if (pending) pending.remove();
-
-    out.appendChild(entry);
     out.scrollTop = out.scrollHeight;
   }
 
-  function _esc(str) {
-    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  function _esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
-  // ── Limpiar output ────────────────────────────────────────────────────────
-
+  // ── Limpiar ──────────────────────────────────────────────────────────────
   function clear() {
     const out = $('term-output');
     if (out) out.innerHTML = '';
   }
 
-  // ── Init ──────────────────────────────────────────────────────────────────
-
+  // ── Init ─────────────────────────────────────────────────────────────────
   function init() {
     if (_inited) return;
     _inited = true;
 
-    _buildGroups();
+    _build();
 
-    // Custom input: Enter key
-    const inputEl  = $('term-input');
-    const runBtn   = $('btn-term-run');
-    const clearBtn = $('btn-term-clear');
+    const inputEl = $('term-input');
+    const runBtn  = $('btn-term-run');
 
     if (inputEl) {
       inputEl.addEventListener('keydown', e => {
@@ -253,12 +247,10 @@ const TerminalModule = (() => {
       });
     }
 
-    if (clearBtn) {
-      clearBtn.addEventListener('click', clear);
-    }
+    $('btn-term-clear')?.addEventListener('click', clear);
 
-    // Run a welcome command to confirm connectivity
-    run('echo "Terminal lista · $(hostname) · $(date)"');
+    // Bienvenida
+    run('echo "Brumexa Pi Terminal" && echo "Host: $(hostname)" && echo "Fecha: $(date)" && uname -m', 'Bienvenida');
   }
 
   return { init, run, clear };
