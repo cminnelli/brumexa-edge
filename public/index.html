@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Brumexa-Edge 2</title>
-  <link rel="stylesheet" href="style.css?v=3" />
+  <link rel="stylesheet" href="style.css?v=4" />
 </head>
 <body>
 
@@ -131,6 +131,42 @@
             <div class="field">
               <label class="field-label">Dispositivo ALSA</label>
               <select id="alsa-device-select" class="select-input"></select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Destino de audio (speaker) — solo Pi/Linux -->
+        <div id="speaker-dest-wrap" style="display:none">
+          <div class="divider"></div>
+          <div class="field">
+            <label class="field-label">Salida de audio (speaker)</label>
+            <div class="source-selector">
+              <label class="source-opt">
+                <input type="radio" name="speaker-dest" value="browser" checked />
+                <span class="source-opt-inner">
+                  <span class="source-opt-icon">🌐</span>
+                  <span class="source-opt-text">
+                    <strong>Browser</strong>
+                    <small>Reproduce en el dispositivo que visualiza esta página</small>
+                  </span>
+                </span>
+              </label>
+              <label class="source-opt">
+                <input type="radio" name="speaker-dest" value="pi" />
+                <span class="source-opt-inner">
+                  <span class="source-opt-icon">🔈</span>
+                  <span class="source-opt-text">
+                    <strong>Raspberry Pi</strong>
+                    <small>Reproduce en el altavoz físico conectado a la Pi (ALSA)</small>
+                  </span>
+                </span>
+              </label>
+            </div>
+          </div>
+          <div id="alsa-speaker-wrap" style="display:none">
+            <div class="field">
+              <label class="field-label">Dispositivo ALSA (playback)</label>
+              <select id="alsa-speaker-select" class="select-input"></select>
             </div>
           </div>
         </div>
@@ -311,7 +347,7 @@
 </div><!-- #terminal-section -->
 
 <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-<script src="app.js?v=3"></script>
-<script src="terminal.js?v=3"></script>
+<script src="app.js?v=4"></script>
+<script src="terminal.js?v=4"></script>
 </body>
 </html>

@@ -398,6 +398,100 @@ const PiMicModule = {
   },
 };
 
+// ============================================================
+// MÓDULO SPEAKER PI — enruta audio del agente a aplay en la Pi
+// ============================================================
+
+/**
+ * PiSpeakerModule
+ *
+ * Cuando el usuario selecciona "Raspberry Pi" como speaker:
+ *  1. Abre WebSocket /ws/speaker en el servidor
+ *  2. Decodifica el track de audio del agente LiveKit via ScriptProcessorNode
+ *  3. Convierte Float32 → Int16 LE y envía los chunks al servidor
+ *  4. El servidor los pipa a aplay → sale por el Google Voice HAT
+ *
+ * El audio NO se reproduce en el browser (GainNode en 0).
+ */
+const PiSpeakerModule = {
+  _ws:        null,
+  _audioCtx:  null,
+  _processor: null,
+  _source:    null,
+
+  start(track, device) {
+    const audioCtx   = new AudioContext();          // usa el rate nativo del sistema (típico: 48 kHz)
+    const sampleRate = audioCtx.sampleRate;
+    this._audioCtx   = audioCtx;
+
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl    = `${protocol}//${location.host}/ws/speaker?device=${encodeURIComponent(device)}&rate=${sampleRate}&channels=1`;
+    const ws       = new WebSocket(wsUrl);
+    this._ws = ws;
+
+    ws.onopen = () => {
+      log(`[speaker-pi] WebSocket abierto — ALSA: ${device}  rate: ${sampleRate} Hz`, 'success');
+      console.log(`[PiSpeaker] WS open — device: ${device}  sampleRate: ${sampleRate}`);
+
+      // Crear pipeline: track → source → ScriptProcessor → GainNode (mute) → destination
+      const stream    = new MediaStream([track.mediaStreamTrack]);
+      const source    = audioCtx.createMediaStreamSource(stream);
+      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+      const mute      = audioCtx.createGain();
+      mute.gain.value = 0;   // silenciar en el browser
+
+      source.connect(processor);
+      processor.connect(mute);
+      mute.connect(audioCtx.destination);
+
+      this._source    = source;
+      this._processor = processor;
+
+      let chunkCount = 0;
+      processor.onaudioprocess = (e) => {
+        if (ws.readyState !== WebSocket.OPEN) return;
+        const float32 = e.inputBuffer.getChannelData(0);
+        // Convertir Float32 [-1, 1] a Int16 LE [-32768, 32767]
+        const int16 = new Int16Array(float32.length);
+        for (let i = 0; i < float32.length; i++) {
+          int16[i] = Math.max(-32768, Math.min(32767, Math.round(float32[i] * 32767)));
+        }
+        ws.send(int16.buffer);
+        chunkCount++;
+        if (chunkCount === 1) {
+          console.log(`[PiSpeaker] ▶ primer chunk enviado (${int16.byteLength} bytes @ ${sampleRate} Hz)`);
+          log('[speaker-pi] Enviando audio del agente a la Pi — primer frame', 'success');
+        }
+      };
+    };
+
+    ws.onerror = (ev) => {
+      console.error('[PiSpeaker] WS error', ev);
+      log('[speaker-pi] Error en WebSocket del speaker', 'error');
+    };
+
+    ws.onclose = (e) => {
+      console.log(`[PiSpeaker] WS cerrado — code: ${e.code}  reason: "${e.reason || '—'}"`);
+    };
+  },
+
+  stop() {
+    if (this._processor) {
+      this._processor.disconnect();
+      this._processor.onaudioprocess = null;
+      this._processor = null;
+    }
+    if (this._source) {
+      this._source.disconnect();
+      this._source = null;
+    }
+    this._ws?.close();
+    this._ws = null;
+    this._audioCtx?.close();
+    this._audioCtx = null;
+  },
+};
+
 // ─── Helpers para leer la fuente elegida en el UI ─────────────────────────────
 function getSelectedSource() {
   for (const r of ui.audioSourceRadios) {
@@ -408,6 +502,16 @@ function getSelectedSource() {
 
 function getSelectedAlsaDevice() {
   return ui.alsaDeviceSelect.value || 'default';
+}
+
+function getSelectedSpeakerDest() {
+  const radios = document.querySelectorAll('input[name="speaker-dest"]');
+  for (const r of radios) { if (r.checked) return r.value; }
+  return 'browser';
+}
+
+function getSelectedAlsaSpeaker() {
+  return document.getElementById('alsa-speaker-select')?.value || 'plughw:0,0';
 }
 
 /**
@@ -594,15 +698,26 @@ const LiveKitModule = {
 
     room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, _pub, participant) => {
       if (track.kind !== LivekitClient.Track.Kind.Audio) return;
-      log(`Audio recibido de "${participant.identity}"`, 'info');
-      const audioEl = track.attach();
-      audioEl.autoplay = true;
-      audioEl.style.display = 'none';
-      document.body.appendChild(audioEl);
+      const speakerDest = getSelectedSpeakerDest();
+      log(`Audio recibido de "${participant.identity}" — speaker: ${speakerDest}`, 'info');
+      console.log(`[LiveKit] TrackSubscribed — participant: ${participant.identity}  speakerDest: ${speakerDest}`);
+
+      if (speakerDest === 'pi') {
+        const device = getSelectedAlsaSpeaker();
+        log(`[speaker-pi] Enrutando audio del agente → Pi ALSA: ${device}`, 'info');
+        console.log(`[PiSpeaker] → start() device: ${device}`);
+        PiSpeakerModule.start(track, device);
+      } else {
+        const audioEl = track.attach();
+        audioEl.autoplay = true;
+        audioEl.style.display = 'none';
+        document.body.appendChild(audioEl);
+      }
     });
 
     room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
       track.detach();
+      PiSpeakerModule.stop();
     });
 
     log(`[lk] Conectando a room "${tokenData.room}" → ${livekitUrl}`, 'info');
@@ -694,6 +809,7 @@ const LiveKitModule = {
   async stop() {
     console.log('[LiveKit] ⏹ stop() iniciado');
     PiMicModule.stop();
+    PiSpeakerModule.stop();
     stopMiniVu();
     stopSessionTimer();
     if (state.localTrack) {
@@ -1062,7 +1178,13 @@ const BluetoothModule = {
       btn.onclick = () => this._pair(mac, name, btn, dot);
     }
 
-    li.append(dot, typeIcon, nameEl, badge, macEl, btn);
+    // Fila 2: MAC + badge juntos
+    const sub = document.createElement('span');
+    sub.className = 'bt-item-sub';
+    sub.append(macEl);
+    if (audioCapable) sub.append(badge);
+
+    li.append(dot, typeIcon, nameEl, btn, sub);
     return li;
   },
 
@@ -1360,6 +1482,39 @@ document.getElementById('btn-rec-stop').addEventListener('click', async () => {
       RecorderModule.show();  // siempre visible en Linux (graba browser o ALSA)
     } catch {
       ui.alsaDeviceSelect.innerHTML = '<option value="">Error al leer ALSA</option>';
+    }
+
+    // ── Selector de speaker (Pi o browser) ──────────────────────────────────
+    const speakerDestWrap  = document.getElementById('speaker-dest-wrap');
+    const alsaSpeakerWrap  = document.getElementById('alsa-speaker-wrap');
+    const alsaSpeakerSel   = document.getElementById('alsa-speaker-select');
+
+    if (speakerDestWrap) {
+      speakerDestWrap.style.display = '';
+
+      // Cargar dispositivos ALSA de reproducción
+      try {
+        const { devices: pbDevices } = await fetch('/audio-playback-devices').then(r => r.json());
+        if (pbDevices.length > 0) {
+          alsaSpeakerSel.innerHTML = pbDevices
+            .map(d => `<option value="${d.id}">${d.name} (${d.id})</option>`)
+            .join('');
+          log(`${pbDevices.length} dispositivo(s) ALSA playback: ${pbDevices.map(d => d.id).join(', ')}`, 'info');
+        } else {
+          alsaSpeakerSel.innerHTML = '<option value="plughw:0,0">plughw:0,0 (default)</option>';
+        }
+      } catch {
+        alsaSpeakerSel.innerHTML = '<option value="plughw:0,0">plughw:0,0 (default)</option>';
+      }
+
+      // Mostrar/ocultar dropdown ALSA playback
+      const updateSpeakerState = () => {
+        alsaSpeakerWrap.style.display = getSelectedSpeakerDest() === 'pi' ? '' : 'none';
+      };
+      document.querySelectorAll('input[name="speaker-dest"]').forEach(r => {
+        r.addEventListener('change', updateSpeakerState);
+      });
+      updateSpeakerState();
     }
 
     // Actualizar tarjeta Dispositivo según la fuente seleccionada
