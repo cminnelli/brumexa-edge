@@ -254,8 +254,8 @@ app.get('/recordings/:file', (req, res) => {
 
 // ─── Reproducción de grabaciones en la Pi ────────────────────────────────────
 const { spawn } = require('child_process');
-let _playProc     = null;
-let _playProcGone = Promise.resolve(); // se resuelve cuando el aplay actual muere
+let _playProc   = null;
+let _playResult = null;  // { exitCode, stderr, filename } — resultado del último aplay
 
 // Mata el aplay en curso y espera que realmente muera (máx. 1.5 s)
 function killAplay() {
@@ -279,21 +279,26 @@ app.post('/recordings/play', express.json(), async (req, res) => {
 
   await killAplay(); // espera que el anterior muera
 
-  const proc = spawn('aplay', ['-D', device, filePath]);
-  _playProc  = proc;
+  _playResult = null;
+  const proc  = spawn('aplay', ['-D', device, filePath]);
+  _playProc   = proc;
   console.log(`[play] aplay -D ${device} ${safeName}`);
 
+  let stderrBuf = '';
   proc.stderr.on('data', d => {
     const msg = d.toString().trim();
-    if (msg) console.error('[aplay]', msg);
+    if (msg) { console.error('[aplay]', msg); stderrBuf += msg + '\n'; }
   });
   proc.on('error', err => {
     console.error('[play] aplay error:', err.message);
-    if (_playProc === proc) _playProc = null;
+    if (_playProc === proc) { _playProc = null; _playResult = { exitCode: -1, stderr: err.message, filename: safeName }; }
   });
   proc.on('close', code => {
     console.log(`[play] aplay exited code ${code}`);
-    if (_playProc === proc) _playProc = null;
+    if (_playProc === proc) {
+      _playProc   = null;
+      _playResult = { exitCode: code, stderr: stderrBuf.trim(), filename: safeName };
+    }
   });
 
   res.json({ ok: true, filename: safeName, device });
@@ -311,9 +316,12 @@ app.post('/recordings/stop-play', async (_req, res) => {
   }
 });
 
-// GET /recordings/play-status — si aplay sigue corriendo
+// GET /recordings/play-status — si aplay sigue corriendo + resultado del último
 app.get('/recordings/play-status', (_req, res) => {
-  res.json({ playing: _playProc !== null });
+  res.json({
+    playing:  _playProc !== null,
+    result:   _playResult,   // { exitCode, stderr, filename } o null si no hay resultado aún
+  });
 });
 
 // ─── POST /terminal/run — ejecutar comando en la Pi ──────────────────────────

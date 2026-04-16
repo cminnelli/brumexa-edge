@@ -1346,6 +1346,7 @@ const PlaybackModule = {
   _pollInterval: null,   // polling de /recordings/play-status (Pi)
   _piActive:     false,  // si hay un aplay corriendo en la Pi
   _busy:         false,  // evita operaciones concurrentes
+  _playStartAt:  0,      // timestamp cuando empezó el aplay (para detectar fallos rápidos)
 
   async play(filename, btn) {
     if (this._busy) return;
@@ -1403,7 +1404,8 @@ const PlaybackModule = {
         return;
       }
 
-      this._piActive = true;
+      this._piActive    = true;
+      this._playStartAt = Date.now();
       log(`▶ aplay iniciado — ${device}: "${res.filename}"`, 'success');
 
       // Pollear hasta que aplay termine (máx. 30 min)
@@ -1416,10 +1418,16 @@ const PlaybackModule = {
           return;
         }
         try {
-          const { playing } = await fetch('/recordings/play-status').then(r => r.json());
+          const { playing, result } = await fetch('/recordings/play-status').then(r => r.json());
           if (!playing) {
             this._stopPoll();
-            log(`✔ Reproducción completa: "${filename}"`, 'info');
+            if (result && result.exitCode !== 0) {
+              // aplay falló — mostrar error claro
+              const detail = result.stderr ? `: ${result.stderr.split('\n')[0]}` : '';
+              log(`[Pi] Error reproduciendo "${filename}"${detail}`, 'error');
+            } else {
+              log(`✔ Reproducción completa: "${filename}"`, 'info');
+            }
             this._finish();
           }
         } catch { this._stopPoll(); this._finish(); }
@@ -1783,7 +1791,7 @@ const DebugModule = {
   _renderSpeaker() {
     const s = PiSpeakerModule;
 
-    // Pi speaker activo
+    // Pi speaker activo — LiveKit → aplay via WebSocket
     if (s._ws && s._ws.readyState === WebSocket.OPEN) {
       const ago     = s._lastFrameAt ? Math.round((Date.now() - s._lastFrameAt) / 1000) : null;
       const flowing = ago !== null && ago < 2;
@@ -1794,12 +1802,25 @@ const DebugModule = {
 
       this._set('dbg-spk',
         flowing
-          ? `Pi — frame #${s._frameCount} · ${ago}s ago`
+          ? `Pi LiveKit — frame #${s._frameCount} · ${ago}s ago`
           : s._frameCount > 0
-            ? `Pi — frame #${s._frameCount} · ${ago ?? '?'}s (sin flujo)`
-            : `Pi — esperando audio…`,
+            ? `Pi LiveKit — frame #${s._frameCount} · ${ago ?? '?'}s (sin flujo)`
+            : `Pi LiveKit — esperando audio…`,
         subParts.join(' · '),
         flowing ? 'ok pulse' : s._frameCount > 0 ? 'warn' : 'idle pulse'
+      );
+      return;
+    }
+
+    // Pi speaker activo — reproducción de grabación via aplay
+    if (PlaybackModule._piActive) {
+      const pb = PlaybackModule;
+      const filename = pb._activeBtn?.dataset?.filename || '—';
+      const elapsed  = pb._playStartAt ? Math.round((Date.now() - pb._playStartAt) / 1000) : 0;
+      this._set('dbg-spk',
+        `Pi aplay — ${elapsed}s`,
+        filename,
+        'ok pulse'
       );
       return;
     }
