@@ -595,7 +595,8 @@ body {
 .device-list::-webkit-scrollbar       { width: 3px; }
 .device-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
 
-.list-empty { font-size: 12px; color: var(--muted); text-align: center; padding: 12px 0; }
+.list-empty,
+.rec-empty  { font-size: 12px; color: var(--muted); text-align: center; padding: 12px 0; }
 
 .bt-item {
   display: grid;

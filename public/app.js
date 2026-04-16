@@ -1626,7 +1626,6 @@ document.getElementById('btn-rec-stop').addEventListener('click', async () => {
         ui.alsaDeviceSelect.innerHTML = '<option value="">Sin dispositivos ALSA</option>';
         log('Raspberry detectada — sin dispositivos ALSA conectados', 'warn');
       }
-      RecorderModule.show();
     } catch {
       ui.alsaDeviceSelect.innerHTML = '<option value="">Error al leer ALSA</option>';
     }
@@ -1695,15 +1694,12 @@ document.getElementById('btn-rec-stop').addEventListener('click', async () => {
 
   }
 
-  // ─── Bluetooth y grabaciones (cualquier Linux) ───────────────────────────
+  // ─── Grabaciones — siempre visible (browser recording funciona en cualquier plataforma) ──
+  await RecorderModule.show();
+
+  // ─── Bluetooth y terminal (solo Linux) ───────────────────────────────────
   if (isLinux) {
     BluetoothModule.init();
-    // Mostrar panel de grabaciones si no se mostró ya en el bloque isRaspberry
-    if (!isRaspberry) RecorderModule.show();
-  }
-
-  // ─── Terminal (solo Linux) ────────────────────────────────────────────────
-  if (isLinux) {
     const tabNav = document.getElementById('tab-nav');
     if (tabNav) {
       tabNav.style.display = 'flex';
