@@ -1277,47 +1277,51 @@ const PlaybackModule = {
   _audio:        null,   // HTMLAudioElement (browser)
   _activeBtn:    null,   // botón ▶ activo, para restaurarlo al parar
   _pollInterval: null,   // polling de /recordings/play-status (Pi)
+  _piActive:     false,  // si hay un aplay corriendo en la Pi
+  _busy:         false,  // evita operaciones concurrentes
 
   async play(filename, btn) {
-    await this.stop();
-    this._activeBtn = btn || null;
-    if (btn) { btn.textContent = '⏹'; btn.classList.add('playing'); }
+    if (this._busy) return;
+    this._busy = true;
+    try {
+      await this._stop();
+      this._activeBtn = btn || null;
+      if (btn) { btn.textContent = '⏹'; btn.classList.add('playing'); }
 
-    const dest       = getSelectedSpeakerDest();
-    const isBrowserRec = filename.includes('_browser_');  // WebM — aplay no lo soporta
+      const dest       = getSelectedSpeakerDest();
+      const isBrowserRec = filename.includes('_browser_');  // WebM — aplay no soporta
 
-    console.log(`[Playback] play — file: ${filename}  dest: ${dest}  isBrowserRec: ${isBrowserRec}`);
-
-    if (dest === 'pi' && !isBrowserRec) {
-      // ALSA recording (WAV real) → aplay en la Pi
-      log(`▶ Reproduciendo "${filename}" en Pi ALSA`, 'info');
-      await this._playOnPi(filename, getSelectedAlsaSpeaker());
-    } else {
-      // Browser recording (WebM) o destino browser → <audio> en el browser
-      if (dest === 'pi' && isBrowserRec) {
-        log(`▶ Reproduciendo "${filename}" en browser (grabación WebM — aplay no compatible)`, 'info');
+      if (dest === 'pi' && !isBrowserRec) {
+        log(`▶ Pi ALSA: "${filename}"`, 'info');
+        await this._playOnPi(filename, getSelectedAlsaSpeaker());
       } else {
-        log(`▶ Reproduciendo "${filename}" en browser`, 'info');
+        if (dest === 'pi' && isBrowserRec) {
+          log(`▶ Browser (WebM — aplay no compatible): "${filename}"`, 'info');
+        } else {
+          log(`▶ Browser: "${filename}"`, 'info');
+        }
+        this._playInBrowser(filename);
       }
-      this._playInBrowser(filename);
+    } finally {
+      this._busy = false;
     }
   },
 
   _playInBrowser(filename) {
     const audio = new Audio(`/recordings/${encodeURIComponent(filename)}`);
-    this._audio  = audio;
+    this._audio   = audio;
+    this._piActive = false;
     audio.onended = () => this._finish();
     audio.onerror = () => {
       log(`Error reproduciendo "${filename}" en browser`, 'error');
       this._finish();
     };
     audio.play().catch(err => {
-      log(`Error: ${err.message}`, 'error');
+      log(`Error audio: ${err.message}`, 'error');
       this._finish();
     });
   },
 
-  // Pi: llama a aplay en el servidor directamente — sin decode en el browser
   async _playOnPi(filename, device) {
     try {
       const res = await fetch('/recordings/play', {
@@ -1327,42 +1331,59 @@ const PlaybackModule = {
       }).then(r => r.json());
 
       if (!res.ok) {
-        log(`[speaker-pi] Error: ${res.error}`, 'error');
+        log(`[Pi] Error aplay: ${res.error}`, 'error');
         this._finish();
         return;
       }
 
-      log(`[speaker-pi] ▶ aplay iniciado — device: ${device}  archivo: "${res.filename}"`, 'success');
-      console.log(`[Playback] Pi aplay started — ${res.filename} @ ${device}`);
+      this._piActive = true;
+      log(`▶ aplay iniciado — ${device}: "${res.filename}"`, 'success');
 
-      // Pollear estado hasta que aplay termine
+      // Pollear hasta que aplay termine (máx. 30 min)
+      let ticks = 0;
       this._pollInterval = setInterval(async () => {
+        ticks++;
+        if (ticks > 2250) { // 30 min a 800ms/tick
+          this._stopPoll();
+          this._finish();
+          return;
+        }
         try {
           const { playing } = await fetch('/recordings/play-status').then(r => r.json());
           if (!playing) {
             this._stopPoll();
-            log(`[speaker-pi] ✔ Reproducción completa: "${filename}"`, 'info');
+            log(`✔ Reproducción completa: "${filename}"`, 'info');
             this._finish();
           }
         } catch { this._stopPoll(); this._finish(); }
       }, 800);
 
     } catch (err) {
-      log(`Error reproduciendo en Pi: ${err.message}`, 'error');
-      console.error('[Playback]', err);
+      log(`Error Pi: ${err.message}`, 'error');
+      this._piActive = false;
       this._finish();
     }
   },
 
   async stop() {
+    if (this._busy) return;
+    this._busy = true;
+    try { await this._stop(); } finally { this._busy = false; }
+  },
+
+  // stop interno — sin guardia _busy (llamado desde play que ya la tiene)
+  async _stop() {
     this._stopPoll();
     if (this._audio) {
       this._audio.pause();
       this._audio.src = '';
       this._audio = null;
     }
-    // Detener aplay en la Pi si estaba corriendo
-    try { await fetch('/recordings/stop-play', { method: 'POST' }); } catch {}
+    // Solo llama al servidor si había un aplay Pi activo
+    if (this._piActive) {
+      this._piActive = false;
+      try { await fetch('/recordings/stop-play', { method: 'POST' }); } catch {}
+    }
     this._finish();
   },
 

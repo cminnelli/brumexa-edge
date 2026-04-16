@@ -237,41 +237,55 @@ app.delete('/recordings/:file', (req, res) => {
   }
 });
 
-// ─── GET /recordings/:file — descargar un archivo WAV ────────────────────────
+// ─── GET /recordings/:file — servir archivo de audio (streaming + descarga) ───
 app.get('/recordings/:file', (req, res) => {
-  // Sanitizar: solo letras, números, guiones, puntos — sin path traversal
-  const name = req.params.file.replace(/[^a-zA-Z0-9_\-\.]/g, '');
-  const filePath = `${RECORDINGS_DIR}/${name}`;
-  res.download(filePath, name, (err) => {
-    if (err) res.status(404).json({ error: 'Archivo no encontrado' });
+  const name     = req.params.file.replace(/[^a-zA-Z0-9_\-\.]/g, '');
+  const filePath = path.join(RECORDINGS_DIR, name);
+  const mime     = name.endsWith('.webm') ? 'audio/webm' : 'audio/wav';
+
+  // sendFile soporta range requests (necesario para que el <audio> del browser funcione bien)
+  res.setHeader('Content-Type', mime);
+  res.setHeader('Accept-Ranges', 'bytes');
+  res.sendFile(filePath, { root: '/' }, (err) => {
+    if (err && !res.headersSent) res.status(404).json({ error: 'Archivo no encontrado' });
   });
 });
 
 // ─── Reproducción de grabaciones en la Pi ────────────────────────────────────
-let _playProc = null;
+const { spawn } = require('child_process');
+let _playProc     = null;
+let _playProcGone = Promise.resolve(); // se resuelve cuando el aplay actual muere
 
-// POST /recordings/play — ejecuta aplay en la Pi con el archivo indicado
-app.post('/recordings/play', express.json(), (req, res) => {
+// Mata el aplay en curso y espera que realmente muera (máx. 1.5 s)
+function killAplay() {
+  if (!_playProc) return Promise.resolve();
+  const proc = _playProc;
+  _playProc  = null;
+  const gone = new Promise(r => proc.once('close', r));
+  try { proc.kill('SIGTERM'); } catch {}
+  // timeout de seguridad: si en 1.5 s no murió, continuamos igual
+  return Promise.race([gone, new Promise(r => setTimeout(r, 1500))]);
+}
+
+// POST /recordings/play — espera que el aplay previo muera antes de iniciar uno nuevo
+app.post('/recordings/play', express.json(), async (req, res) => {
   const { filename, device = 'plughw:0,0' } = req.body || {};
   if (!filename || typeof filename !== 'string') {
     return res.status(400).json({ ok: false, error: 'filename requerido' });
   }
-  // Solo letras, números, guiones, puntos y espacios — sin path traversal
   const safeName = filename.replace(/[^a-zA-Z0-9_\-\. ]/g, '');
   const filePath = path.join(RECORDINGS_DIR, safeName);
 
-  // Matar reproducción previa si la hay
-  if (_playProc) {
-    try { _playProc.kill('SIGTERM'); } catch {}
-    _playProc = null;
-  }
+  await killAplay(); // espera que el anterior muera
 
-  const { spawn } = require('child_process');
   const proc = spawn('aplay', ['-D', device, filePath]);
-  _playProc = proc;
+  _playProc  = proc;
   console.log(`[play] aplay -D ${device} ${safeName}`);
 
-  proc.stderr.on('data', d => console.error('[aplay]', d.toString().trim()));
+  proc.stderr.on('data', d => {
+    const msg = d.toString().trim();
+    if (msg) console.error('[aplay]', msg);
+  });
   proc.on('error', err => {
     console.error('[play] aplay error:', err.message);
     if (_playProc === proc) _playProc = null;
@@ -284,12 +298,12 @@ app.post('/recordings/play', express.json(), (req, res) => {
   res.json({ ok: true, filename: safeName, device });
 });
 
-// POST /recordings/stop-play — mata el aplay en curso
-app.post('/recordings/stop-play', (_req, res) => {
+// POST /recordings/stop-play — mata aplay y espera que muera antes de responder
+app.post('/recordings/stop-play', async (_req, res) => {
   if (_playProc) {
-    try { _playProc.kill('SIGTERM'); } catch {}
-    _playProc = null;
-    console.log('[play] detenido por usuario');
+    console.log('[play] deteniendo aplay…');
+    await killAplay();
+    console.log('[play] aplay detenido');
     res.json({ ok: true });
   } else {
     res.json({ ok: false, message: 'Sin reproducción activa' });
