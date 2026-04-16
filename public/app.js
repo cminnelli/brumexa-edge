@@ -1271,6 +1271,141 @@ const BluetoothModule = {
 };
 
 // ============================================================
+// MÓDULO PLAYBACK — reproduce grabaciones en browser o Pi speaker
+// ============================================================
+const PlaybackModule = {
+  _audio:     null,   // HTMLAudioElement (browser)
+  _speakerWs: null,   // WebSocket hacia /ws/speaker (Pi)
+  _activeBtn: null,   // botón ▶ activo, para restaurarlo al parar
+
+  async play(filename, btn) {
+    this.stop();                    // detener cualquier reproducción previa
+    this._activeBtn = btn || null;
+    if (btn) { btn.textContent = '⏹'; btn.classList.add('playing'); }
+
+    const dest = getSelectedSpeakerDest();
+    log(`▶ Reproduciendo "${filename}" — speaker: ${dest}`, 'info');
+    console.log(`[Playback] play — file: ${filename}  dest: ${dest}`);
+
+    if (dest === 'pi') {
+      await this._playOnPi(filename, getSelectedAlsaSpeaker());
+    } else {
+      this._playInBrowser(filename);
+    }
+  },
+
+  _playInBrowser(filename) {
+    const audio = new Audio(`/recordings/${encodeURIComponent(filename)}`);
+    this._audio  = audio;
+    audio.onended = () => { this._finish(); };
+    audio.onerror = () => {
+      log(`Error reproduciendo "${filename}" en browser`, 'error');
+      this._finish();
+    };
+    audio.play().catch(err => {
+      log(`Error: ${err.message}`, 'error');
+      this._finish();
+    });
+  },
+
+  async _playOnPi(filename, device) {
+    try {
+      log(`[speaker-pi] Descargando y decodificando "${filename}"…`, 'info');
+      const arrayBuffer = await fetch(`/recordings/${encodeURIComponent(filename)}`).then(r => r.arrayBuffer());
+
+      // Decodificar con AudioContext (soporta WAV y WebM/Opus)
+      const tmpCtx      = new AudioContext();
+      const audioBuffer = await tmpCtx.decodeAudioData(arrayBuffer);
+      await tmpCtx.close();
+
+      const sampleRate = audioBuffer.sampleRate;
+      const numSamples = audioBuffer.length;
+
+      // Mixear a mono (por si la grabación es estéreo)
+      const float32 = new Float32Array(numSamples);
+      for (let c = 0; c < audioBuffer.numberOfChannels; c++) {
+        const ch = audioBuffer.getChannelData(c);
+        for (let i = 0; i < numSamples; i++) float32[i] += ch[i] / audioBuffer.numberOfChannels;
+      }
+
+      // Convertir Float32 → Int16 LE
+      const int16 = new Int16Array(numSamples);
+      for (let i = 0; i < numSamples; i++) {
+        int16[i] = Math.max(-32768, Math.min(32767, Math.round(float32[i] * 32767)));
+      }
+
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl    = `${protocol}//${location.host}/ws/speaker?device=${encodeURIComponent(device)}&rate=${sampleRate}&channels=1`;
+      const ws       = new WebSocket(wsUrl);
+      this._speakerWs = ws;
+
+      ws.onopen = () => {
+        log(`[speaker-pi] ▶ Reproduciendo "${filename}" — device: ${device}  ${sampleRate} Hz  ${(int16.byteLength / 1024).toFixed(1)} KB`, 'success');
+        console.log(`[Playback] Pi speaker streaming — ${numSamples} samples @ ${sampleRate} Hz`);
+
+        // Enviar en chunks de ~100 ms al ritmo de reproducción
+        const chunkSamples = Math.floor(sampleRate * 0.1);
+        let offset = 0;
+
+        const sendNext = () => {
+          if (this._speakerWs !== ws) return;    // stop() fue llamado
+          if (offset >= int16.length) {
+            ws.close();
+            return;
+          }
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(int16.slice(offset, offset + chunkSamples).buffer);
+          }
+          offset += chunkSamples;
+          setTimeout(sendNext, 95);
+        };
+        sendNext();
+      };
+
+      ws.onerror = () => {
+        log(`[speaker-pi] Error WebSocket al reproducir`, 'error');
+        this._finish();
+      };
+
+      ws.onclose = () => {
+        if (this._speakerWs === ws) {
+          log(`[speaker-pi] ✔ Reproducción completa: "${filename}"`, 'info');
+          this._speakerWs = null;
+          this._finish();
+        }
+      };
+
+    } catch (err) {
+      log(`Error reproduciendo en Pi: ${err.message}`, 'error');
+      console.error('[Playback]', err);
+      this._finish();
+    }
+  },
+
+  stop() {
+    if (this._audio) {
+      this._audio.pause();
+      this._audio.src = '';
+      this._audio = null;
+    }
+    if (this._speakerWs) {
+      const ws = this._speakerWs;
+      this._speakerWs = null;   // marca parada antes de close para que sendNext se detenga
+      ws.close();
+    }
+    this._finish();
+  },
+
+  _finish() {
+    if (this._activeBtn) {
+      this._activeBtn.textContent = '▶';
+      this._activeBtn.classList.remove('playing');
+      this._activeBtn = null;
+    }
+  },
+};
+
+// ============================================================
 // MÓDULO GRABACIONES — ALSA (Pi) + Browser MediaRecorder
 // ============================================================
 const RecorderModule = {
@@ -1382,25 +1517,59 @@ const RecorderModule = {
   async refreshList() {
     try {
       const { files } = await fetch('/recordings').then(r => r.json());
+      ui.recordingsList.innerHTML = '';
       if (files.length === 0) {
         ui.recordingsList.innerHTML = '<li class="rec-empty">Sin grabaciones aún.</li>';
         return;
       }
-      ui.recordingsList.innerHTML = files.map(f => {
-        const kb   = (f.size / 1024).toFixed(1);
-        const date = new Date(f.created).toLocaleString();
-        const src  = f.filename.includes('_browser_') ? '🌐' : '🍓';
-        return `
-          <li class="rec-item">
-            <span title="${f.filename.includes('_browser_') ? 'Browser mic' : 'Pi ALSA mic'}">${src}</span>
-            <span class="rec-item-name" title="${f.filename}">${f.filename}</span>
-            <span class="rec-item-size">${kb} KB · ${date}</span>
-            <a class="rec-item-dl" href="/recordings/${f.filename}" download>↓</a>
-          </li>`;
-      }).join('');
+      for (const f of files) ui.recordingsList.appendChild(this._makeRecItem(f));
     } catch (err) {
       log(`Error cargando grabaciones: ${err.message}`, 'error');
     }
+  },
+
+  _makeRecItem(f) {
+    const kb        = (f.size / 1024).toFixed(1);
+    const date      = new Date(f.created).toLocaleString();
+    const isBrowser = f.filename.includes('_browser_');
+
+    const li = document.createElement('li');
+    li.className = 'rec-item';
+
+    const srcEl = document.createElement('span');
+    srcEl.title       = isBrowser ? 'Browser mic' : 'Pi ALSA mic';
+    srcEl.textContent = isBrowser ? '🌐' : '🍓';
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'rec-item-name';
+    nameEl.title     = f.filename;
+    nameEl.textContent = f.filename;
+
+    const sizeEl = document.createElement('span');
+    sizeEl.className   = 'rec-item-size';
+    sizeEl.textContent = `${kb} KB · ${date}`;
+
+    const playBtn = document.createElement('button');
+    playBtn.className        = 'rec-item-play';
+    playBtn.dataset.filename = f.filename;
+    playBtn.textContent      = '▶';
+    playBtn.title            = 'Reproducir';
+    playBtn.addEventListener('click', () => {
+      if (playBtn.classList.contains('playing')) {
+        PlaybackModule.stop();
+      } else {
+        PlaybackModule.play(f.filename, playBtn);
+      }
+    });
+
+    const dlLink = document.createElement('a');
+    dlLink.className = 'rec-item-dl';
+    dlLink.href      = `/recordings/${encodeURIComponent(f.filename)}`;
+    dlLink.download  = f.filename;
+    dlLink.textContent = '↓';
+
+    li.append(srcEl, nameEl, sizeEl, playBtn, dlLink);
+    return li;
   },
 };
 

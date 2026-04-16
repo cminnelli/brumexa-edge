@@ -755,6 +755,16 @@ body {
   flex-shrink: 0;
 }
 .rec-item-dl:hover { background: var(--accent); color: #fff; }
+.rec-item-play {
+  font-size: 11px; font-weight: 700; cursor: pointer;
+  color: var(--success); background: transparent;
+  padding: 2px 7px; border: 1px solid var(--success); border-radius: 3px;
+  transition: background var(--tr), color var(--tr);
+  flex-shrink: 0;
+}
+.rec-item-play:hover   { background: var(--success); color: #fff; }
+.rec-item-play.playing { background: var(--danger); border-color: var(--danger); color: #fff; }
+.rec-item-play.playing:hover { background: color-mix(in srgb, var(--danger) 80%, #000); }
 
 /* ═══════════════════════════════════════════════════════════
    EVENT LOG
