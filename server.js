@@ -10,7 +10,8 @@ const os      = require('os');
 const { setupAudio }                                    = require('./lib/audio');
 const { startRecording, stopRecording, getStatus,
         listRecordings, RECORDINGS_DIR,
-        reserveBrowserFilename, saveBrowserRecording } = require('./lib/recorder');
+        reserveBrowserFilename, saveBrowserRecording,
+        deleteRecording } = require('./lib/recorder');
 const { setupBluetooth }                               = require('./lib/bluetooth');
 const { setupWifi, autoStartAP }                       = require('./lib/wifi');
 
@@ -223,6 +224,17 @@ app.post('/record/upload/:filename', (req, res) => {
       res.status(400).json({ ok: false, error: err.message });
     }
   });
+});
+
+// ─── DELETE /recordings/:file — eliminar grabación ───────────────────────────
+app.delete('/recordings/:file', (req, res) => {
+  const name = req.params.file.replace(/[^a-zA-Z0-9_\-\.]/g, '');
+  try {
+    deleteRecording(name);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
 });
 
 // ─── GET /recordings/:file — descargar un archivo WAV ────────────────────────

@@ -766,6 +766,14 @@ body {
 .rec-item-play:hover   { background: var(--success); color: #fff; }
 .rec-item-play.playing { background: var(--danger); border-color: var(--danger); color: #fff; }
 .rec-item-play.playing:hover { background: color-mix(in srgb, var(--danger) 80%, #000); }
+.rec-item-del {
+  font-size: 11px; cursor: pointer;
+  color: var(--muted); background: transparent;
+  padding: 2px 5px; border: 1px solid transparent; border-radius: 3px;
+  transition: color var(--tr), border-color var(--tr);
+  flex-shrink: 0;
+}
+.rec-item-del:hover { color: var(--danger); border-color: var(--danger); }
 
 /* ═══════════════════════════════════════════════════════════
    EVENT LOG

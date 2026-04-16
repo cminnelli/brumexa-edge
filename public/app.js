@@ -1385,6 +1385,7 @@ const PlaybackModule = {
 const RecorderModule = {
   _interval:   null,
   _elapsed:    0,
+  _statusPoll: null,   // detecta si arecord muere durante la grabación ALSA
   // Browser recording state
   _mediaRec:   null,
   _chunks:     [],
@@ -1403,7 +1404,6 @@ const RecorderModule = {
       // ── ALSA: arecord server-side ──────────────────────────────────────
       const device = getSelectedAlsaDevice();
       console.log(`[rec] Iniciando grabación ALSA — device: ${device}`);
-      log(`[Debug] Grabación ALSA — device: ${device}`, 'info');
 
       const res = await fetch('/record/start', {
         method:  'POST',
@@ -1412,7 +1412,26 @@ const RecorderModule = {
       }).then(r => r.json());
 
       if (!res.ok) throw new Error(res.error);
-      log(`⏺ Grabando Pi ALSA — ${res.filename}`, 'success');
+      log(`⏺ Grabando Pi ALSA — ${res.filename} (${device})`, 'success');
+
+      // Detectar si arecord muere antes de que el usuario detenga la grabación
+      this._statusPoll = setInterval(async () => {
+        try {
+          const s = await fetch('/record/status').then(r => r.json());
+          if (!s.recording && this._interval !== null) {
+            // arecord salió inesperadamente
+            this._clearStatusPoll();
+            clearInterval(this._interval);
+            this._interval = null;
+            ui.btnRecStop.style.display  = 'none';
+            ui.btnRecStart.style.display = '';
+            ui.recTimer.style.display    = 'none';
+            ui.recSeconds.textContent    = '0';
+            log(`arecord terminó inesperadamente. Verificá que el dispositivo "${device}" sea correcto (probá en terminal: arecord -D ${device} -f S16_LE -r 16000 test.wav)`, 'error');
+            await this.refreshList();
+          }
+        } catch { /* servidor reconectando, ignorar */ }
+      }, 2000);
 
     } else {
       // ── Browser: MediaRecorder client-side ────────────────────────────
@@ -1447,8 +1466,13 @@ const RecorderModule = {
     }, 1000);
   },
 
+  _clearStatusPoll() {
+    if (this._statusPoll) { clearInterval(this._statusPoll); this._statusPoll = null; }
+  },
+
   // ── Detener ───────────────────────────────────────────────────────────────
   async stop() {
+    this._clearStatusPoll();
     clearInterval(this._interval);
     this._interval = null;
     ui.btnRecStop.style.display  = 'none';
@@ -1546,7 +1570,23 @@ const RecorderModule = {
     dlLink.download  = f.filename;
     dlLink.textContent = '↓';
 
-    li.append(srcEl, nameEl, sizeEl, playBtn, dlLink);
+    const delBtn = document.createElement('button');
+    delBtn.className   = 'rec-item-del';
+    delBtn.textContent = '🗑';
+    delBtn.title       = 'Eliminar';
+    delBtn.addEventListener('click', async () => {
+      if (!confirm(`¿Eliminar "${f.filename}"?`)) return;
+      try {
+        const res = await fetch(`/recordings/${encodeURIComponent(f.filename)}`, { method: 'DELETE' }).then(r => r.json());
+        if (!res.ok) throw new Error(res.error);
+        log(`🗑 Eliminado: ${f.filename}`, 'info');
+        await RecorderModule.refreshList();
+      } catch (err) {
+        log(`Error al eliminar: ${err.message}`, 'error');
+      }
+    });
+
+    li.append(srcEl, nameEl, sizeEl, playBtn, dlLink, delBtn);
     return li;
   },
 };
