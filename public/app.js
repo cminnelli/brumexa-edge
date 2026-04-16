@@ -419,60 +419,73 @@ const PiSpeakerModule = {
   _processor: null,
   _source:    null,
 
-  start(track, device) {
-    const audioCtx   = new AudioContext();          // usa el rate nativo del sistema (típico: 48 kHz)
+  // Devuelve Promise que resuelve cuando el WS está abierto y el pipeline listo
+  async start(track, device) {
+    // AudioContext usa la tasa nativa del sistema (típico: 48 kHz)
+    const audioCtx = new AudioContext();
+    this._audioCtx = audioCtx;
+
+    // CRÍTICO: resume() — el AudioContext arranca suspended si se crea fuera
+    // de un handler de gesto del usuario. Sin esto onaudioprocess nunca dispara.
+    await audioCtx.resume();
     const sampleRate = audioCtx.sampleRate;
-    this._audioCtx   = audioCtx;
+    console.log(`[PiSpeaker] AudioContext state: ${audioCtx.state}  rate: ${sampleRate} Hz`);
+
+    // Crear pipeline ANTES de abrir el WS para que esté listo al conectar
+    const stream    = new MediaStream([track.mediaStreamTrack]);
+    const source    = audioCtx.createMediaStreamSource(stream);
+    const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+    const mute      = audioCtx.createGain();
+    mute.gain.value = 0;   // silenciar en el browser — el audio va a la Pi
+
+    source.connect(processor);
+    processor.connect(mute);
+    mute.connect(audioCtx.destination);
+
+    this._source    = source;
+    this._processor = processor;
 
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl    = `${protocol}//${location.host}/ws/speaker?device=${encodeURIComponent(device)}&rate=${sampleRate}&channels=1`;
-    const ws       = new WebSocket(wsUrl);
-    this._ws = ws;
 
-    ws.onopen = () => {
-      log(`[speaker-pi] WebSocket abierto — ALSA: ${device}  rate: ${sampleRate} Hz`, 'success');
-      console.log(`[PiSpeaker] WS open — device: ${device}  sampleRate: ${sampleRate}`);
+    await new Promise((resolve, reject) => {
+      const ws = new WebSocket(wsUrl);
+      ws.binaryType = 'arraybuffer';
+      this._ws = ws;
 
-      // Crear pipeline: track → source → ScriptProcessor → GainNode (mute) → destination
-      const stream    = new MediaStream([track.mediaStreamTrack]);
-      const source    = audioCtx.createMediaStreamSource(stream);
-      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
-      const mute      = audioCtx.createGain();
-      mute.gain.value = 0;   // silenciar en el browser
+      ws.onopen = () => {
+        log(`[speaker-pi] WS abierto — ${device}  ${sampleRate} Hz`, 'success');
+        console.log(`[PiSpeaker] WS open — device: ${device}  sampleRate: ${sampleRate}`);
 
-      source.connect(processor);
-      processor.connect(mute);
-      mute.connect(audioCtx.destination);
-
-      this._source    = source;
-      this._processor = processor;
-
-      let chunkCount = 0;
-      processor.onaudioprocess = (e) => {
-        if (ws.readyState !== WebSocket.OPEN) return;
-        const float32 = e.inputBuffer.getChannelData(0);
-        // Convertir Float32 [-1, 1] a Int16 LE [-32768, 32767]
-        const int16 = new Int16Array(float32.length);
-        for (let i = 0; i < float32.length; i++) {
-          int16[i] = Math.max(-32768, Math.min(32767, Math.round(float32[i] * 32767)));
-        }
-        ws.send(int16.buffer);
-        chunkCount++;
-        if (chunkCount === 1) {
-          console.log(`[PiSpeaker] ▶ primer chunk enviado (${int16.byteLength} bytes @ ${sampleRate} Hz)`);
-          log('[speaker-pi] Enviando audio del agente a la Pi — primer frame', 'success');
-        }
+        let chunkCount = 0;
+        processor.onaudioprocess = (e) => {
+          if (ws.readyState !== WebSocket.OPEN) return;
+          const float32 = e.inputBuffer.getChannelData(0);
+          const int16   = new Int16Array(float32.length);
+          for (let i = 0; i < float32.length; i++) {
+            int16[i] = Math.max(-32768, Math.min(32767, Math.round(float32[i] * 32767)));
+          }
+          ws.send(int16.buffer);
+          chunkCount++;
+          if (chunkCount === 1) {
+            console.log(`[PiSpeaker] ▶ primer chunk enviado (${int16.byteLength} B @ ${sampleRate} Hz)`);
+            log('[speaker-pi] Audio del agente llegando a la Pi — primer frame', 'success');
+          }
+        };
+        resolve();
       };
-    };
 
-    ws.onerror = (ev) => {
-      console.error('[PiSpeaker] WS error', ev);
-      log('[speaker-pi] Error en WebSocket del speaker', 'error');
-    };
+      ws.onerror = (ev) => {
+        console.error('[PiSpeaker] WS error', ev);
+        log('[speaker-pi] Error en WebSocket del speaker', 'error');
+        reject(new Error('WebSocket speaker falló'));
+      };
 
-    ws.onclose = (e) => {
-      console.log(`[PiSpeaker] WS cerrado — code: ${e.code}  reason: "${e.reason || '—'}"`);
-    };
+      ws.onclose = (e) => {
+        console.log(`[PiSpeaker] WS cerrado — code: ${e.code}  reason: "${e.reason || '—'}"`);
+        processor.onaudioprocess = null;
+      };
+    });
   },
 
   stop() {
@@ -696,22 +709,34 @@ const LiveKitModule = {
       setMicStatus('error', err.message);
     });
 
-    room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, _pub, participant) => {
+    room.on(LivekitClient.RoomEvent.TrackSubscribed, async (track, _pub, participant) => {
       if (track.kind !== LivekitClient.Track.Kind.Audio) return;
       const speakerDest = getSelectedSpeakerDest();
       log(`Audio recibido de "${participant.identity}" — speaker: ${speakerDest}`, 'info');
-      console.log(`[LiveKit] TrackSubscribed — participant: ${participant.identity}  speakerDest: ${speakerDest}`);
+      console.log(`[LiveKit] TrackSubscribed — participant: ${participant.identity}  speakerDest: ${speakerDest}  state: ${track.mediaStreamTrack?.readyState}`);
 
       if (speakerDest === 'pi') {
         const device = getSelectedAlsaSpeaker();
-        log(`[speaker-pi] Enrutando audio del agente → Pi ALSA: ${device}`, 'info');
-        console.log(`[PiSpeaker] → start() device: ${device}`);
-        PiSpeakerModule.start(track, device);
+        log(`[speaker-pi] → Pi ALSA: ${device}`, 'info');
+        try {
+          await PiSpeakerModule.start(track, device);
+        } catch (err) {
+          log(`[speaker-pi] Error: ${err.message} — reproduciendo en browser como fallback`, 'warn');
+          const audioEl = track.attach();
+          document.body.appendChild(audioEl);
+          audioEl.play().catch(() => {});
+        }
       } else {
+        // Browser speaker — attach() crea el <audio> y LiveKit maneja el stream
         const audioEl = track.attach();
         audioEl.autoplay = true;
         audioEl.style.display = 'none';
         document.body.appendChild(audioEl);
+        // play() explícito porque autoplay policy puede bloquearlo silenciosamente
+        audioEl.play().catch(err => {
+          console.warn('[LiveKit] autoplay bloqueado:', err.message);
+          log('Autoplay bloqueado por el browser — hacé clic en la página para habilitar audio', 'warn');
+        });
       }
     });
 
