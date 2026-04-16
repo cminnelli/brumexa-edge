@@ -1504,7 +1504,7 @@ const RecorderModule = {
       const res = await fetch('/record/start', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ device }),
+        body:    JSON.stringify({ device, normTarget: GainControls.normTarget }),
       }).then(r => r.json());
 
       if (!res.ok) throw new Error(res.error);
@@ -1687,6 +1687,71 @@ const RecorderModule = {
 
     li.append(srcEl, nameEl, sizeEl, playBtn, dlLink, delBtn);
     return li;
+  },
+};
+
+// ============================================================
+// CONTROLES DE GANANCIA
+// ============================================================
+const GainControls = {
+  _sliderMic:  document.getElementById('slider-mic-gain'),
+  _sliderNorm: document.getElementById('slider-norm-target'),
+  _valMic:     document.getElementById('val-mic-gain'),
+  _valNorm:    document.getElementById('val-norm-target'),
+  _dbMic:      document.getElementById('db-mic-gain'),
+  _dbNorm:     document.getElementById('db-norm-target'),
+
+  // Valor actual de normTarget (0.3–1.0) para enviarlo con /record/start
+  get normTarget() { return parseFloat(this._sliderNorm?.value || 85) / 100; },
+  get micGain()    { return parseFloat(this._sliderMic?.value  || 4); },
+
+  init(serverMicGain) {
+    if (!this._sliderMic) return; // card no visible aún
+
+    // Restaurar normTarget desde localStorage
+    const savedNorm = parseFloat(localStorage.getItem('brumexa_norm_target'));
+    if (!isNaN(savedNorm)) this._sliderNorm.value = Math.round(savedNorm * 100);
+
+    // Inicializar mic gain desde el servidor
+    if (serverMicGain) this._sliderMic.value = serverMicGain;
+
+    this._updateLabels();
+
+    // Mic gain — enviar al servidor al soltar el slider
+    this._sliderMic.addEventListener('input', () => this._updateLabels());
+    this._sliderMic.addEventListener('change', () => this._pushMicGain());
+
+    // Norm target — solo localStorage (se aplica al grabar)
+    this._sliderNorm.addEventListener('input', () => {
+      this._updateLabels();
+      localStorage.setItem('brumexa_norm_target', this.normTarget.toFixed(2));
+    });
+  },
+
+  _updateLabels() {
+    if (!this._sliderMic) return;
+    const gain = this.micGain;
+    const db   = (20 * Math.log10(gain)).toFixed(1);
+    this._valMic.textContent = `${gain}x`;
+    this._dbMic.textContent  = `+${db} dB`;
+
+    const pct   = parseInt(this._sliderNorm.value);
+    const dbNorm = (20 * Math.log10(pct / 100)).toFixed(1);
+    this._valNorm.textContent = `${pct}%`;
+    this._dbNorm.textContent  = `${dbNorm} dBFS`;
+  },
+
+  async _pushMicGain() {
+    try {
+      await fetch('/config/mic-gain', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ gain: this.micGain }),
+      });
+      log(`Ganancia mic → ${this.micGain}x`, 'info');
+    } catch (err) {
+      log(`Error actualizando ganancia: ${err.message}`, 'error');
+    }
   },
 };
 
@@ -1933,7 +1998,7 @@ const DebugModule = {
       isLinux     = cfg.server.platform === 'linux';
       isRaspberry = isLinux && /arm/i.test(cfg.server.arch);
       log(`Debug: platform=${cfg.server.platform} arch=${cfg.server.arch} isLinux=${isLinux} isRaspberry=${isRaspberry}`, 'info');
-      if (cfg.micGain) state.micGain = cfg.micGain;
+      if (cfg.micGain) { state.micGain = cfg.micGain; GainControls.init(cfg.micGain); }
     }
 
     if (!cfg.livekitUrl) {

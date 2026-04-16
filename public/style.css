@@ -775,6 +775,45 @@ body {
 }
 .rec-item-del:hover { color: var(--danger); border-color: var(--danger); }
 
+/* ─── Controles de ganancia ── */
+.gain-controls {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px 0 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.gain-row {
+  display: grid;
+  grid-template-columns: 90px 1fr 32px 52px;
+  align-items: center;
+  gap: 8px;
+}
+.gain-label {
+  font-size: 11px; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.gain-slider {
+  -webkit-appearance: none; appearance: none;
+  height: 3px; border-radius: 2px;
+  background: var(--border2);
+  outline: none; cursor: pointer;
+}
+.gain-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent); cursor: pointer;
+  transition: background .15s;
+}
+.gain-slider:hover::-webkit-slider-thumb { background: var(--accent-h); }
+.gain-val {
+  font-size: 11px; font-weight: 700; color: var(--fg);
+  text-align: right;
+}
+.gain-db {
+  font-size: 10px; color: var(--muted);
+  text-align: right;
+}
+
 /* ─── Debug panel ────────────────────────────────────────────────────────── */
 .dbg-rows { display: flex; flex-direction: column; gap: 2px; }
 

@@ -346,6 +346,24 @@
             <button class="btn-rec-stop"  id="btn-rec-stop" style="display:none">Detener</button>
           </div>
         </div>
+        <!-- Controles de ganancia -->
+        <div class="gain-controls">
+          <div class="gain-row">
+            <label class="gain-label" for="slider-mic-gain">Mic en vivo</label>
+            <input type="range" id="slider-mic-gain" class="gain-slider"
+                   min="1" max="16" step="0.5" value="4">
+            <span class="gain-val" id="val-mic-gain">4x</span>
+            <span class="gain-db"  id="db-mic-gain">+12 dB</span>
+          </div>
+          <div class="gain-row">
+            <label class="gain-label" for="slider-norm-target">Nivel grabación</label>
+            <input type="range" id="slider-norm-target" class="gain-slider"
+                   min="30" max="100" step="5" value="85">
+            <span class="gain-val" id="val-norm-target">85%</span>
+            <span class="gain-db"  id="db-norm-target">−1 dBFS</span>
+          </div>
+        </div>
+
         <ul id="recordings-list" class="recordings-list">
           <li class="list-empty">Sin grabaciones aún.</li>
         </ul>

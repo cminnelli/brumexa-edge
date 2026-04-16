@@ -7,7 +7,7 @@ const express = require('express');
 const path    = require('path');
 const os      = require('os');
 
-const { setupAudio }                                    = require('./lib/audio');
+const { setupAudio, getMicGain, setMicGain }            = require('./lib/audio');
 const { startRecording, stopRecording, getStatus,
         listRecordings, RECORDINGS_DIR,
         reserveBrowserFilename, saveBrowserRecording,
@@ -48,7 +48,7 @@ app.get('/config', (_req, res) => {
     livekitUrl:         LIVEKIT_URL || null,
     tokenApiConfigured: !!TOKEN_API_URL,
     port:               Number(PORT),
-    micGain:            parseFloat(process.env.MIC_GAIN) || 4.0,
+    micGain:            getMicGain(),
     server: {
       hostname: os.hostname(),
       platform: process.platform,
@@ -174,11 +174,27 @@ app.get('/token', async (_req, res) => {
   }
 });
 
+// ─── GET /config/mic-gain — ganancia actual del mic en vivo ──────────────────
+app.get('/config/mic-gain', (_req, res) => {
+  res.json({ gain: getMicGain() });
+});
+
+// ─── POST /config/mic-gain — actualizar ganancia del mic en vivo ──────────────
+app.post('/config/mic-gain', express.json(), (req, res) => {
+  const gain = parseFloat(req.body?.gain);
+  if (isNaN(gain) || gain < 1 || gain > 32) {
+    return res.status(400).json({ ok: false, error: 'gain debe ser un número entre 1 y 32' });
+  }
+  setMicGain(gain);
+  res.json({ ok: true, gain: getMicGain() });
+});
+
 // ─── POST /record/start — iniciar grabación en la Pi ─────────────────────────
 app.post('/record/start', express.json(), (req, res) => {
   try {
-    const device = req.body?.device || 'default';
-    const info   = startRecording(device);
+    const device     = req.body?.device     || 'default';
+    const normTarget = parseFloat(req.body?.normTarget);
+    const info       = startRecording(device, isNaN(normTarget) ? 0.85 : Math.min(Math.max(normTarget, 0.3), 1.0));
     res.json({ ok: true, ...info });
   } catch (err) {
     res.status(409).json({ ok: false, error: err.message });
