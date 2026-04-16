@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Brumexa-Edge 2</title>
-  <link rel="stylesheet" href="style.css?v=12" />
+  <link rel="stylesheet" href="style.css?v=13" />
 </head>
 <body>
 
@@ -255,6 +255,67 @@
     ══════════════════════════════════════════════ -->
     <aside class="panel-aside">
 
+      <!-- § Panel de diagnóstico — siempre visible -->
+      <div class="card" id="debug-card">
+        <div class="card-hdr-row">
+          <div class="card-section-hdr" style="margin-bottom:0">
+            <span class="card-section-icon">🔍</span>
+            <div>
+              <div class="card-section-title">Diagnóstico</div>
+              <div class="card-section-desc">Estado en tiempo real</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="dbg-rows">
+
+          <!-- Mic -->
+          <div class="dbg-row">
+            <span class="dbg-icon">🎤</span>
+            <div class="dbg-body">
+              <div class="dbg-label">Micrófono</div>
+              <div class="dbg-val" id="dbg-mic-val">Inactivo</div>
+              <div class="dbg-sub" id="dbg-mic-sub">—</div>
+            </div>
+            <span class="dbg-dot idle" id="dbg-mic-dot"></span>
+          </div>
+
+          <!-- Speaker -->
+          <div class="dbg-row">
+            <span class="dbg-icon">🔈</span>
+            <div class="dbg-body">
+              <div class="dbg-label">Speaker</div>
+              <div class="dbg-val" id="dbg-spk-val">Inactivo</div>
+              <div class="dbg-sub" id="dbg-spk-sub">—</div>
+            </div>
+            <span class="dbg-dot idle" id="dbg-spk-dot"></span>
+          </div>
+
+          <!-- LiveKit -->
+          <div class="dbg-row">
+            <span class="dbg-icon">📡</span>
+            <div class="dbg-body">
+              <div class="dbg-label">LiveKit</div>
+              <div class="dbg-val" id="dbg-lk-val">Sin conectar</div>
+              <div class="dbg-sub" id="dbg-lk-sub">—</div>
+            </div>
+            <span class="dbg-dot idle" id="dbg-lk-dot"></span>
+          </div>
+
+          <!-- Agente -->
+          <div class="dbg-row">
+            <span class="dbg-icon">🤖</span>
+            <div class="dbg-body">
+              <div class="dbg-label">Agente IA</div>
+              <div class="dbg-val" id="dbg-agent-val">Sin sala</div>
+              <div class="dbg-sub" id="dbg-agent-sub">—</div>
+            </div>
+            <span class="dbg-dot idle" id="dbg-agent-dot"></span>
+          </div>
+
+        </div>
+      </div>
+
       <!-- § Bluetooth — solo Linux -->
       <div class="card" id="bluetooth-card" style="display:none">
         <div class="card-hdr-row">
@@ -347,7 +408,7 @@
 </div><!-- #terminal-section -->
 
 <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-<script src="app.js?v=12"></script>
-<script src="terminal.js?v=12"></script>
+<script src="app.js?v=13"></script>
+<script src="terminal.js?v=13"></script>
 </body>
 </html>

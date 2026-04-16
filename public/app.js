@@ -16,6 +16,9 @@ const state = {
   audioCtx:  null,
   analyser:  null,
   animFrame: null,
+
+  // Config (from /config)
+  micGain: null,
 };
 
 // ============================================================
@@ -315,8 +318,10 @@ function setMicStatus(status, sub = '') {
  * Devuelve un MediaStream que LiveKit puede publicar igual que getUserMedia.
  */
 const PiMicModule = {
-  _ws:       null,
-  _audioCtx: null,
+  _ws:          null,
+  _audioCtx:    null,
+  _workletNode: null,   // expuesto para conectar analyser en el mismo contexto
+  _device:      null,
 
   /**
    * Inicia la captura del mic de la Pi.
@@ -344,7 +349,9 @@ const PiMicModule = {
     const destination = audioCtx.createMediaStreamDestination();
     workletNode.connect(destination);
 
-    this._audioCtx = audioCtx;
+    this._audioCtx    = audioCtx;
+    this._workletNode = workletNode;
+    this._device      = device;
 
     // WebSocket al servidor
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -365,20 +372,21 @@ const PiMicModule = {
       };
     });
 
-    let chunkCount = 0;
+    this._frameCount   = 0;
+    this._lastFrameAt  = null;
     let _lastLogAt = 0;
     ws.onmessage = (e) => {
       workletNode.port.postMessage(e.data, [e.data]);
-      chunkCount++;
-      // Log al primer chunk y luego cada 5 segundos (~200 chunks a 16kHz/512 bytes)
-      if (chunkCount === 1) {
-        console.log(`[PiMic] ▶ primer chunk recibido (${e.data.byteLength} bytes)`);
+      this._frameCount++;
+      this._lastFrameAt = Date.now();
+      if (this._frameCount === 1) {
+        console.log(`[PiMic] ▶ primer chunk (${e.data.byteLength} B)`);
         log('[mic-pi] Capturando audio — primer frame recibido', 'success');
       }
       const now = Date.now();
-      if (now - _lastLogAt > 5000 && chunkCount > 1) {
+      if (now - _lastLogAt > 5000 && this._frameCount > 1) {
         _lastLogAt = now;
-        console.log(`[PiMic] streaming — chunk #${chunkCount} (${e.data.byteLength} B/frame)`);
+        console.log(`[PiMic] streaming — frame #${this._frameCount} (${e.data.byteLength} B)`);
       }
     };
 
@@ -392,9 +400,13 @@ const PiMicModule = {
 
   stop() {
     this._ws?.close();
-    this._ws = null;
+    this._ws          = null;
     this._audioCtx?.close();
-    this._audioCtx = null;
+    this._audioCtx    = null;
+    this._workletNode = null;
+    this._device      = null;
+    this._frameCount  = 0;
+    this._lastFrameAt = null;
   },
 };
 
@@ -414,10 +426,14 @@ const PiMicModule = {
  * El audio NO se reproduce en el browser (GainNode en 0).
  */
 const PiSpeakerModule = {
-  _ws:        null,
-  _audioCtx:  null,
-  _processor: null,
-  _source:    null,
+  _ws:         null,
+  _audioCtx:   null,
+  _processor:  null,
+  _source:     null,
+  _frameCount: 0,
+  _lastFrameAt: null,
+  _device:     null,
+  _sampleRate: null,
 
   // Devuelve Promise que resuelve cuando el WS está abierto y el pipeline listo
   async start(track, device) {
@@ -428,7 +444,11 @@ const PiSpeakerModule = {
     // CRÍTICO: resume() — el AudioContext arranca suspended si se crea fuera
     // de un handler de gesto del usuario. Sin esto onaudioprocess nunca dispara.
     await audioCtx.resume();
-    const sampleRate = audioCtx.sampleRate;
+    const sampleRate  = audioCtx.sampleRate;
+    this._device      = device;
+    this._sampleRate  = sampleRate;
+    this._frameCount  = 0;
+    this._lastFrameAt = null;
     console.log(`[PiSpeaker] AudioContext state: ${audioCtx.state}  rate: ${sampleRate} Hz`);
 
     // Crear pipeline ANTES de abrir el WS para que esté listo al conectar
@@ -457,7 +477,6 @@ const PiSpeakerModule = {
         log(`[speaker-pi] WS abierto — ${device}  ${sampleRate} Hz`, 'success');
         console.log(`[PiSpeaker] WS open — device: ${device}  sampleRate: ${sampleRate}`);
 
-        let chunkCount = 0;
         processor.onaudioprocess = (e) => {
           if (ws.readyState !== WebSocket.OPEN) return;
           const float32 = e.inputBuffer.getChannelData(0);
@@ -466,9 +485,10 @@ const PiSpeakerModule = {
             int16[i] = Math.max(-32768, Math.min(32767, Math.round(float32[i] * 32767)));
           }
           ws.send(int16.buffer);
-          chunkCount++;
-          if (chunkCount === 1) {
-            console.log(`[PiSpeaker] ▶ primer chunk enviado (${int16.byteLength} B @ ${sampleRate} Hz)`);
+          this._frameCount++;
+          this._lastFrameAt = Date.now();
+          if (this._frameCount === 1) {
+            console.log(`[PiSpeaker] ▶ primer chunk (${int16.byteLength} B @ ${sampleRate} Hz)`);
             log('[speaker-pi] Audio del agente llegando a la Pi — primer frame', 'success');
           }
         };
@@ -499,9 +519,13 @@ const PiSpeakerModule = {
       this._source = null;
     }
     this._ws?.close();
-    this._ws = null;
+    this._ws          = null;
     this._audioCtx?.close();
-    this._audioCtx = null;
+    this._audioCtx    = null;
+    this._frameCount  = 0;
+    this._lastFrameAt = null;
+    this._device      = null;
+    this._sampleRate  = null;
   },
 };
 
@@ -882,12 +906,27 @@ const MicTestModule = {
     state.stream = stream;
     if (src === 'browser') updateMicName();
 
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const source   = audioCtx.createMediaStreamSource(stream);
-    const analyser = audioCtx.createAnalyser();
-    analyser.fftSize               = 256;
-    analyser.smoothingTimeConstant = 0.7;
-    source.connect(analyser);
+    let audioCtx, analyser;
+
+    if (src === 'pi' && PiMicModule._workletNode && PiMicModule._audioCtx) {
+      // ALSA: conectar el analyser DIRECTAMENTE al workletNode en su propio AudioContext.
+      // Crear un nuevo AudioContext para analizar un stream de otro contexto no funciona
+      // bien en Chrome cuando los sample rates son distintos (16kHz vs 48kHz).
+      audioCtx = PiMicModule._audioCtx;
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize               = 256;
+      analyser.smoothingTimeConstant = 0.6;
+      PiMicModule._workletNode.connect(analyser);
+    } else {
+      // Browser mic: AudioContext normal
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      await audioCtx.resume();
+      const source = audioCtx.createMediaStreamSource(stream);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize               = 256;
+      analyser.smoothingTimeConstant = 0.6;
+      source.connect(analyser);
+    }
 
     state.audioCtx = audioCtx;
     state.analyser = analyser;
@@ -946,7 +985,10 @@ const MicTestModule = {
       cancelAnimationFrame(state.animFrame);
       state.animFrame = null;
     }
-    state.audioCtx?.close();
+    // Solo cerrar el AudioContext si es nuestro (no el de PiMicModule)
+    if (state.audioCtx && state.audioCtx !== PiMicModule._audioCtx) {
+      state.audioCtx.close();
+    }
     state.audioCtx = null;
     state.analyser = null;
     state.stream?.getTracks().forEach((t) => t.stop());
@@ -1648,6 +1690,198 @@ document.getElementById('btn-rec-stop').addEventListener('click', async () => {
 });
 
 // ============================================================
+// DEBUG MODULE — panel de estado en tiempo real (actualiza cada 500ms)
+// ============================================================
+const DebugModule = {
+  _interval: null,
+
+  start() {
+    if (this._interval) return;
+    this._render(); // render inmediato
+    this._interval = setInterval(() => this._render(), 500);
+  },
+
+  stop() {
+    clearInterval(this._interval);
+    this._interval = null;
+  },
+
+  // Helpers DOM
+  _set(id, val, sub, dotClass) {
+    const valEl = document.getElementById(`${id}-val`);
+    const subEl = document.getElementById(`${id}-sub`);
+    const dotEl = document.getElementById(`${id}-dot`);
+    if (valEl && val !== undefined) valEl.textContent = val;
+    if (subEl && sub !== undefined) subEl.textContent = sub;
+    if (dotEl && dotClass !== undefined) {
+      dotEl.className = `dbg-dot ${dotClass}`;
+    }
+  },
+
+  _render() {
+    this._renderMic();
+    this._renderSpeaker();
+    this._renderLiveKit();
+    this._renderAgent();
+  },
+
+  _renderMic() {
+    const m = PiMicModule;
+
+    // Pi mic activo
+    if (m._ws && m._ws.readyState === WebSocket.OPEN) {
+      const ago     = m._lastFrameAt ? Math.round((Date.now() - m._lastFrameAt) / 1000) : null;
+      const flowing = ago !== null && ago < 2;
+      const ctxState = m._audioCtx?.state || '—';
+      const gain    = state.micGain ? `gain ${state.micGain}x` : '';
+
+      const subParts = [];
+      if (m._device)     subParts.push(m._device);
+      if (gain)          subParts.push(gain);
+      if (ctxState !== '—') subParts.push(`ctx:${ctxState}`);
+
+      this._set('dbg-mic',
+        flowing
+          ? `Pi — frame #${m._frameCount} · ${ago}s ago`
+          : m._frameCount > 0
+            ? `Pi — frame #${m._frameCount} · ${ago ?? '?'}s (sin flujo)`
+            : `Pi — conectando…`,
+        subParts.join(' · '),
+        flowing ? 'ok pulse' : m._frameCount > 0 ? 'warn' : 'idle pulse'
+      );
+      return;
+    }
+
+    // Mic test browser (modo mictest, no Pi)
+    if (state.mode === 'mictest' && state.stream) {
+      const tracks = state.stream.getAudioTracks();
+      const active = tracks.length > 0 && tracks[0].readyState === 'live';
+      this._set('dbg-mic',
+        active ? 'Browser mic — activo' : 'Browser mic — sin señal',
+        tracks[0]?.label?.slice(0, 40) || '',
+        active ? 'ok' : 'warn'
+      );
+      return;
+    }
+
+    // LiveKit local track publicado
+    if (state.active && state.localTrack) {
+      const track = state.localTrack;
+      const ms    = track.mediaStreamTrack;
+      const alive = ms?.readyState === 'live';
+      this._set('dbg-mic',
+        alive ? 'LiveKit mic — publicado' : 'LiveKit mic — track inactivo',
+        ms?.label?.slice(0, 40) || '',
+        alive ? 'ok' : 'warn'
+      );
+      return;
+    }
+
+    this._set('dbg-mic', 'Inactivo', 'Sin fuente de audio', 'idle');
+  },
+
+  _renderSpeaker() {
+    const s = PiSpeakerModule;
+
+    // Pi speaker activo
+    if (s._ws && s._ws.readyState === WebSocket.OPEN) {
+      const ago     = s._lastFrameAt ? Math.round((Date.now() - s._lastFrameAt) / 1000) : null;
+      const flowing = ago !== null && ago < 2;
+
+      const subParts = [];
+      if (s._device)     subParts.push(s._device);
+      if (s._sampleRate) subParts.push(`${s._sampleRate}Hz`);
+
+      this._set('dbg-spk',
+        flowing
+          ? `Pi — frame #${s._frameCount} · ${ago}s ago`
+          : s._frameCount > 0
+            ? `Pi — frame #${s._frameCount} · ${ago ?? '?'}s (sin flujo)`
+            : `Pi — esperando audio…`,
+        subParts.join(' · '),
+        flowing ? 'ok pulse' : s._frameCount > 0 ? 'warn' : 'idle pulse'
+      );
+      return;
+    }
+
+    // Speaker browser (LiveKit activo, sin Pi)
+    if (state.active) {
+      const room = state.room;
+      const hasRemote = room && room.remoteParticipants.size > 0;
+      if (hasRemote) {
+        this._set('dbg-spk', 'Browser — agente en sala', 'Audio via LiveKit directo', 'ok');
+        return;
+      }
+    }
+
+    this._set('dbg-spk', 'Inactivo', 'Sin reproducción activa', 'idle');
+  },
+
+  _renderLiveKit() {
+    if (!state.active || !state.room) {
+      // Mostrar health del servidor LiveKit
+      const lkSub = document.getElementById('sm-lk-sub');
+      const host  = lkSub?.textContent || '';
+      this._set('dbg-lk',
+        'Sin sesión activa',
+        host ? `Servidor: ${host}` : 'No configurado',
+        host ? 'idle' : 'error'
+      );
+      return;
+    }
+
+    const room       = state.room;
+    const connState  = room.state; // 'connected' | 'connecting' | 'disconnected' | 'reconnecting'
+    const localPub   = room.localParticipant?.trackPublications?.size ?? 0;
+    const remotePts  = room.remoteParticipants.size;
+
+    const dotMap = {
+      connected:    'ok',
+      connecting:   'warn pulse',
+      reconnecting: 'warn pulse',
+      disconnected: 'error',
+    };
+
+    this._set('dbg-lk',
+      `${connState} · local: ${localPub} tracks`,
+      `sala: ${room.name || '—'}  remotos: ${remotePts}`,
+      dotMap[connState] || 'warn'
+    );
+  },
+
+  _renderAgent() {
+    if (!state.active || !state.room) {
+      this._set('dbg-agent', 'Sin sesión', '', 'idle');
+      return;
+    }
+
+    const room    = state.room;
+    const remote  = [...room.remoteParticipants.values()];
+    const agents  = remote.filter(p => p.identity && p.kind !== 'SIP');
+
+    if (agents.length === 0) {
+      this._set('dbg-agent', 'Sin agente en sala', `${room.remoteParticipants.size} participante(s)`, 'warn');
+      return;
+    }
+
+    // Verificar si el agente tiene tracks suscritos
+    let trackCount = 0;
+    for (const agent of agents) {
+      for (const [, pub] of agent.trackPublications) {
+        if (pub.isSubscribed) trackCount++;
+      }
+    }
+
+    const ids = agents.map(a => a.identity).join(', ');
+    this._set('dbg-agent',
+      trackCount > 0 ? `Agente activo — ${trackCount} track(s)` : 'Agente conectado — sin tracks',
+      ids.slice(0, 50),
+      trackCount > 0 ? 'ok' : 'warn'
+    );
+  },
+};
+
+// ============================================================
 // INIT
 // ============================================================
 (async function init() {
@@ -1675,6 +1909,7 @@ document.getElementById('btn-rec-stop').addEventListener('click', async () => {
       isLinux     = cfg.server.platform === 'linux';
       isRaspberry = isLinux && /arm/i.test(cfg.server.arch);
       log(`Debug: platform=${cfg.server.platform} arch=${cfg.server.arch} isLinux=${isLinux} isRaspberry=${isRaspberry}`, 'info');
+      if (cfg.micGain) state.micGain = cfg.micGain;
     }
 
     if (!cfg.livekitUrl) {
@@ -1811,4 +2046,7 @@ document.getElementById('btn-rec-stop').addEventListener('click', async () => {
   startHealthCheck();
 
   log('Brumexa-Edge listo. Seleccioná modo y presioná "Iniciar micrófono".', 'info');
+
+  // ─── Debug panel — arrancar loop de actualización ────────────────────────
+  DebugModule.start();
 })();

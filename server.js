@@ -45,9 +45,10 @@ app.get('/', (_req, res) => {
 // ─── GET /config — info del dispositivo y configuración (sin secretos) ───────
 app.get('/config', (_req, res) => {
   res.json({
-    livekitUrl:       LIVEKIT_URL || null,
+    livekitUrl:         LIVEKIT_URL || null,
     tokenApiConfigured: !!TOKEN_API_URL,
-    port:             Number(PORT),
+    port:               Number(PORT),
+    micGain:            parseFloat(process.env.MIC_GAIN) || 4.0,
     server: {
       hostname: os.hostname(),
       platform: process.platform,
