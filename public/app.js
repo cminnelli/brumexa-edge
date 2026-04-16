@@ -1717,9 +1717,13 @@ const GainControls = {
 
     this._updateLabels();
 
-    // Mic gain — enviar al servidor al soltar el slider
-    this._sliderMic.addEventListener('input', () => this._updateLabels());
-    this._sliderMic.addEventListener('change', () => this._pushMicGain());
+    // Mic gain — actualizar label en tiempo real, enviar al servidor con debounce
+    let _micTimer = null;
+    this._sliderMic.addEventListener('input', () => {
+      this._updateLabels();
+      clearTimeout(_micTimer);
+      _micTimer = setTimeout(() => this._pushMicGain(), 400);
+    });
 
     // Norm target — solo localStorage (se aplica al grabar)
     this._sliderNorm.addEventListener('input', () => {
@@ -1998,7 +2002,7 @@ const DebugModule = {
       isLinux     = cfg.server.platform === 'linux';
       isRaspberry = isLinux && /arm/i.test(cfg.server.arch);
       log(`Debug: platform=${cfg.server.platform} arch=${cfg.server.arch} isLinux=${isLinux} isRaspberry=${isRaspberry}`, 'info');
-      if (cfg.micGain) { state.micGain = cfg.micGain; GainControls.init(cfg.micGain); }
+      if (cfg.micGain) state.micGain = cfg.micGain;
     }
 
     if (!cfg.livekitUrl) {
@@ -2106,6 +2110,7 @@ const DebugModule = {
 
   // ─── Grabaciones — siempre visible (browser recording funciona en cualquier plataforma) ──
   await RecorderModule.show();
+  GainControls.init(state.micGain || 4);
 
   // ─── Bluetooth y terminal (solo Linux) ───────────────────────────────────
   if (isLinux) {
