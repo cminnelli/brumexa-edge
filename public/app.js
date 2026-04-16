@@ -1671,7 +1671,9 @@ const RecorderModule = {
     delBtn.textContent = '🗑';
     delBtn.title       = 'Eliminar';
     delBtn.addEventListener('click', async () => {
+      if (delBtn.disabled) return;
       if (!confirm(`¿Eliminar "${f.filename}"?`)) return;
+      delBtn.disabled = true;
       try {
         const res = await fetch(`/recordings/${encodeURIComponent(f.filename)}`, { method: 'DELETE' }).then(r => r.json());
         if (!res.ok) throw new Error(res.error);
@@ -1679,6 +1681,7 @@ const RecorderModule = {
         await RecorderModule.refreshList();
       } catch (err) {
         log(`Error al eliminar: ${err.message}`, 'error');
+        delBtn.disabled = false;
       }
     });
 
