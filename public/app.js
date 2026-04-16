@@ -1274,22 +1274,31 @@ const BluetoothModule = {
 // MÓDULO PLAYBACK — reproduce grabaciones en browser o Pi speaker
 // ============================================================
 const PlaybackModule = {
-  _audio:     null,   // HTMLAudioElement (browser)
-  _speakerWs: null,   // WebSocket hacia /ws/speaker (Pi)
-  _activeBtn: null,   // botón ▶ activo, para restaurarlo al parar
+  _audio:        null,   // HTMLAudioElement (browser)
+  _activeBtn:    null,   // botón ▶ activo, para restaurarlo al parar
+  _pollInterval: null,   // polling de /recordings/play-status (Pi)
 
   async play(filename, btn) {
-    this.stop();                    // detener cualquier reproducción previa
+    await this.stop();
     this._activeBtn = btn || null;
     if (btn) { btn.textContent = '⏹'; btn.classList.add('playing'); }
 
-    const dest = getSelectedSpeakerDest();
-    log(`▶ Reproduciendo "${filename}" — speaker: ${dest}`, 'info');
-    console.log(`[Playback] play — file: ${filename}  dest: ${dest}`);
+    const dest       = getSelectedSpeakerDest();
+    const isBrowserRec = filename.includes('_browser_');  // WebM — aplay no lo soporta
 
-    if (dest === 'pi') {
+    console.log(`[Playback] play — file: ${filename}  dest: ${dest}  isBrowserRec: ${isBrowserRec}`);
+
+    if (dest === 'pi' && !isBrowserRec) {
+      // ALSA recording (WAV real) → aplay en la Pi
+      log(`▶ Reproduciendo "${filename}" en Pi ALSA`, 'info');
       await this._playOnPi(filename, getSelectedAlsaSpeaker());
     } else {
+      // Browser recording (WebM) o destino browser → <audio> en el browser
+      if (dest === 'pi' && isBrowserRec) {
+        log(`▶ Reproduciendo "${filename}" en browser (grabación WebM — aplay no compatible)`, 'info');
+      } else {
+        log(`▶ Reproduciendo "${filename}" en browser`, 'info');
+      }
       this._playInBrowser(filename);
     }
   },
@@ -1297,7 +1306,7 @@ const PlaybackModule = {
   _playInBrowser(filename) {
     const audio = new Audio(`/recordings/${encodeURIComponent(filename)}`);
     this._audio  = audio;
-    audio.onended = () => { this._finish(); };
+    audio.onended = () => this._finish();
     audio.onerror = () => {
       log(`Error reproduciendo "${filename}" en browser`, 'error');
       this._finish();
@@ -1308,72 +1317,35 @@ const PlaybackModule = {
     });
   },
 
+  // Pi: llama a aplay en el servidor directamente — sin decode en el browser
   async _playOnPi(filename, device) {
     try {
-      log(`[speaker-pi] Descargando y decodificando "${filename}"…`, 'info');
-      const arrayBuffer = await fetch(`/recordings/${encodeURIComponent(filename)}`).then(r => r.arrayBuffer());
+      const res = await fetch('/recordings/play', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ filename, device }),
+      }).then(r => r.json());
 
-      // Decodificar con AudioContext (soporta WAV y WebM/Opus)
-      const tmpCtx      = new AudioContext();
-      const audioBuffer = await tmpCtx.decodeAudioData(arrayBuffer);
-      await tmpCtx.close();
-
-      const sampleRate = audioBuffer.sampleRate;
-      const numSamples = audioBuffer.length;
-
-      // Mixear a mono (por si la grabación es estéreo)
-      const float32 = new Float32Array(numSamples);
-      for (let c = 0; c < audioBuffer.numberOfChannels; c++) {
-        const ch = audioBuffer.getChannelData(c);
-        for (let i = 0; i < numSamples; i++) float32[i] += ch[i] / audioBuffer.numberOfChannels;
-      }
-
-      // Convertir Float32 → Int16 LE
-      const int16 = new Int16Array(numSamples);
-      for (let i = 0; i < numSamples; i++) {
-        int16[i] = Math.max(-32768, Math.min(32767, Math.round(float32[i] * 32767)));
-      }
-
-      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl    = `${protocol}//${location.host}/ws/speaker?device=${encodeURIComponent(device)}&rate=${sampleRate}&channels=1`;
-      const ws       = new WebSocket(wsUrl);
-      this._speakerWs = ws;
-
-      ws.onopen = () => {
-        log(`[speaker-pi] ▶ Reproduciendo "${filename}" — device: ${device}  ${sampleRate} Hz  ${(int16.byteLength / 1024).toFixed(1)} KB`, 'success');
-        console.log(`[Playback] Pi speaker streaming — ${numSamples} samples @ ${sampleRate} Hz`);
-
-        // Enviar en chunks de ~100 ms al ritmo de reproducción
-        const chunkSamples = Math.floor(sampleRate * 0.1);
-        let offset = 0;
-
-        const sendNext = () => {
-          if (this._speakerWs !== ws) return;    // stop() fue llamado
-          if (offset >= int16.length) {
-            ws.close();
-            return;
-          }
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(int16.slice(offset, offset + chunkSamples).buffer);
-          }
-          offset += chunkSamples;
-          setTimeout(sendNext, 95);
-        };
-        sendNext();
-      };
-
-      ws.onerror = () => {
-        log(`[speaker-pi] Error WebSocket al reproducir`, 'error');
+      if (!res.ok) {
+        log(`[speaker-pi] Error: ${res.error}`, 'error');
         this._finish();
-      };
+        return;
+      }
 
-      ws.onclose = () => {
-        if (this._speakerWs === ws) {
-          log(`[speaker-pi] ✔ Reproducción completa: "${filename}"`, 'info');
-          this._speakerWs = null;
-          this._finish();
-        }
-      };
+      log(`[speaker-pi] ▶ aplay iniciado — device: ${device}  archivo: "${res.filename}"`, 'success');
+      console.log(`[Playback] Pi aplay started — ${res.filename} @ ${device}`);
+
+      // Pollear estado hasta que aplay termine
+      this._pollInterval = setInterval(async () => {
+        try {
+          const { playing } = await fetch('/recordings/play-status').then(r => r.json());
+          if (!playing) {
+            this._stopPoll();
+            log(`[speaker-pi] ✔ Reproducción completa: "${filename}"`, 'info');
+            this._finish();
+          }
+        } catch { this._stopPoll(); this._finish(); }
+      }, 800);
 
     } catch (err) {
       log(`Error reproduciendo en Pi: ${err.message}`, 'error');
@@ -1382,18 +1354,20 @@ const PlaybackModule = {
     }
   },
 
-  stop() {
+  async stop() {
+    this._stopPoll();
     if (this._audio) {
       this._audio.pause();
       this._audio.src = '';
       this._audio = null;
     }
-    if (this._speakerWs) {
-      const ws = this._speakerWs;
-      this._speakerWs = null;   // marca parada antes de close para que sendNext se detenga
-      ws.close();
-    }
+    // Detener aplay en la Pi si estaba corriendo
+    try { await fetch('/recordings/stop-play', { method: 'POST' }); } catch {}
     this._finish();
+  },
+
+  _stopPoll() {
+    if (this._pollInterval) { clearInterval(this._pollInterval); this._pollInterval = null; }
   },
 
   _finish() {
@@ -1500,8 +1474,10 @@ const RecorderModule = {
         body:   buffer,
       }).then(r => r.json());
 
-      this._mediaRec   = null;
-      this._chunks     = [];
+      this._mediaRec = null;
+      this._chunks   = [];
+
+      if (!res.ok) throw new Error(res.error || 'Error al guardar grabación');
       log(`✔ Guardado browser: ${res.filename}`, 'success');
 
     } else {
@@ -1509,6 +1485,8 @@ const RecorderModule = {
       const res = await fetch('/record/stop', { method: 'POST' }).then(r => r.json());
       if (!res.ok) throw new Error(res.error);
       log(`✔ Guardado ALSA: ${res.filename} (${res.duration}s)`, 'success');
+      // Esperar que arecord termine de escribir el WAV antes de listar
+      await new Promise(r => setTimeout(r, 400));
     }
 
     await this.refreshList();
@@ -1648,7 +1626,7 @@ document.getElementById('btn-rec-stop').addEventListener('click', async () => {
         ui.alsaDeviceSelect.innerHTML = '<option value="">Sin dispositivos ALSA</option>';
         log('Raspberry detectada — sin dispositivos ALSA conectados', 'warn');
       }
-      RecorderModule.show();  // siempre visible en Linux (graba browser o ALSA)
+      RecorderModule.show();
     } catch {
       ui.alsaDeviceSelect.innerHTML = '<option value="">Error al leer ALSA</option>';
     }
@@ -1717,9 +1695,11 @@ document.getElementById('btn-rec-stop').addEventListener('click', async () => {
 
   }
 
-  // ─── Bluetooth (cualquier Linux — no depende de ARM) ─────────────────────
+  // ─── Bluetooth y grabaciones (cualquier Linux) ───────────────────────────
   if (isLinux) {
     BluetoothModule.init();
+    // Mostrar panel de grabaciones si no se mostró ya en el bloque isRaspberry
+    if (!isRaspberry) RecorderModule.show();
   }
 
   // ─── Terminal (solo Linux) ────────────────────────────────────────────────

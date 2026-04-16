@@ -1,0 +1,241 @@
+/* setup.css — WiFi provisioning page */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #f4f6fa;
+  --surface:  #ffffff;
+  --border:   #dde3ef;
+  --accent:   #4f5fe0;
+  --success:  #2ca85e;
+  --danger:   #d94040;
+  --warn:     #d07a10;
+  --text:     #1a1f33;
+  --text2:    #5a6080;
+  --muted:    #9aa0be;
+  --r:        12px;
+  --r-sm:     7px;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 15px;
+  line-height: 1.5;
+  padding: 0 0 3rem;
+}
+
+/* ── Header ── */
+.header {
+  background: var(--accent);
+  color: #fff;
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.header-icon  { font-size: 24px; }
+.header-title { font-size: 17px; font-weight: 700; }
+.header-sub   { font-size: 12px; opacity: 0.8; }
+
+/* ── Page container ── */
+.page { max-width: 480px; margin: 0 auto; padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem; }
+
+/* ── Card ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 1rem 1.125rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.card-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text2);
+}
+
+/* ── Status chip ── */
+.status-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 13px;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--r-sm);
+  background: #f0f2fa;
+  border: 1px solid var(--border);
+}
+.status-chip.ap     { background: #edf5ff; border-color: #b3cdf8; }
+.status-chip.ok     { background: #edfaf4; border-color: #8fdcb3; color: var(--success); }
+.status-chip.error  { background: #fdf0f0; border-color: #f0b8b8; color: var(--danger); }
+.status-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: var(--muted);
+}
+.status-dot.ap        { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.status-dot.connected { background: var(--success); box-shadow: 0 0 6px var(--success); }
+.status-dot.error     { background: var(--danger); }
+.status-dot.pulse     { animation: blink .9s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* ── Network list ── */
+.network-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.network-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 2px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+  user-select: none;
+}
+.network-item:hover   { border-color: var(--accent); background: #f5f6ff; }
+.network-item.selected { border-color: var(--accent); background: #edeffe; }
+.net-icon   { font-size: 18px; flex-shrink: 0; }
+.net-name   { flex: 1; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.net-signal { font-size: 12px; color: var(--text2); flex-shrink: 0; }
+.net-lock   { font-size: 13px; color: var(--muted); flex-shrink: 0; }
+.net-manual {
+  font-style: italic;
+  color: var(--text2);
+  font-size: 13px;
+}
+
+.signal-bar {
+  display: inline-flex;
+  gap: 2px;
+  align-items: flex-end;
+  height: 14px;
+}
+.signal-bar span {
+  width: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+.signal-bar span.on { background: var(--accent); }
+
+/* Spinner */
+.spinner {
+  display: inline-block;
+  width: 18px; height: 18px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Form ── */
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: 12px; font-weight: 600; color: var(--text2); }
+.field input[type="text"],
+.field input[type="password"] {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: 15px;
+  font-family: inherit;
+  background: #fafbfd;
+  color: var(--text);
+  transition: border-color .15s;
+  outline: none;
+}
+.field input:focus { border-color: var(--accent); background: #fff; }
+
+.pass-wrap { position: relative; }
+.pass-wrap input { padding-right: 3rem; }
+.btn-toggle-pass {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; cursor: pointer;
+  font-size: 16px; color: var(--muted); padding: 4px;
+}
+
+/* ── Buttons ── */
+.btn-primary {
+  width: 100%;
+  padding: 13px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--r-sm);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .15s, opacity .15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.btn-primary:hover:not(:disabled)    { background: #3d4ecc; }
+.btn-primary:disabled                { opacity: 0.55; cursor: not-allowed; }
+.btn-primary.success                 { background: var(--success); }
+
+.btn-ghost {
+  background: transparent;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text2);
+  transition: border-color .15s, color .15s;
+}
+.btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Progress / result card ── */
+.progress-card { display: none; }
+.progress-card.visible { display: flex; }
+
+.result-connected {
+  text-align: center;
+  padding: 0.5rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.result-connected .big-icon { font-size: 40px; }
+.result-connected .ip {
+  font-family: 'Consolas', monospace;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--success);
+  letter-spacing: 0.05em;
+}
+.result-connected .hint {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.5;
+}
+
+/* ── Log ── */
+.log-list {
+  list-style: none;
+  font-size: 12px;
+  font-family: 'Consolas', monospace;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+.log-list li { color: var(--text2); }
+.log-list li.ok    { color: var(--success); }
+.log-list li.err   { color: var(--danger); }
+.log-list li.warn  { color: var(--warn); }
+
+/* ── Responsive ── */
+@media (max-width: 500px) {
+  .header { padding: 0.875rem 1rem; }
+  .page   { padding: 1rem; }
+}

@@ -12,6 +12,7 @@ const { startRecording, stopRecording, getStatus,
         listRecordings, RECORDINGS_DIR,
         reserveBrowserFilename, saveBrowserRecording } = require('./lib/recorder');
 const { setupBluetooth }                               = require('./lib/bluetooth');
+const { setupWifi, autoStartAP }                       = require('./lib/wifi');
 
 const {
   LIVEKIT_URL,
@@ -234,6 +235,60 @@ app.get('/recordings/:file', (req, res) => {
   });
 });
 
+// ─── Reproducción de grabaciones en la Pi ────────────────────────────────────
+let _playProc = null;
+
+// POST /recordings/play — ejecuta aplay en la Pi con el archivo indicado
+app.post('/recordings/play', express.json(), (req, res) => {
+  const { filename, device = 'plughw:0,0' } = req.body || {};
+  if (!filename || typeof filename !== 'string') {
+    return res.status(400).json({ ok: false, error: 'filename requerido' });
+  }
+  // Solo letras, números, guiones, puntos y espacios — sin path traversal
+  const safeName = filename.replace(/[^a-zA-Z0-9_\-\. ]/g, '');
+  const filePath = path.join(RECORDINGS_DIR, safeName);
+
+  // Matar reproducción previa si la hay
+  if (_playProc) {
+    try { _playProc.kill('SIGTERM'); } catch {}
+    _playProc = null;
+  }
+
+  const { spawn } = require('child_process');
+  const proc = spawn('aplay', ['-D', device, filePath]);
+  _playProc = proc;
+  console.log(`[play] aplay -D ${device} ${safeName}`);
+
+  proc.stderr.on('data', d => console.error('[aplay]', d.toString().trim()));
+  proc.on('error', err => {
+    console.error('[play] aplay error:', err.message);
+    if (_playProc === proc) _playProc = null;
+  });
+  proc.on('close', code => {
+    console.log(`[play] aplay exited code ${code}`);
+    if (_playProc === proc) _playProc = null;
+  });
+
+  res.json({ ok: true, filename: safeName, device });
+});
+
+// POST /recordings/stop-play — mata el aplay en curso
+app.post('/recordings/stop-play', (_req, res) => {
+  if (_playProc) {
+    try { _playProc.kill('SIGTERM'); } catch {}
+    _playProc = null;
+    console.log('[play] detenido por usuario');
+    res.json({ ok: true });
+  } else {
+    res.json({ ok: false, message: 'Sin reproducción activa' });
+  }
+});
+
+// GET /recordings/play-status — si aplay sigue corriendo
+app.get('/recordings/play-status', (_req, res) => {
+  res.json({ playing: _playProc !== null });
+});
+
 // ─── POST /terminal/run — ejecutar comando en la Pi ──────────────────────────
 app.post('/terminal/run', express.json(), (req, res) => {
   const { command } = req.body || {};
@@ -264,10 +319,15 @@ app.post('/terminal/run', express.json(), (req, res) => {
 const httpServer = http.createServer(app);
 setupAudio(app, httpServer);
 setupBluetooth(app, express);
+setupWifi(app);
 
 httpServer.listen(PORT, () => {
   console.log(`\n  Brumexa-Edge corriendo en → http://localhost:${PORT}`);
   console.log(`  LiveKit URL             → ${LIVEKIT_URL || '(no configurado)'}`);
   console.log(`  Token API               → ${TOKEN_API_URL || '(no configurado)'}`);
-  console.log(`  Sala por defecto        → ${LIVEKIT_ROOM_NAME}\n`);
+  console.log(`  Sala por defecto        → ${LIVEKIT_ROOM_NAME}`);
+  console.log(`  Setup WiFi              → http://localhost:${PORT}/setup\n`);
+
+  // Si estamos en Linux y no hay WiFi configurado → activar AP automáticamente
+  if (process.platform === 'linux') autoStartAP();
 });

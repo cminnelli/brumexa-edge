@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brumexa — Configuración WiFi</title>
+  <link rel="stylesheet" href="setup.css" />
+</head>
+<body>
+
+<header class="header">
+  <span class="header-icon">🍓</span>
+  <div>
+    <div class="header-title">Brumexa — Configuración WiFi</div>
+    <div class="header-sub">Registrá tu red para conectar el dispositivo</div>
+  </div>
+</header>
+
+<main class="page">
+
+  <!-- ── Estado del dispositivo ── -->
+  <div class="card" id="card-status">
+    <div class="card-title">Estado del dispositivo</div>
+    <div class="status-chip ap" id="chip-ap">
+      <span class="status-dot ap pulse" id="dot-ap"></span>
+      <span id="txt-ap">Cargando…</span>
+    </div>
+  </div>
+
+  <!-- ── Redes disponibles ── -->
+  <div class="card" id="card-networks">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px">
+      <div class="card-title">Redes WiFi disponibles</div>
+      <button class="btn-ghost" id="btn-rescan">↺ Actualizar</button>
+    </div>
+    <div id="scan-status" style="display:flex; align-items:center; gap:8px; font-size:13px; color:#5a6080">
+      <span class="spinner"></span> Buscando redes…
+    </div>
+    <ul class="network-list" id="network-list" style="display:none"></ul>
+  </div>
+
+  <!-- ── Formulario de conexión ── -->
+  <div class="card" id="card-form">
+    <div class="card-title">Ingresar credenciales</div>
+
+    <div class="field">
+      <label for="inp-ssid">Nombre de red (SSID)</label>
+      <input type="text" id="inp-ssid" placeholder="Nombre de tu WiFi" autocomplete="off" spellcheck="false" />
+    </div>
+
+    <div class="field">
+      <label for="inp-pass">Contraseña</label>
+      <div class="pass-wrap">
+        <input type="password" id="inp-pass" placeholder="Contraseña de tu WiFi" autocomplete="current-password" />
+        <button type="button" class="btn-toggle-pass" id="btn-show-pass" title="Mostrar/ocultar">👁</button>
+      </div>
+    </div>
+
+    <button class="btn-primary" id="btn-connect">
+      <span id="btn-connect-icon">📶</span>
+      <span id="btn-connect-txt">Conectar</span>
+    </button>
+  </div>
+
+  <!-- ── Progreso / resultado ── -->
+  <div class="card progress-card" id="card-progress">
+    <div class="card-title" id="progress-title">Conectando…</div>
+
+    <!-- Estado: conectando -->
+    <div id="state-connecting" style="display:flex; align-items:center; gap:10px; font-size:14px">
+      <span class="spinner"></span>
+      <span id="txt-connecting">Conectando a "<strong id="txt-ssid-connecting"></strong>"…</span>
+    </div>
+
+    <!-- Estado: conectado -->
+    <div id="state-connected" style="display:none">
+      <div class="result-connected">
+        <div class="big-icon">✅</div>
+        <div style="font-size:16px; font-weight:700; color:var(--success)">¡Conectado!</div>
+        <div class="ip" id="txt-new-ip">—</div>
+        <div class="hint">
+          La Pi quedó conectada a tu red WiFi.<br>
+          Ahora <strong>conectate vos también a esa red</strong> y accedé a Brumexa en:
+          <br><br>
+          <code id="txt-new-url" style="font-size:14px; color:var(--accent)">—</code>
+        </div>
+      </div>
+    </div>
+
+    <!-- Estado: error -->
+    <div id="state-error" style="display:none">
+      <div class="status-chip error">
+        <span class="status-dot error"></span>
+        <span id="txt-error">No se pudo conectar.</span>
+      </div>
+      <button class="btn-ghost" id="btn-retry" style="margin-top:8px; width:100%">↺ Reintentar</button>
+    </div>
+  </div>
+
+  <!-- ── Log ── -->
+  <div class="card">
+    <div class="card-title">Log</div>
+    <ul class="log-list" id="log"></ul>
+  </div>
+
+</main>
+
+<script>
+'use strict';
+
+// ─── Utilidades ───────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+
+function addLog(msg, type = '') {
+  const li = document.createElement('li');
+  li.className  = type;
+  li.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  $('log').prepend(li);
+  if ($('log').children.length > 30) $('log').lastElementChild.remove();
+}
+
+function signalBars(signal) {
+  // signal 0-100 → 1-4 barras
+  const lvl = signal >= 75 ? 4 : signal >= 50 ? 3 : signal >= 25 ? 2 : 1;
+  const heights = ['4px','8px','12px','16px'];
+  let html = '<span class="signal-bar">';
+  for (let i = 0; i < 4; i++) {
+    html += `<span style="height:${heights[i]}" class="${i < lvl ? 'on' : ''}"></span>`;
+  }
+  return html + '</span>';
+}
+
+// ─── Estado global ────────────────────────────────────────────────────────────
+let _selectedSSID = null;
+let _polling      = null;
+
+// ─── 1. Cargar estado del dispositivo ─────────────────────────────────────────
+async function loadStatus() {
+  try {
+    const s = await fetch('/wifi/status').then(r => r.json());
+    const dot = $('dot-ap');
+    const txt = $('txt-ap');
+    const chip = $('chip-ap');
+
+    if (s.apActive) {
+      dot.className  = 'status-dot ap pulse';
+      chip.className = 'status-chip ap';
+      txt.textContent = `AP activo: "${s.apSsid}" — IP ${s.apIp}`;
+      addLog(`AP "${s.apSsid}" activo (${s.apIp})`, 'ok');
+    } else if (s.connectedSSID) {
+      dot.className  = 'status-dot connected';
+      chip.className = 'status-chip ok';
+      txt.textContent = `WiFi conectado: "${s.connectedSSID}" — ${s.ipAddress || '—'}`;
+      addLog(`Ya conectado a "${s.connectedSSID}"`, 'ok');
+    } else {
+      dot.className  = 'status-dot';
+      chip.className = 'status-chip';
+      txt.textContent = 'Sin WiFi configurado';
+    }
+  } catch {
+    addLog('No se pudo obtener estado', 'err');
+  }
+}
+
+// ─── 2. Escanear redes ────────────────────────────────────────────────────────
+async function scanNetworks() {
+  $('scan-status').style.display = 'flex';
+  $('network-list').style.display = 'none';
+  $('btn-rescan').disabled = true;
+
+  addLog('Buscando redes WiFi…');
+  try {
+    const { networks } = await fetch('/wifi/scan').then(r => r.json());
+    renderNetworks(networks || []);
+    addLog(`${(networks||[]).length} redes encontradas`);
+  } catch {
+    addLog('Error al escanear redes', 'err');
+    renderNetworks([]);
+  }
+  $('btn-rescan').disabled = false;
+}
+
+function renderNetworks(networks) {
+  $('scan-status').style.display = 'none';
+  const list = $('network-list');
+  list.innerHTML = '';
+  list.style.display = '';
+
+  for (const n of networks) {
+    const li = document.createElement('li');
+    li.className = 'network-item';
+    li.dataset.ssid = n.ssid;
+    const hasPass = n.security && n.security !== 'open' && n.security !== '--';
+    li.innerHTML =
+      `<span class="net-icon">📶</span>` +
+      `<span class="net-name">${esc(n.ssid)}</span>` +
+      `<span class="net-signal">${signalBars(n.signal)}</span>` +
+      `<span class="net-lock">${hasPass ? '🔒' : '🔓'}</span>`;
+    li.addEventListener('click', () => selectNetwork(n.ssid, li));
+    list.appendChild(li);
+  }
+
+  // Opción manual
+  const manual = document.createElement('li');
+  manual.className = 'network-item';
+  manual.id = 'item-manual';
+  manual.innerHTML = `<span class="net-icon">✏️</span><span class="net-name net-manual">Ingresar SSID manualmente…</span>`;
+  manual.addEventListener('click', () => {
+    document.querySelectorAll('.network-item').forEach(el => el.classList.remove('selected'));
+    manual.classList.add('selected');
+    _selectedSSID = null;
+    $('inp-ssid').value = '';
+    $('inp-ssid').focus();
+  });
+  list.appendChild(manual);
+}
+
+function selectNetwork(ssid, el) {
+  document.querySelectorAll('.network-item').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+  _selectedSSID = ssid;
+  $('inp-ssid').value = ssid;
+  $('inp-pass').focus();
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── 3. Conectar ──────────────────────────────────────────────────────────────
+async function doConnect() {
+  const ssid = $('inp-ssid').value.trim();
+  const pass  = $('inp-pass').value;
+
+  if (!ssid) { addLog('Ingresá el nombre de la red (SSID)', 'warn'); $('inp-ssid').focus(); return; }
+
+  // Mostrar tarjeta de progreso
+  $('card-progress').classList.add('visible');
+  $('state-connecting').style.display = 'flex';
+  $('state-connected').style.display  = 'none';
+  $('state-error').style.display      = 'none';
+  $('progress-title').textContent     = 'Conectando…';
+  $('txt-ssid-connecting').textContent = ssid;
+
+  $('btn-connect').disabled  = true;
+  $('btn-rescan').disabled   = true;
+  $('inp-ssid').disabled     = true;
+  $('inp-pass').disabled     = true;
+
+  addLog(`Conectando a "${ssid}"…`);
+
+  try {
+    const res = await fetch('/wifi/connect', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ ssid, password: pass }),
+    }).then(r => r.json());
+
+    if (!res.ok) {
+      showError(res.error || 'Error al iniciar conexión');
+      return;
+    }
+
+    // Polling
+    startPolling(ssid);
+
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+function startPolling(ssid) {
+  if (_polling) clearInterval(_polling);
+  const start = Date.now();
+
+  _polling = setInterval(async () => {
+    try {
+      const s = await fetch('/wifi/connect/status').then(r => r.json());
+
+      if (s.status === 'connected') {
+        clearInterval(_polling);
+        _polling = null;
+        showConnected(s.ssid, s.ip);
+
+      } else if (s.status === 'error') {
+        clearInterval(_polling);
+        _polling = null;
+        showError(s.error || 'No se pudo conectar');
+
+      } else if (Date.now() - start > 35000) {
+        clearInterval(_polling);
+        _polling = null;
+        showError('Tiempo de espera agotado — verificá la contraseña e intentá de nuevo');
+      }
+    } catch {
+      // El servidor puede estar reconectando — seguir esperando
+    }
+  }, 2000);
+}
+
+function showConnected(ssid, ip) {
+  $('state-connecting').style.display = 'none';
+  $('state-error').style.display      = 'none';
+  $('state-connected').style.display  = '';
+  $('progress-title').textContent     = '¡Conectado!';
+
+  const url = ip ? `http://${ip}:${window.location.port || 3000}` : '—';
+  $('txt-new-ip').textContent  = ip || '—';
+  $('txt-new-url').textContent = url;
+
+  addLog(`✔ Conectado a "${ssid}" — IP: ${ip}`, 'ok');
+
+  // Intentar redirigir automáticamente a la nueva IP en 5s
+  if (ip) {
+    addLog(`Redirigiendo a ${url} en 5 segundos…`, '');
+    setTimeout(() => { window.location.href = url; }, 5000);
+  }
+}
+
+function showError(msg) {
+  $('state-connecting').style.display = 'none';
+  $('state-connected').style.display  = 'none';
+  $('state-error').style.display      = '';
+  $('progress-title').textContent     = 'Error de conexión';
+  $('txt-error').textContent          = msg;
+  addLog(`✘ ${msg}`, 'err');
+  resetForm();
+}
+
+function resetForm() {
+  $('btn-connect').disabled = false;
+  $('btn-rescan').disabled  = false;
+  $('inp-ssid').disabled    = false;
+  $('inp-pass').disabled    = false;
+}
+
+// ─── Eventos ──────────────────────────────────────────────────────────────────
+$('btn-connect').addEventListener('click', doConnect);
+$('btn-rescan').addEventListener('click', scanNetworks);
+$('btn-retry').addEventListener('click', () => {
+  $('card-progress').classList.remove('visible');
+  resetForm();
+});
+
+$('btn-show-pass').addEventListener('click', () => {
+  const inp = $('inp-pass');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+});
+
+$('inp-pass').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doConnect();
+});
+
+// ─── Arranque ─────────────────────────────────────────────────────────────────
+(async () => {
+  await loadStatus();
+  await scanNetworks();
+})();
+</script>
+
+</body>
+</html>
