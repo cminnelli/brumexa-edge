@@ -426,14 +426,14 @@ const PiMicModule = {
  * El audio NO se reproduce en el browser (GainNode en 0).
  */
 const PiSpeakerModule = {
-  _ws:         null,
-  _audioCtx:   null,
-  _processor:  null,
-  _source:     null,
-  _frameCount: 0,
+  _ws:          null,
+  _audioCtx:    null,
+  _workletNode: null,
+  _source:      null,
+  _frameCount:  0,
   _lastFrameAt: null,
-  _device:     null,
-  _sampleRate: null,
+  _device:      null,
+  _sampleRate:  null,
 
   // Devuelve Promise que resuelve cuando el WS está abierto y el pipeline listo
   async start(track, device) {
@@ -441,8 +441,6 @@ const PiSpeakerModule = {
     const audioCtx = new AudioContext();
     this._audioCtx = audioCtx;
 
-    // CRÍTICO: resume() — el AudioContext arranca suspended si se crea fuera
-    // de un handler de gesto del usuario. Sin esto onaudioprocess nunca dispara.
     await audioCtx.resume();
     const sampleRate  = audioCtx.sampleRate;
     this._device      = device;
@@ -452,19 +450,21 @@ const PiSpeakerModule = {
     log(`[speaker-pi] AudioContext: ${audioCtx.state}  ${sampleRate} Hz`, 'info');
     console.log(`[PiSpeaker] AudioContext state: ${audioCtx.state}  rate: ${sampleRate} Hz`);
 
-    // Crear pipeline ANTES de abrir el WS para que esté listo al conectar
-    const stream    = new MediaStream([track.mediaStreamTrack]);
-    const source    = audioCtx.createMediaStreamSource(stream);
-    const processor = audioCtx.createScriptProcessor(4096, 1, 1);
-    const mute      = audioCtx.createGain();
+    // Cargar AudioWorklet (reemplaza ScriptProcessorNode deprecado)
+    await audioCtx.audioWorklet.addModule('/worklets/speaker-capture.js');
+
+    const stream      = new MediaStream([track.mediaStreamTrack]);
+    const source      = audioCtx.createMediaStreamSource(stream);
+    const workletNode = new AudioWorkletNode(audioCtx, 'speaker-capture');
+    const mute        = audioCtx.createGain();
     mute.gain.value = 0;   // silenciar en el browser — el audio va a la Pi
 
-    source.connect(processor);
-    processor.connect(mute);
+    source.connect(workletNode);
+    workletNode.connect(mute);
     mute.connect(audioCtx.destination);
 
-    this._source    = source;
-    this._processor = processor;
+    this._source      = source;
+    this._workletNode = workletNode;
 
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl    = `${protocol}//${location.host}/ws/speaker?device=${encodeURIComponent(device)}&rate=${sampleRate}&channels=1`;
@@ -479,18 +479,14 @@ const PiSpeakerModule = {
         log(`[speaker-pi] WS abierto — ${device}  ${sampleRate} Hz`, 'success');
         console.log(`[PiSpeaker] WS open — device: ${device}  sampleRate: ${sampleRate}`);
 
-        processor.onaudioprocess = (e) => {
+        workletNode.port.onmessage = (e) => {
           if (ws.readyState !== WebSocket.OPEN) return;
-          const float32 = e.inputBuffer.getChannelData(0);
-          const int16   = new Int16Array(float32.length);
-          for (let i = 0; i < float32.length; i++) {
-            int16[i] = Math.max(-32768, Math.min(32767, Math.round(float32[i] * 32767)));
-          }
-          ws.send(int16.buffer);
+          ws.send(e.data);
           this._frameCount++;
           this._lastFrameAt = Date.now();
           if (this._frameCount === 1) {
-            console.log(`[PiSpeaker] ▶ primer chunk (${int16.byteLength} B @ ${sampleRate} Hz)`);
+            const byteLen = e.data instanceof ArrayBuffer ? e.data.byteLength : '?';
+            console.log(`[PiSpeaker] ▶ primer chunk (${byteLen} B @ ${sampleRate} Hz)`);
             log('[speaker-pi] Audio del agente llegando a la Pi — primer frame', 'success');
           }
         };
@@ -505,16 +501,16 @@ const PiSpeakerModule = {
 
       ws.onclose = (e) => {
         console.log(`[PiSpeaker] WS cerrado — code: ${e.code}  reason: "${e.reason || '—'}"`);
-        processor.onaudioprocess = null;
+        if (this._workletNode) this._workletNode.port.onmessage = null;
       };
     });
   },
 
   stop() {
-    if (this._processor) {
-      this._processor.disconnect();
-      this._processor.onaudioprocess = null;
-      this._processor = null;
+    if (this._workletNode) {
+      this._workletNode.port.onmessage = null;
+      this._workletNode.disconnect();
+      this._workletNode = null;
     }
     if (this._source) {
       this._source.disconnect();
