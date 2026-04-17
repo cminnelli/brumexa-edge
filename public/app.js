@@ -320,7 +320,8 @@ function setMicStatus(status, sub = '') {
 const PiMicModule = {
   _ws:          null,
   _audioCtx:    null,
-  _workletNode: null,   // expuesto para conectar analyser en el mismo contexto
+  _workletNode: null,
+  _processor:   null,
   _device:      null,
 
   /**
@@ -329,29 +330,61 @@ const PiMicModule = {
    * @returns {Promise<MediaStream>}
    */
   async start(device) {
-    // AudioContext mono a 16kHz — coincide con arecord
     const audioCtx = new AudioContext({ sampleRate: 16000 });
-
-    // Chrome arranca el AudioContext en "suspended" — hay que resumirlo
-    // explícitamente dentro del handler del click del usuario
     await audioCtx.resume();
 
-    // Cargar el procesador PCM como AudioWorklet
-    await audioCtx.audioWorklet.addModule('/worklets/pcm-processor.js');
-
-    // outputChannelCount: [1] fuerza salida mono — sin esto puede ser silencio
-    const workletNode = new AudioWorkletNode(audioCtx, 'pcm-processor', {
-      numberOfOutputs:    1,
-      outputChannelCount: [1],
-    });
-
-    // Capturar salida del worklet como MediaStream
     const destination = audioCtx.createMediaStreamDestination();
-    workletNode.connect(destination);
+    this._audioCtx = audioCtx;
+    this._device   = device;
 
-    this._audioCtx    = audioCtx;
-    this._workletNode = workletNode;
-    this._device      = device;
+    // AudioWorklet requiere contexto seguro (HTTPS / localhost).
+    // En HTTP desde otra máquina usamos ScriptProcessorNode como fallback.
+    const useWorklet = !!audioCtx.audioWorklet;
+    console.log(`[PiMic] modo inyección PCM: ${useWorklet ? 'AudioWorklet' : 'ScriptProcessorNode (fallback HTTP)'}`);
+    log(`[mic-pi] Modo: ${useWorklet ? 'AudioWorklet' : 'ScriptProcessor (HTTP fallback)'}`, 'info');
+
+    let injectPcm; // función que recibe Int16Array y la inyecta al pipeline
+
+    if (useWorklet) {
+      await audioCtx.audioWorklet.addModule('/worklets/pcm-processor.js');
+      const workletNode = new AudioWorkletNode(audioCtx, 'pcm-processor', {
+        numberOfOutputs:    1,
+        outputChannelCount: [1],
+      });
+      workletNode.connect(destination);
+      this._workletNode = workletNode;
+      injectPcm = (int16buf) => workletNode.port.postMessage(int16buf, [int16buf]);
+    } else {
+      // Fallback: ScriptProcessorNode con cola de Float32
+      const _queue = [];
+      let   _buf   = new Float32Array(0);
+      let   _pos   = 0;
+
+      // Fuente silenciosa para mantener el ScriptProcessorNode vivo
+      const silence = audioCtx.createBufferSource();
+      silence.buffer = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate);
+      silence.loop   = true;
+
+      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+      silence.connect(processor);
+      processor.connect(destination);
+      silence.start();
+
+      processor.onaudioprocess = (e) => {
+        const out = e.outputBuffer.getChannelData(0);
+        for (let i = 0; i < out.length; i++) {
+          while (_pos >= _buf.length && _queue.length) { _buf = _queue.shift(); _pos = 0; }
+          out[i] = _pos < _buf.length ? _buf[_pos++] : 0;
+        }
+      };
+
+      this._processor = processor;
+      injectPcm = (int16buf) => {
+        const f32 = new Float32Array(int16buf.length);
+        for (let i = 0; i < int16buf.length; i++) f32[i] = int16buf[i] / 32768;
+        _queue.push(f32);
+      };
+    }
 
     // WebSocket al servidor
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -372,11 +405,12 @@ const PiMicModule = {
       };
     });
 
-    this._frameCount   = 0;
-    this._lastFrameAt  = null;
-    let _lastLogAt = 0;
+    this._frameCount  = 0;
+    this._lastFrameAt = null;
+    let _lastLogAt    = 0;
+
     ws.onmessage = (e) => {
-      workletNode.port.postMessage(e.data, [e.data]);
+      injectPcm(new Int16Array(e.data));
       this._frameCount++;
       this._lastFrameAt = Date.now();
       if (this._frameCount === 1) {
@@ -391,7 +425,7 @@ const PiMicModule = {
     };
 
     ws.onclose = (e) => {
-      console.log(`[PiMic] WS cerrado — code: ${e.code}  reason: "${e.reason || '—'}"  chunks: ${chunkCount}`);
+      console.log(`[PiMic] WS cerrado — code: ${e.code}  reason: "${e.reason || '—'}"`);
       if (state.active) log(`[mic-pi] WebSocket cerrado: ${e.reason || 'sin razón'}`, 'warn');
     };
 
@@ -400,7 +434,12 @@ const PiMicModule = {
 
   stop() {
     this._ws?.close();
-    this._ws          = null;
+    this._ws = null;
+    if (this._processor) {
+      this._processor.onaudioprocess = null;
+      this._processor.disconnect();
+      this._processor = null;
+    }
     this._audioCtx?.close();
     this._audioCtx    = null;
     this._workletNode = null;
@@ -429,6 +468,7 @@ const PiSpeakerModule = {
   _ws:          null,
   _audioCtx:    null,
   _workletNode: null,
+  _processor:   null,
   _source:      null,
   _frameCount:  0,
   _lastFrameAt: null,
@@ -450,21 +490,32 @@ const PiSpeakerModule = {
     log(`[speaker-pi] AudioContext: ${audioCtx.state}  ${sampleRate} Hz`, 'info');
     console.log(`[PiSpeaker] AudioContext state: ${audioCtx.state}  rate: ${sampleRate} Hz`);
 
-    // Cargar AudioWorklet (reemplaza ScriptProcessorNode deprecado)
-    await audioCtx.audioWorklet.addModule('/worklets/speaker-capture.js');
-
-    const stream      = new MediaStream([track.mediaStreamTrack]);
-    const source      = audioCtx.createMediaStreamSource(stream);
-    const workletNode = new AudioWorkletNode(audioCtx, 'speaker-capture');
-    const mute        = audioCtx.createGain();
+    const stream  = new MediaStream([track.mediaStreamTrack]);
+    const source  = audioCtx.createMediaStreamSource(stream);
+    const mute    = audioCtx.createGain();
     mute.gain.value = 0;   // silenciar en el browser — el audio va a la Pi
-
-    source.connect(workletNode);
-    workletNode.connect(mute);
     mute.connect(audioCtx.destination);
 
-    this._source      = source;
-    this._workletNode = workletNode;
+    // AudioWorklet requiere contexto seguro (HTTPS / localhost).
+    // En HTTP desde otra máquina usamos ScriptProcessorNode como fallback.
+    const useWorklet = !!audioCtx.audioWorklet;
+    console.log(`[PiSpeaker] modo captura: ${useWorklet ? 'AudioWorklet' : 'ScriptProcessorNode (fallback HTTP)'}`);
+    log(`[speaker-pi] Captura: ${useWorklet ? 'AudioWorklet' : 'ScriptProcessor (HTTP fallback)'}`, 'info');
+
+    if (useWorklet) {
+      await audioCtx.audioWorklet.addModule('/worklets/speaker-capture.js');
+      const workletNode = new AudioWorkletNode(audioCtx, 'speaker-capture');
+      source.connect(workletNode);
+      workletNode.connect(mute);
+      this._workletNode = workletNode;
+    } else {
+      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+      source.connect(processor);
+      processor.connect(mute);
+      this._processor = processor;
+    }
+
+    this._source = source;
 
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl    = `${protocol}//${location.host}/ws/speaker?device=${encodeURIComponent(device)}&rate=${sampleRate}&channels=1`;
@@ -479,17 +530,30 @@ const PiSpeakerModule = {
         log(`[speaker-pi] WS abierto — ${device}  ${sampleRate} Hz`, 'success');
         console.log(`[PiSpeaker] WS open — device: ${device}  sampleRate: ${sampleRate}`);
 
-        workletNode.port.onmessage = (e) => {
+        const sendChunk = (int16buf) => {
           if (ws.readyState !== WebSocket.OPEN) return;
-          ws.send(e.data);
+          ws.send(int16buf);
           this._frameCount++;
           this._lastFrameAt = Date.now();
           if (this._frameCount === 1) {
-            const byteLen = e.data instanceof ArrayBuffer ? e.data.byteLength : '?';
+            const byteLen = int16buf instanceof ArrayBuffer ? int16buf.byteLength : int16buf.buffer?.byteLength ?? '?';
             console.log(`[PiSpeaker] ▶ primer chunk (${byteLen} B @ ${sampleRate} Hz)`);
             log('[speaker-pi] Audio del agente llegando a la Pi — primer frame', 'success');
           }
         };
+
+        if (this._workletNode) {
+          this._workletNode.port.onmessage = (e) => sendChunk(e.data);
+        } else if (this._processor) {
+          this._processor.onaudioprocess = (e) => {
+            const float32 = e.inputBuffer.getChannelData(0);
+            const int16   = new Int16Array(float32.length);
+            for (let i = 0; i < float32.length; i++) {
+              int16[i] = Math.max(-32768, Math.min(32767, Math.round(float32[i] * 32767)));
+            }
+            sendChunk(int16.buffer);
+          };
+        }
         resolve();
       };
 
@@ -502,6 +566,7 @@ const PiSpeakerModule = {
       ws.onclose = (e) => {
         console.log(`[PiSpeaker] WS cerrado — code: ${e.code}  reason: "${e.reason || '—'}"`);
         if (this._workletNode) this._workletNode.port.onmessage = null;
+        if (this._processor)  this._processor.onaudioprocess   = null;
       };
     });
   },
@@ -511,6 +576,11 @@ const PiSpeakerModule = {
       this._workletNode.port.onmessage = null;
       this._workletNode.disconnect();
       this._workletNode = null;
+    }
+    if (this._processor) {
+      this._processor.onaudioprocess = null;
+      this._processor.disconnect();
+      this._processor = null;
     }
     if (this._source) {
       this._source.disconnect();
