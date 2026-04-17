@@ -437,7 +437,7 @@ const PiSpeakerModule = {
 
   // Devuelve Promise que resuelve cuando el WS está abierto y el pipeline listo
   async start(track, device) {
-    // AudioContext usa la tasa nativa del sistema (típico: 48 kHz)
+    log(`[speaker-pi] Creando AudioContext…`, 'info');
     const audioCtx = new AudioContext();
     this._audioCtx = audioCtx;
 
@@ -449,6 +449,8 @@ const PiSpeakerModule = {
     this._sampleRate  = sampleRate;
     this._frameCount  = 0;
     this._lastFrameAt = null;
+    log(`[speaker-pi] AudioContext: ${audioCtx.state}  ${sampleRate} Hz`, audioCtx.state === 'running' ? 'info' : 'error');
+    if (audioCtx.state !== 'running') throw new Error(`AudioContext no pudo iniciarse (state: ${audioCtx.state})`);
     console.log(`[PiSpeaker] AudioContext state: ${audioCtx.state}  rate: ${sampleRate} Hz`);
 
     // Crear pipeline ANTES de abrir el WS para que esté listo al conectar
@@ -736,19 +738,20 @@ const LiveKitModule = {
     room.on(LivekitClient.RoomEvent.TrackSubscribed, async (track, _pub, participant) => {
       if (track.kind !== LivekitClient.Track.Kind.Audio) return;
       const speakerDest = getSelectedSpeakerDest();
-      log(`Audio recibido de "${participant.identity}" — speaker: ${speakerDest}`, 'info');
-      console.log(`[LiveKit] TrackSubscribed — participant: ${participant.identity}  speakerDest: ${speakerDest}  state: ${track.mediaStreamTrack?.readyState}`);
+      const msState     = track.mediaStreamTrack?.readyState ?? 'sin track';
+      log(`🔈 Audio de "${participant.identity}" — destino: ${speakerDest}  track: ${msState}`, 'info');
+      console.log(`[LiveKit] TrackSubscribed — participant: ${participant.identity}  speakerDest: ${speakerDest}  trackState: ${msState}`);
 
       if (speakerDest === 'pi') {
         const device = getSelectedAlsaSpeaker();
-        log(`[speaker-pi] → Pi ALSA: ${device}`, 'info');
+        log(`[speaker-pi] Iniciando → ALSA: ${device}`, 'info');
         try {
           await PiSpeakerModule.start(track, device);
+          log(`[speaker-pi] ✔ Audio enrutado a Pi — ${device}`, 'success');
         } catch (err) {
-          log(`[speaker-pi] Error: ${err.message} — reproduciendo en browser como fallback`, 'warn');
-          const audioEl = track.attach();
-          document.body.appendChild(audioEl);
-          audioEl.play().catch(() => {});
+          log(`[speaker-pi] ✗ Error: ${err.message}`, 'error');
+          log(`[speaker-pi] Verificá que el servidor esté corriendo y el device "${device}" sea correcto`, 'warn');
+          // No fallback al browser — el usuario eligió Pi explícitamente
         }
       } else {
         // Browser speaker — attach() crea el <audio> y LiveKit maneja el stream
@@ -756,11 +759,11 @@ const LiveKitModule = {
         audioEl.autoplay = true;
         audioEl.style.display = 'none';
         document.body.appendChild(audioEl);
-        // play() explícito porque autoplay policy puede bloquearlo silenciosamente
         audioEl.play().catch(err => {
           console.warn('[LiveKit] autoplay bloqueado:', err.message);
-          log('Autoplay bloqueado por el browser — hacé clic en la página para habilitar audio', 'warn');
+          log('Autoplay bloqueado — hacé clic en la página para habilitar audio', 'warn');
         });
+        log(`[speaker-browser] ✔ Audio enrutado al browser`, 'success');
       }
     });
 
