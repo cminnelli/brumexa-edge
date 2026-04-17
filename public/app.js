@@ -926,27 +926,24 @@ const LiveKitModule = {
     state.room       = room;
     state.localTrack = localTrack;
 
-    // Despachar agente explícitamente si no hay ninguno en sala
+    // Dispatch del agente en background — no bloquea el "listo para hablar"
     if (room.remoteParticipants.size === 0) {
-      log('[lk] Sin agente en sala — solicitando dispatch…', 'info');
-      try {
-        const dr = await fetch('/livekit/dispatch', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ room: tokenData.room }),
-        });
-        const dj = await dr.json();
-        if (dj.ok) {
-          log(`[lk] Agente despachado — id: ${dj.dispatchId}`, 'success');
-          console.log(`[LiveKit] dispatch OK — id: ${dj.dispatchId}`);
-        } else {
-          log(`[lk] Dispatch sin soporte: ${dj.error}`, 'warn');
-          console.warn('[LiveKit] dispatch error:', dj.error);
-        }
-      } catch (e) {
-        log(`[lk] Dispatch falló: ${e.message}`, 'warn');
-        console.warn('[LiveKit] dispatch fetch error:', e.message);
-      }
+      fetch('/livekit/dispatch', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ room: tokenData.room }),
+      })
+        .then(r => r.json())
+        .then(dj => {
+          if (dj.ok) {
+            log(`[lk] Agente despachado — id: ${dj.dispatchId}`, 'success');
+          } else if (dj.error?.includes('no configurad')) {
+            log('[lk] Dispatch: reiniciá el servidor con LIVEKIT_API_KEY y LIVEKIT_API_SECRET en .env', 'warn');
+          } else {
+            log(`[lk] Dispatch: ${dj.error}`, 'warn');
+          }
+        })
+        .catch(e => log(`[lk] Dispatch falló: ${e.message}`, 'warn'));
     }
   },
 
