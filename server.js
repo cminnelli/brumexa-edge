@@ -17,6 +17,9 @@ const { setupWifi, autoStartAP }                       = require('./lib/wifi');
 
 const {
   LIVEKIT_URL,
+  LIVEKIT_API_KEY,
+  LIVEKIT_API_SECRET,
+  LIVEKIT_AGENT_NAME = 'brumexa-agent',
   LIVEKIT_ROOM_NAME = 'brumexa-room',
   TOKEN_API_URL,
   BRUMEXA_API_KEY,
@@ -338,6 +341,32 @@ app.get('/recordings/play-status', (_req, res) => {
     playing:  _playProc !== null,
     result:   _playResult,   // { exitCode, stderr, filename } o null si no hay resultado aún
   });
+});
+
+// ─── POST /livekit/dispatch — despachar agente explícitamente a una sala ─────
+app.post('/livekit/dispatch', express.json(), async (req, res) => {
+  if (!LIVEKIT_API_KEY || !LIVEKIT_API_SECRET) {
+    return res.status(503).json({ ok: false, error: 'LIVEKIT_API_KEY / LIVEKIT_API_SECRET no configurados' });
+  }
+
+  const { room } = req.body || {};
+  if (!room || typeof room !== 'string') {
+    return res.status(400).json({ ok: false, error: 'room requerido' });
+  }
+
+  const { AgentDispatchClient } = require('livekit-server-sdk');
+  const httpUrl = (LIVEKIT_URL || '').replace(/^wss?:\/\//, 'https://');
+  const client  = new AgentDispatchClient(httpUrl, LIVEKIT_API_KEY, LIVEKIT_API_SECRET);
+
+  try {
+    console.log(`[dispatch] → room: ${room}`);
+    const dispatch = await client.createDispatch(room, LIVEKIT_AGENT_NAME);
+    console.log(`[dispatch] ✔ id: ${dispatch.id}`);
+    res.json({ ok: true, dispatchId: dispatch.id });
+  } catch (err) {
+    console.error('[dispatch] ✘', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 // ─── POST /terminal/run — ejecutar comando en la Pi ──────────────────────────
