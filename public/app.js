@@ -449,8 +449,7 @@ const PiSpeakerModule = {
     this._sampleRate  = sampleRate;
     this._frameCount  = 0;
     this._lastFrameAt = null;
-    log(`[speaker-pi] AudioContext: ${audioCtx.state}  ${sampleRate} Hz`, audioCtx.state === 'running' ? 'info' : 'error');
-    if (audioCtx.state !== 'running') throw new Error(`AudioContext no pudo iniciarse (state: ${audioCtx.state})`);
+    log(`[speaker-pi] AudioContext: ${audioCtx.state}  ${sampleRate} Hz`, 'info');
     console.log(`[PiSpeaker] AudioContext state: ${audioCtx.state}  rate: ${sampleRate} Hz`);
 
     // Crear pipeline ANTES de abrir el WS para que esté listo al conectar
@@ -469,6 +468,7 @@ const PiSpeakerModule = {
 
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl    = `${protocol}//${location.host}/ws/speaker?device=${encodeURIComponent(device)}&rate=${sampleRate}&channels=1`;
+    log(`[speaker-pi] Conectando WS → ${wsUrl}`, 'info');
 
     await new Promise((resolve, reject) => {
       const ws = new WebSocket(wsUrl);
@@ -749,9 +749,12 @@ const LiveKitModule = {
           await PiSpeakerModule.start(track, device);
           log(`[speaker-pi] ✔ Audio enrutado a Pi — ${device}`, 'success');
         } catch (err) {
-          log(`[speaker-pi] ✗ Error: ${err.message}`, 'error');
-          log(`[speaker-pi] Verificá que el servidor esté corriendo y el device "${device}" sea correcto`, 'warn');
-          // No fallback al browser — el usuario eligió Pi explícitamente
+          log(`[speaker-pi] ✗ Falló (${err.message}) — reproduciendo en browser como fallback`, 'error');
+          const audioEl = track.attach();
+          audioEl.autoplay = true;
+          audioEl.style.display = 'none';
+          document.body.appendChild(audioEl);
+          audioEl.play().catch(() => {});
         }
       } else {
         // Browser speaker — attach() crea el <audio> y LiveKit maneja el stream
