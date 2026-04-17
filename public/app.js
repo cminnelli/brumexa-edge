@@ -862,76 +862,80 @@ const LiveKitModule = {
 
     try {
       await room.connect(livekitUrl, tokenData.token);
-      console.log(`[LiveKit] ✔ conectado  sid: ${room.localParticipant?.sid}`);
+      const nRemote = room.remoteParticipants.size;
+      console.log(`[LiveKit] ✔ conectado  sid: ${room.localParticipant?.sid}  remote: ${nRemote}`);
+      log(`[lk] ✔ Conectado — sala: ${tokenData.room}  remote: ${nRemote}`, 'success');
     } catch (err) {
       setStep('connect', 'error', 'falló');
       setChannelStatus('closed', tokenData.room);
-      log(`[lk] Error al conectar: ${err.message}`, 'error');
-      console.error('[LiveKit] ✘ connect error:', err);
+      log(`[lk] ✘ Error al conectar: ${err.message}`, 'error');
       throw err;
     }
 
-    // Dispatch del agente en background
-    if (room.remoteParticipants.size === 0) {
-      fetch('/livekit/dispatch', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ room: tokenData.room }),
-      })
-        .then(r => r.json())
-        .then(dj => {
-          if (dj.ok) log(`[lk] Agente despachado — id: ${dj.dispatchId}`, 'success');
-          else        log(`[lk] Dispatch: ${dj.error}`, 'warn');
-        })
-        .catch(e => log(`[lk] Dispatch falló: ${e.message}`, 'warn'));
+    // ── Esperar al agente (auto-dispatch) — sin dispatch explícito ───────────
+    // El worker se une automáticamente cuando el participante entra a la sala.
+    // NO usamos dispatch explícito porque el worker no tiene agentName registrado.
+    const agentAlreadyHere = room.remoteParticipants.size > 0;
+    if (agentAlreadyHere) {
+      const ids = [...room.remoteParticipants.values()].map(p => p.identity).join(', ');
+      log(`[lk] Agente ya en sala: ${ids}`, 'success');
+    } else {
+      log('[lk] Sala vacía — esperando auto-dispatch del agente (máx 20 s)…', 'info');
+      setStep('publish', 'loading', 'esperando agente…');
+      setMicStatus('requesting', 'esperando agente…');
+
+      await new Promise((resolve) => {
+        const tid = setTimeout(() => {
+          log('[lk] ⚠ Sin agente tras 20 s — verificá que el worker esté corriendo', 'warn');
+          resolve();
+        }, 20000);
+        room.once(LivekitClient.RoomEvent.ParticipantConnected, (p) => {
+          clearTimeout(tid);
+          log(`[lk] ✔ Agente conectado: "${p.identity}" — activando mic`, 'success');
+          console.log(`[LiveKit] agente en sala: ${p.identity}  sid: ${p.sid}`);
+          resolve();
+        });
+      });
     }
 
-    log('[lk] Conectado — obteniendo fuente de audio…');
+    // ── Iniciar mic ──────────────────────────────────────────────────────────
+    log('[lk] Iniciando fuente de audio…', 'info');
     setStep('publish', 'loading', 'publicando…');
     setMicStatus('requesting', 'obteniendo fuente…');
 
     let localTrack;
-    let micStream;   // para el mini VU meter
+    let micStream;
 
     const selectedSrc = getSelectedSource();
-    console.log(`[LiveKit] fuente seleccionada: ${selectedSrc}`);
+    log(`[lk] Fuente seleccionada: ${selectedSrc}`, 'info');
 
     try {
       if (selectedSrc === 'pi') {
-        // ── Fuente Pi: WebSocket → AudioWorklet → MediaStream → LiveKit ──────
         const alsaDevice = getSelectedAlsaDevice();
-        log(`[mic-pi] Iniciando captura ALSA — device: ${alsaDevice}`, 'info');
-        console.log(`[LiveKit] ▶ PiMic.start() — ALSA: ${alsaDevice}`);
+        log(`[mic-pi] Iniciando ALSA — device: ${alsaDevice}`, 'info');
 
-        micStream              = await PiMicModule.start(alsaDevice);
-        const [rawAudioTrack]  = micStream.getAudioTracks();
-        console.log(`[LiveKit] audio track: id=${rawAudioTrack.id} label="${rawAudioTrack.label}" state=${rawAudioTrack.readyState}`);
+        micStream = await PiMicModule.start(alsaDevice);
+        const [rawAudioTrack] = micStream.getAudioTracks();
+        log(`[mic-pi] Track: id=${rawAudioTrack.id.slice(0,8)}  state=${rawAudioTrack.readyState}`, 'info');
+        console.log(`[PiMic] track  id=${rawAudioTrack.id}  label="${rawAudioTrack.label}"  state=${rawAudioTrack.readyState}`);
 
-        log('[lk] Publicando track Pi → LiveKit…', 'info');
-        console.log('[LiveKit] → publishTrack (pi-mic)');
+        log('[mic-pi] Publicando en LiveKit…', 'info');
         const pub = await room.localParticipant.publishTrack(rawAudioTrack, {
-          name:   'pi-mic',
-          source: LivekitClient.Track.Source.Microphone,
+          name: 'pi-mic', source: LivekitClient.Track.Source.Microphone,
         });
         localTrack = pub.track ?? pub;
-        console.log(`[LiveKit] ✔ publicado — trackSid: ${pub.trackSid}  muted: ${pub.isMuted}`);
+        log(`[mic-pi] ✔ Track publicado — sid: ${pub.trackSid}  muted: ${pub.isMuted}`, 'success');
+        console.log(`[PiMic] ✔ publicado  trackSid=${pub.trackSid}  muted=${pub.isMuted}`);
 
       } else {
-        // ── Fuente browser: API pública de LiveKit con procesadores de audio ──
-        log('[mic-browser] getUserMedia — solicitando micrófono…', 'info');
-        console.log('[LiveKit] ▶ createLocalAudioTrack (browser getUserMedia)');
-
+        log('[mic-browser] getUserMedia…', 'info');
         localTrack = await LivekitClient.createLocalAudioTrack({
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl:  true,
+          echoCancellation: true, noiseSuppression: true, autoGainControl: true,
         });
         const mt = localTrack.mediaStreamTrack;
-        console.log(`[LiveKit] audio track: id=${mt?.id} label="${mt?.label}" state=${mt?.readyState}`);
-
-        console.log('[LiveKit] → publishTrack (browser-mic)');
+        log(`[mic-browser] Track: state=${mt?.readyState}`, 'info');
         const pub = await room.localParticipant.publishTrack(localTrack);
-        console.log(`[LiveKit] ✔ publicado — trackSid: ${pub?.trackSid}  muted: ${pub?.isMuted}`);
-
+        log(`[mic-browser] ✔ publicado — sid: ${pub?.trackSid}`, 'success');
         micStream = mt ? new MediaStream([mt]) : null;
         updateMicName();
       }
@@ -939,9 +943,9 @@ const LiveKitModule = {
     } catch (err) {
       PiMicModule.stop();
       setStep('publish', 'error', 'falló');
-      setMicStatus('error', 'sin permiso');
-      console.error('[LiveKit] ✘ publish error:', err);
-      log(`[lk] Error al publicar: ${err.message}`, 'error');
+      setMicStatus('error', 'error');
+      log(`[lk] ✘ Error al publicar mic: ${err.message}`, 'error');
+      console.error('[LiveKit] publish error:', err);
       throw err;
     }
 
@@ -949,8 +953,7 @@ const LiveKitModule = {
     setStep('publish', 'ok', 'activo');
     setMicStatus('active', sourceName);
     updateWorkerState();
-    log(`[lk] Micrófono activo — fuente: ${sourceName}`, 'success');
-    console.log(`[LiveKit] ▶ streaming activo — fuente: ${sourceName}`);
+    log(`[lk] ✔ Micrófono activo — ${sourceName}`, 'success');
     if (micStream) startMiniVu(micStream);
 
     state.room       = room;
