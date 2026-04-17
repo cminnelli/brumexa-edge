@@ -338,10 +338,10 @@ const PiMicModule = {
     this._device   = device;
 
     // AudioWorklet requiere contexto seguro (HTTPS / localhost).
-    // En HTTP desde otra máquina usamos ScriptProcessorNode como fallback.
-    const useWorklet = !!audioCtx.audioWorklet;
-    console.log(`[PiMic] modo inyección PCM: ${useWorklet ? 'AudioWorklet' : 'ScriptProcessorNode (fallback HTTP)'}`);
-    log(`[mic-pi] Modo: ${useWorklet ? 'AudioWorklet' : 'ScriptProcessor (HTTP fallback)'}`, 'info');
+    // audioCtx.audioWorklet existe en HTTP pero addModule() lanza → usar isSecureContext.
+    const useWorklet = window.isSecureContext;
+    console.log(`[PiMic] modo inyección PCM: ${useWorklet ? 'AudioWorklet' : 'ScriptProcessorNode (HTTP fallback)'}`);
+    log(`[mic-pi] Modo: ${useWorklet ? 'AudioWorklet' : 'ScriptProcessor (HTTP)'}`, 'info');
 
     let injectPcm; // función que recibe Int16Array y la inyecta al pipeline
 
@@ -497,10 +497,10 @@ const PiSpeakerModule = {
     mute.connect(audioCtx.destination);
 
     // AudioWorklet requiere contexto seguro (HTTPS / localhost).
-    // En HTTP desde otra máquina usamos ScriptProcessorNode como fallback.
-    const useWorklet = !!audioCtx.audioWorklet;
-    console.log(`[PiSpeaker] modo captura: ${useWorklet ? 'AudioWorklet' : 'ScriptProcessorNode (fallback HTTP)'}`);
-    log(`[speaker-pi] Captura: ${useWorklet ? 'AudioWorklet' : 'ScriptProcessor (HTTP fallback)'}`, 'info');
+    // audioCtx.audioWorklet existe en HTTP pero addModule() lanza → usar isSecureContext.
+    const useWorklet = window.isSecureContext;
+    console.log(`[PiSpeaker] modo captura: ${useWorklet ? 'AudioWorklet' : 'ScriptProcessorNode (HTTP fallback)'}`);
+    log(`[speaker-pi] Captura: ${useWorklet ? 'AudioWorklet' : 'ScriptProcessor (HTTP)'}`, 'info');
 
     if (useWorklet) {
       await audioCtx.audioWorklet.addModule('/worklets/speaker-capture.js');
