@@ -330,8 +330,12 @@ const PiMicModule = {
    * @returns {Promise<MediaStream>}
    */
   async start(device) {
-    const audioCtx = new AudioContext({ sampleRate: 16000 });
+    // Sin sampleRate fijo — usar el nativo del sistema (normalmente 48000 Hz).
+    // El worklet resamplifica los 16 kHz de arecord al rate real del contexto.
+    const audioCtx = new AudioContext();
     await audioCtx.resume();
+    log(`[mic-pi] AudioContext: ${audioCtx.sampleRate} Hz`, 'info');
+    console.log(`[PiMic] AudioContext sampleRate: ${audioCtx.sampleRate} Hz`);
 
     const destination = audioCtx.createMediaStreamDestination();
     this._audioCtx = audioCtx;
@@ -354,6 +358,18 @@ const PiMicModule = {
       workletNode.connect(destination);
       this._workletNode = workletNode;
       injectPcm = (int16buf) => workletNode.port.postMessage(int16buf, [int16buf]);
+
+      // Indicador de voz: worklet envía nivel RMS cada ~20 frames
+      let _speaking = false;
+      workletNode.port.onmessage = (e) => {
+        if (e.data?.type !== 'level') return;
+        const active = e.data.rms > 0.01;
+        if (active !== _speaking) {
+          _speaking = active;
+          log(`[mic-pi] ${active ? '🎙 hablando' : '— silencio'}`, active ? 'info' : 'info');
+          console.log(`[PiMic] voz: ${active ? 'ON' : 'off'}  rms=${e.data.rms.toFixed(4)}`);
+        }
+      };
     } else {
       // Fallback: ScriptProcessorNode con cola de Float32
       const _queue = [];
@@ -855,6 +871,20 @@ const LiveKitModule = {
       throw err;
     }
 
+    // Dispatch del agente en background
+    if (room.remoteParticipants.size === 0) {
+      fetch('/livekit/dispatch', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ room: tokenData.room }),
+      })
+        .then(r => r.json())
+        .then(dj => {
+          if (dj.ok) log(`[lk] Agente despachado — id: ${dj.dispatchId}`, 'success');
+          else        log(`[lk] Dispatch: ${dj.error}`, 'warn');
+        })
+        .catch(e => log(`[lk] Dispatch falló: ${e.message}`, 'warn'));
+    }
+
     log('[lk] Conectado — obteniendo fuente de audio…');
     setStep('publish', 'loading', 'publicando…');
     setMicStatus('requesting', 'obteniendo fuente…');
@@ -926,25 +956,6 @@ const LiveKitModule = {
     state.room       = room;
     state.localTrack = localTrack;
 
-    // Dispatch del agente en background — no bloquea el "listo para hablar"
-    if (room.remoteParticipants.size === 0) {
-      fetch('/livekit/dispatch', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ room: tokenData.room }),
-      })
-        .then(r => r.json())
-        .then(dj => {
-          if (dj.ok) {
-            log(`[lk] Agente despachado — id: ${dj.dispatchId}`, 'success');
-          } else if (dj.error?.includes('no configurad')) {
-            log('[lk] Dispatch: reiniciá el servidor con LIVEKIT_API_KEY y LIVEKIT_API_SECRET en .env', 'warn');
-          } else {
-            log(`[lk] Dispatch: ${dj.error}`, 'warn');
-          }
-        })
-        .catch(e => log(`[lk] Dispatch falló: ${e.message}`, 'warn'));
-    }
   },
 
   async stop() {
