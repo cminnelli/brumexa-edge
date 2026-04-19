@@ -11,7 +11,7 @@ const { setupAudio, getMicGain, setMicGain }            = require('./lib/audio')
 const { startRecording, stopRecording, getStatus,
         listRecordings, RECORDINGS_DIR,
         reserveBrowserFilename, saveBrowserRecording,
-        deleteRecording } = require('./lib/recorder');
+        deleteRecording, boostCaptureGain } = require('./lib/recorder');
 const { setupBluetooth }                               = require('./lib/bluetooth');
 const { setupWifi, autoStartAP }                       = require('./lib/wifi');
 
@@ -410,6 +410,13 @@ httpServer.listen(PORT, () => {
   console.log(`  Token API               → ${TOKEN_API_URL || '(no configurado)'}`);
   console.log(`  Sala por defecto        → ${LIVEKIT_ROOM_NAME}`);
   console.log(`  Setup WiFi              → http://localhost:${PORT}/setup\n`);
+
+  // En Linux: maximizar el gain de captura ALSA (Capture/Mic/ADC → 100% cap)
+  // Así el mic anda aunque no se haya abierto nunca la UI de grabación.
+  if (process.platform === 'linux') {
+    console.log('[boot] Maximizando gain de captura ALSA…');
+    boostCaptureGain();
+  }
 
   // Si estamos en Linux y no hay WiFi configurado → activar AP automáticamente
   if (process.platform === 'linux') autoStartAP();
