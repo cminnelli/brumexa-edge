@@ -1162,6 +1162,43 @@ const LiveKitModule = {
       });
     }
 
+    // ── DIAGNÓSTICO: listar tracks remotos y FORZAR suscripción si no es auto ─
+    // Watchdog: si tras 4 s de agente presente no tenemos audio subscripto,
+    // lo intentamos a mano con setSubscribed(true) — cubre casos donde el SFU
+    // no auto-enrutó el track (timing, config del dispatch, etc).
+    const dumpRemoteTracks = (tag) => {
+      const parts = [...room.remoteParticipants.values()];
+      log(`[lk-diag] ${tag} — remoteParticipants: ${parts.length}`, 'info');
+      for (const p of parts) {
+        const pubs = [...(p.trackPublications?.values?.() ?? p.tracks?.values?.() ?? [])];
+        log(`[lk-diag]   · ${p.identity} (sid=${p.sid}) — ${pubs.length} publication(s)`, 'info');
+        for (const pub of pubs) {
+          log(`[lk-diag]     - ${pub.kind} sid=${pub.trackSid} source=${pub.source}  subscribed=${pub.isSubscribed}  muted=${pub.isMuted}  mime=${pub.mimeType || '—'}`, 'info');
+          console.log('[LiveKit:diag] publication', pub);
+        }
+      }
+    };
+    dumpRemoteTracks('post-agent');
+    setTimeout(() => {
+      let audioSubscribed = false;
+      for (const p of room.remoteParticipants.values()) {
+        const pubs = [...(p.trackPublications?.values?.() ?? p.tracks?.values?.() ?? [])];
+        for (const pub of pubs) {
+          if (pub.kind === LivekitClient.Track.Kind.Audio) {
+            if (pub.isSubscribed) audioSubscribed = true;
+            else {
+              log(`[lk-diag] ⚠ Forzando suscripción a ${p.identity} ${pub.trackSid} (autoSubscribe no la tomó)`, 'warn');
+              try { pub.setSubscribed(true); } catch (err) { log(`[lk-diag] ✘ setSubscribed falló: ${err.message}`, 'error'); }
+            }
+          }
+        }
+      }
+      if (!audioSubscribed) {
+        log('[lk-diag] ⚠ Tras 4s NO hay ningún audio remoto suscripto — el agente no publicó audio o el SFU no lo enrutó', 'warn');
+      }
+      dumpRemoteTracks('watchdog-4s');
+    }, 4000);
+
     // ── Iniciar mic ──────────────────────────────────────────────────────────
     log('[lk] Iniciando fuente de audio…', 'info');
     setStep('publish', 'loading', 'publicando…');
