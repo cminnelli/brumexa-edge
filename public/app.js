@@ -339,9 +339,34 @@ const PiMicModule = {
     log(`[mic-pi] AudioContext: ${audioCtx.sampleRate} Hz`, 'info');
     console.log(`[PiMic] AudioContext sampleRate: ${audioCtx.sampleRate} Hz`);
 
+    // MediaStreamDestination — forzar MONO (default es stereo y LiveKit duplica canales).
     const destination = audioCtx.createMediaStreamDestination();
-    this._audioCtx = audioCtx;
-    this._device   = device;
+    try {
+      destination.channelCount          = 1;
+      destination.channelCountMode      = 'explicit';
+      destination.channelInterpretation = 'speakers';
+    } catch (err) {
+      console.warn('[PiMic] no se pudo forzar canal mono:', err.message);
+    }
+
+    // Gain EN EL MISMO AudioContext que destination — ganancia digital pre-LiveKit.
+    // Se persiste en localStorage. Ajustable en vivo con window.lkSetMicGain(valor).
+    const gainValue = parseFloat(localStorage.getItem('lk-mic-gain')) || 2.0;
+    const gainNode  = audioCtx.createGain();
+    gainNode.gain.value = gainValue;
+    log(`[mic-pi] GainNode: ${gainValue}x (${(20 * Math.log10(gainValue)).toFixed(1)} dB)  — window.lkSetMicGain(v) para ajustar`, 'info');
+
+    // Analyser EN EL MISMO contexto — lee el audio REAL que sale al stream.
+    // Esto evita el bug de createMediaStreamSource entre AudioContexts distintos
+    // (que leía silencio aunque el track llevaba audio).
+    const inCtxAnalyser = audioCtx.createAnalyser();
+    inCtxAnalyser.fftSize = 512;
+
+    this._audioCtx      = audioCtx;
+    this._destination   = destination;
+    this._gainNode      = gainNode;
+    this._inCtxAnalyser = inCtxAnalyser;
+    this._device        = device;
 
     // AudioWorklet requiere contexto seguro (HTTPS / localhost).
     // audioCtx.audioWorklet existe en HTTP pero addModule() lanza → usar isSecureContext.
@@ -357,9 +382,14 @@ const PiMicModule = {
         numberOfOutputs:    1,
         outputChannelCount: [1],
       });
-      workletNode.connect(destination);
+      // worklet → gain → analyser → destination  (todo en el mismo AudioContext)
+      workletNode.connect(gainNode);
+      gainNode.connect(inCtxAnalyser);
+      inCtxAnalyser.connect(destination);
       this._workletNode = workletNode;
-      injectPcm = (int16buf) => workletNode.port.postMessage(int16buf, [int16buf]);
+      // Transfer list DEBE ser el ArrayBuffer subyacente, no el Int16Array.
+      // Int16Array no es Transferable y Chrome lanza DOMException silenciosa.
+      injectPcm = (int16buf) => workletNode.port.postMessage(int16buf, [int16buf.buffer]);
 
       // Indicador de voz: worklet envía nivel RMS cada ~20 frames
       let _speaking = false;
@@ -385,7 +415,10 @@ const PiMicModule = {
 
       const processor = audioCtx.createScriptProcessor(4096, 1, 1);
       silence.connect(processor);
-      processor.connect(destination);
+      // processor → gain → analyser → destination
+      processor.connect(gainNode);
+      gainNode.connect(inCtxAnalyser);
+      inCtxAnalyser.connect(destination);
       silence.start();
 
       processor.onaudioprocess = (e) => {
@@ -426,9 +459,19 @@ const PiMicModule = {
     this._frameCount  = 0;
     this._lastFrameAt = null;
     let _lastLogAt    = 0;
+    let _rxPeak       = 0;
+    let _rxBytes      = 0;
 
     ws.onmessage = (e) => {
-      injectPcm(new Int16Array(e.data));
+      const int16 = new Int16Array(e.data);
+      // Medir peak ANTES de injectPcm — ese transfer-lista el buffer (queda detached).
+      for (let i = 0; i < int16.length; i++) {
+        const s = int16[i] < 0 ? -int16[i] : int16[i];
+        if (s > _rxPeak) _rxPeak = s;
+      }
+      _rxBytes += int16.byteLength;
+      injectPcm(int16);
+
       this._frameCount++;
       this._lastFrameAt = Date.now();
       if (this._frameCount === 1) {
@@ -436,9 +479,16 @@ const PiMicModule = {
         log('[mic-pi] Capturando audio — primer frame recibido', 'success');
       }
       const now = Date.now();
-      if (now - _lastLogAt > 5000 && this._frameCount > 1) {
+      if (now - _lastLogAt > 2000 && this._frameCount > 1) {
+        const dt     = (now - _lastLogAt) / 1000;
+        const kbps   = (_rxBytes * 8 / dt / 1000).toFixed(1);
+        const pkDb   = _rxPeak > 0 ? (20 * Math.log10(_rxPeak / 32768)).toFixed(1) : '−∞';
+        const pkPct  = (_rxPeak / 327.68).toFixed(0);
+        log(`[mic-pi] PCM rx  peak: ${_rxPeak}/32767 (${pkPct}% · ${pkDb} dBFS)  ${kbps} kbps`, _rxPeak < 100 ? 'warn' : 'info');
+        console.log(`[PiMic] rx  frame#${this._frameCount}  ${e.data.byteLength} B  peak=${_rxPeak} (${pkDb} dBFS)  ${kbps} kbps`);
         _lastLogAt = now;
-        console.log(`[PiMic] streaming — frame #${this._frameCount} (${e.data.byteLength} B)`);
+        _rxPeak    = 0;
+        _rxBytes   = 0;
       }
     };
 
@@ -447,10 +497,35 @@ const PiMicModule = {
       if (state.active) log(`[mic-pi] WebSocket cerrado: ${e.reason || 'sin razón'}`, 'warn');
     };
 
+    // Monitor del audio que REALMENTE sale al stream LiveKit — usando el analyser
+    // que está en el MISMO AudioContext (lectura confiable, sin bug cross-context).
+    const tdBuf = new Uint8Array(inCtxAnalyser.fftSize);
+    this._inCtxMon = setInterval(() => {
+      inCtxAnalyser.getByteTimeDomainData(tdBuf);
+      let peak = 0, sumSq = 0;
+      for (let i = 0; i < tdBuf.length; i++) {
+        const v = tdBuf[i] - 128;
+        const a = v < 0 ? -v : v;
+        if (a > peak) peak = a;
+        sumSq += v * v;
+      }
+      const rms    = Math.sqrt(sumSq / tdBuf.length) / 128;
+      const rmsDb  = rms > 0 ? (20 * Math.log10(rms)).toFixed(1) : '−∞';
+      const pkPct  = (peak / 1.27).toFixed(0);
+      const gain   = this._gainNode?.gain?.value?.toFixed(2) ?? '?';
+      if (peak < 2) {
+        log(`[mic-pi→LK] ⚠ SILENCIO al stream LiveKit (peak ${peak}/127  rms ${rmsDb} dB  gain ${gain}x)`, 'warn');
+      } else {
+        log(`[mic-pi→LK] 🎙 al stream LiveKit: ${pkPct}%  peak ${peak}/127  rms ${rmsDb} dB  gain ${gain}x`, 'info');
+      }
+      console.log(`[PiMic→LK] peak=${peak}/127 rms=${rmsDb}dB gain=${gain}x`);
+    }, 2000);
+
     return destination.stream;
   },
 
   stop() {
+    if (this._inCtxMon) { clearInterval(this._inCtxMon); this._inCtxMon = null; }
     this._ws?.close();
     this._ws = null;
     if (this._processor) {
@@ -458,13 +533,39 @@ const PiMicModule = {
       this._processor.disconnect();
       this._processor = null;
     }
+    try { this._workletNode?.disconnect(); } catch {}
+    try { this._gainNode?.disconnect();     } catch {}
+    try { this._inCtxAnalyser?.disconnect();} catch {}
     this._audioCtx?.close();
-    this._audioCtx    = null;
-    this._workletNode = null;
-    this._device      = null;
-    this._frameCount  = 0;
-    this._lastFrameAt = null;
+    this._audioCtx      = null;
+    this._workletNode   = null;
+    this._gainNode      = null;
+    this._inCtxAnalyser = null;
+    this._destination   = null;
+    this._device        = null;
+    this._frameCount    = 0;
+    this._lastFrameAt   = null;
   },
+};
+
+// Helper global: ajustar gain del mic Pi en vivo desde devtools.
+//   window.lkSetMicGain(4)  → 4x (+12 dB)
+//   window.lkSetMicGain(1)  → 1x (sin ganancia)
+window.lkSetMicGain = function (value) {
+  const v = parseFloat(value);
+  if (!(v > 0) || v > 32) {
+    console.warn('[lkSetMicGain] valor inválido — usar (0, 32]');
+    return;
+  }
+  localStorage.setItem('lk-mic-gain', String(v));
+  if (PiMicModule._gainNode) {
+    PiMicModule._gainNode.gain.value = v;
+    const db = (20 * Math.log10(v)).toFixed(1);
+    log(`[mic-pi] GainNode → ${v}x (${db} dB) — aplicado en vivo`, 'success');
+    console.log(`[lkSetMicGain] gain → ${v}x (${db} dB)`);
+  } else {
+    console.log(`[lkSetMicGain] gain guardado (${v}x) — se aplica al iniciar PiMic`);
+  }
 };
 
 // ============================================================
