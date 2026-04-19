@@ -1111,6 +1111,276 @@ const MicTestModule = {
 };
 
 // ============================================================
+// MÓDULO LOOPBACK TEST — graba mic → reproduce en speaker
+// ============================================================
+const LoopbackModule = {
+  _state:          'idle',   // 'idle' | 'recording' | 'playing'
+  _filename:       null,
+  _stream:         null,
+  _mediaRecorder:  null,
+  _chunks:         [],
+  _audioCtx:       null,
+  _analyser:       null,
+  _animFrame:      null,
+  _audioEl:        null,
+  _localBlobUrl:   null,
+  _startedAt:      0,
+  _timerInterval:  null,
+  _pollInterval:   null,
+
+  show(visible) {
+    document.getElementById('loopback-card').style.display = visible ? '' : 'none';
+    if (visible) this._updateRoute();
+  },
+
+  _updateRoute() {
+    const el = document.getElementById('loopback-route');
+    if (!el) return;
+    const src = getSelectedSource();
+    const dst = getSelectedSpeakerDest();
+    const srcLabel = src === 'pi' ? `🍓 Pi (${getSelectedAlsaDevice()})` : '🌐 Browser';
+    const dstLabel = dst === 'pi' ? `🍓 Pi (${getSelectedAlsaSpeaker()})` : '🌐 Browser';
+    el.innerHTML = `Mic: <strong>${srcLabel}</strong> &nbsp;→&nbsp; Speaker: <strong>${dstLabel}</strong>`;
+  },
+
+  async toggle() {
+    if (this._state === 'idle')      return this.startRecording();
+    if (this._state === 'recording') return this.stopAndPlay();
+    if (this._state === 'playing')   return this.cancelPlayback();
+  },
+
+  async startRecording() {
+    const src = getSelectedSource();
+    this._updateRoute();
+    log(`[loopback] ─────────────────────────────────────────────`, 'info');
+    log(`[loopback] ▶ Iniciando grabación — fuente: ${src}`, 'info');
+    console.log(`[Loopback] startRecording  source=${src}`);
+
+    this._state     = 'recording';
+    this._startedAt = Date.now();
+    this._setUI();
+    setMicStatus('active', src === 'pi' ? 'Pi (rec)' : 'Browser (rec)');
+    this._startTimer();
+
+    try {
+      if (src === 'pi') {
+        const device = getSelectedAlsaDevice();
+        log(`[loopback] POST /record/start  device=${device}`, 'info');
+        const res = await fetch('/record/start', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ device, normTarget: 0.85 }),
+        }).then(r => r.json());
+        if (!res.ok) throw new Error(res.error || 'Error iniciando arecord');
+        this._filename = res.filename;
+        log(`[loopback] ✔ arecord activo — ${res.filename}`, 'success');
+        console.log(`[Loopback] arecord file=${res.filename}`);
+      } else {
+        log('[loopback] getUserMedia… (browser mic)', 'info');
+        this._stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const tracks = this._stream.getAudioTracks();
+        const label  = tracks[0]?.label || '—';
+        log(`[loopback] ✔ Mic browser: "${label}"`, 'success');
+        this._chunks = [];
+        const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                   ? 'audio/webm;codecs=opus' : 'audio/webm';
+        this._mediaRecorder = new MediaRecorder(this._stream, { mimeType: mime });
+        this._mediaRecorder.ondataavailable = e => { if (e.data.size > 0) this._chunks.push(e.data); };
+        this._mediaRecorder.start();
+        log(`[loopback] ✔ MediaRecorder activo (${mime})`, 'success');
+        this._attachAnalyser(this._stream);
+      }
+    } catch (err) {
+      this._stopTimer();
+      log(`[loopback] ✘ Error al grabar: ${err.message}`, 'error');
+      console.error('[Loopback] startRecording error', err);
+      this._finish();
+      throw err;
+    }
+  },
+
+  async stopAndPlay() {
+    const src = getSelectedSource();
+    log(`[loopback] ⏹ Deteniendo grabación…`, 'info');
+    this._stopTimer();
+
+    try {
+      if (src === 'pi') {
+        log('[loopback] POST /record/stop', 'info');
+        const res = await fetch('/record/stop', { method: 'POST' }).then(r => r.json());
+        if (!res.ok) throw new Error(res.error || 'Error deteniendo arecord');
+        log(`[loopback] ✔ arecord stopped — ${res.filename}  duración: ${res.duration}s`, 'success');
+        this._filename = res.filename;
+        // Pequeño delay para que arecord termine de cerrar el header WAV (post-SIGINT)
+        await new Promise(r => setTimeout(r, 600));
+      } else {
+        await new Promise(resolve => {
+          this._mediaRecorder.onstop = resolve;
+          this._mediaRecorder.stop();
+        });
+        this._stream?.getTracks().forEach(t => t.stop());
+        this._stream = null;
+        this._detachAnalyser();
+        const blob = new Blob(this._chunks, { type: 'audio/webm' });
+        log(`[loopback] ✔ Browser rec — ${(blob.size / 1024).toFixed(1)} KB`, 'success');
+        this._localBlobUrl = URL.createObjectURL(blob);
+        this._filename     = null;
+      }
+    } catch (err) {
+      log(`[loopback] ✘ Error al detener: ${err.message}`, 'error');
+      console.error('[Loopback] stopAndPlay error', err);
+      this._finish();
+      throw err;
+    }
+
+    return this._playback();
+  },
+
+  async _playback() {
+    const speakerDest = getSelectedSpeakerDest();
+    const src         = getSelectedSource();
+    this._state       = 'playing';
+    this._setUI();
+    setMicStatus('active', `Reproduciendo (${speakerDest})`);
+
+    try {
+      // CASO 1: speaker Pi + filename WAV en server (solo cuando src === 'pi')
+      if (speakerDest === 'pi' && this._filename) {
+        const device = getSelectedAlsaSpeaker();
+        log(`[loopback] ▶ POST /recordings/play  filename=${this._filename}  device=${device}`, 'info');
+        const res = await fetch('/recordings/play', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ filename: this._filename, device }),
+        }).then(r => r.json());
+        if (!res.ok) throw new Error('Error iniciando aplay');
+        log(`[loopback] ✔ aplay lanzado — esperando que termine…`, 'success');
+
+        this._pollInterval = setInterval(async () => {
+          try {
+            const s = await fetch('/recordings/play-status').then(r => r.json());
+            if (!s.playing) {
+              clearInterval(this._pollInterval); this._pollInterval = null;
+              if (s.result?.exitCode === 0) {
+                log(`[loopback] ✔ aplay finalizado correctamente — ${s.result.filename}`, 'success');
+              } else {
+                log(`[loopback] ✘ aplay exitCode=${s.result?.exitCode}  stderr: ${s.result?.stderr || '—'}`, 'error');
+              }
+              this._finish();
+            }
+          } catch {/* server reiniciando, seguir */}
+        }, 400);
+        return;
+      }
+
+      // CASO 2: speaker browser, o mic browser (no podemos pasar webm a aplay)
+      if (speakerDest === 'pi' && src === 'browser') {
+        log('[loopback] ⚠ Mic Browser → Speaker Pi no soportado (codec webm). Reproduciendo en browser.', 'warn');
+      }
+
+      const url = this._localBlobUrl || `/recordings/${this._filename}`;
+      log(`[loopback] ▶ Browser playback — ${url}`, 'info');
+      this._audioEl = new Audio(url);
+      this._audioEl.onended = () => { log('[loopback] ✔ Browser playback finalizado', 'success'); this._finish(); };
+      this._audioEl.onerror = () => { log('[loopback] ✘ Error en browser playback', 'error'); this._finish(); };
+      try {
+        await this._audioEl.play();
+      } catch (err) {
+        log(`[loopback] ✘ Autoplay bloqueado: ${err.message}`, 'error');
+        this._finish();
+      }
+    } catch (err) {
+      log(`[loopback] ✘ Error en playback: ${err.message}`, 'error');
+      console.error('[Loopback] playback error', err);
+      this._finish();
+    }
+  },
+
+  cancelPlayback() {
+    log('[loopback] ⏹ Cancelando playback', 'warn');
+    if (this._pollInterval) { clearInterval(this._pollInterval); this._pollInterval = null; }
+    if (this._audioEl)      { try { this._audioEl.pause(); } catch {} this._audioEl = null; }
+    fetch('/recordings/stop-play', { method: 'POST' }).catch(() => {});
+    this._finish();
+  },
+
+  _finish() {
+    if (this._localBlobUrl) { URL.revokeObjectURL(this._localBlobUrl); this._localBlobUrl = null; }
+    if (this._stream)       { this._stream.getTracks().forEach(t => t.stop()); this._stream = null; }
+    this._detachAnalyser();
+    this._stopTimer();
+    this._state    = 'idle';
+    this._audioEl  = null;
+    this._setUI();
+    setMicStatus('idle');
+  },
+
+  _startTimer() {
+    const el = document.getElementById('loopback-timer');
+    if (el) el.textContent = '0s';
+    this._timerInterval = setInterval(() => {
+      const el2 = document.getElementById('loopback-timer');
+      if (!el2) return;
+      const s = Math.floor((Date.now() - this._startedAt) / 1000);
+      el2.textContent = `${s}s`;
+    }, 200);
+  },
+
+  _stopTimer() {
+    if (this._timerInterval) { clearInterval(this._timerInterval); this._timerInterval = null; }
+  },
+
+  _attachAnalyser(stream) {
+    this._audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const src = this._audioCtx.createMediaStreamSource(stream);
+    this._analyser = this._audioCtx.createAnalyser();
+    this._analyser.fftSize = 128;
+    src.connect(this._analyser);
+    const data = new Uint8Array(this._analyser.frequencyBinCount);
+    const tick = () => {
+      if (!this._analyser) return;
+      this._analyser.getByteFrequencyData(data);
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) sum += data[i];
+      const pct = Math.min(((sum / data.length) / 255) * 1.8, 1) * 100;
+      const bar = document.getElementById('loopback-level');
+      if (bar) bar.style.width = pct + '%';
+      this._animFrame = requestAnimationFrame(tick);
+    };
+    tick();
+  },
+
+  _detachAnalyser() {
+    if (this._animFrame) { cancelAnimationFrame(this._animFrame); this._animFrame = null; }
+    this._analyser = null;
+    if (this._audioCtx) { try { this._audioCtx.close(); } catch {} this._audioCtx = null; }
+    const bar = document.getElementById('loopback-level');
+    if (bar) bar.style.width = '0%';
+  },
+
+  _setUI() {
+    const btn    = document.getElementById('btn-loopback');
+    const status = document.getElementById('loopback-status');
+    if (!btn || !status) return;
+    btn.classList.remove('recording', 'playing');
+    btn.disabled = false;
+
+    if (this._state === 'idle') {
+      btn.textContent  = '🎙 Grabar';
+      status.innerHTML = 'Listo para grabar — hablá un par de segundos y se reproducirá por el speaker.';
+    } else if (this._state === 'recording') {
+      btn.textContent  = '⏹ Detener y Reproducir';
+      btn.classList.add('recording');
+      status.innerHTML = `🔴 Grabando — <span id="loopback-timer">0s</span>`;
+    } else if (this._state === 'playing') {
+      btn.textContent  = '⏹ Cancelar';
+      btn.classList.add('playing');
+      status.innerHTML = '🔊 Reproduciendo en el speaker…';
+    }
+  },
+};
+
+// ============================================================
 // BOTÓN PRINCIPAL
 // ============================================================
 function updateMicButton(active) {
@@ -1151,18 +1421,34 @@ ui.btnMic.addEventListener('click', async () => {
 // ============================================================
 // SELECTOR DE MODO
 // ============================================================
-const modeLabels = { livekit: 'LiveKit', mictest: 'Test Mic' };
+const modeLabels = { livekit: 'LiveKit', mictest: 'Test Mic', loopback: 'Loopback' };
+
+function applyMode(mode) {
+  state.mode = mode;
+  ui.lkStepsCard.style.display = mode === 'livekit'  ? '' : 'none';
+  // Loopback tiene su propio botón → ocultamos el botón principal "Conectar"
+  document.getElementById('main-connect-row')?.style.setProperty('display', mode === 'loopback' ? 'none' : '');
+  LoopbackModule.show(mode === 'loopback');
+  ui.badgeMode.textContent = modeLabels[mode] || mode;
+}
 
 ui.modeBtns.forEach((btn) => {
   btn.addEventListener('click', () => {
-    if (state.active) return;
+    if (state.active || LoopbackModule._state !== 'idle') return;
     ui.modeBtns.forEach((b) => b.classList.remove('active'));
     btn.classList.add('active');
-    state.mode = btn.dataset.mode;
-    ui.lkStepsCard.style.display = state.mode === 'livekit' ? '' : 'none';
-    ui.badgeMode.textContent     = modeLabels[state.mode] || state.mode;
+    applyMode(btn.dataset.mode);
     log(`Modo: ${modeLabels[state.mode]}`, 'info');
   });
+});
+
+// Botón "Grabar" del modo loopback
+document.getElementById('btn-loopback')?.addEventListener('click', async () => {
+  const btn = document.getElementById('btn-loopback');
+  btn.disabled = true;
+  try { await LoopbackModule.toggle(); }
+  catch (err) { console.error('[Loopback] toggle error', err); }
+  finally { btn.disabled = false; }
 });
 
 // ============================================================
@@ -2134,6 +2420,13 @@ const DebugModule = {
   if (isRaspberry) {
     ui.audioSourceWrap.style.display = '';
 
+    // En Raspberry el default es Pi para mic y speaker
+    const piSrcRadio = document.querySelector('input[name="audio-source"][value="pi"]');
+    const piDstRadio = document.querySelector('input[name="speaker-dest"][value="pi"]');
+    if (piSrcRadio) piSrcRadio.checked = true;
+    if (piDstRadio) piDstRadio.checked = true;
+    log('Raspberry detectada — mic y speaker por defecto: Pi (ALSA)', 'info');
+
     // Cargar dispositivos ALSA en el dropdown
     try {
       const { devices } = await fetch('/audio-devices').then((r) => r.json());
@@ -2205,10 +2498,16 @@ const DebugModule = {
 
     ui.audioSourceRadios.forEach((radio) => {
       radio.addEventListener('change', updateSourceState);
+      radio.addEventListener('change', () => LoopbackModule._updateRoute());
+    });
+    document.querySelectorAll('input[name="speaker-dest"]').forEach(r => {
+      r.addEventListener('change', () => LoopbackModule._updateRoute());
     });
 
     // También actualizar si cambia el dispositivo ALSA seleccionado
     ui.alsaDeviceSelect.addEventListener('change', updateDeviceCard);
+    ui.alsaDeviceSelect.addEventListener('change', () => LoopbackModule._updateRoute());
+    document.getElementById('alsa-speaker-select')?.addEventListener('change', () => LoopbackModule._updateRoute());
 
     updateSourceState(); // estado inicial
 
