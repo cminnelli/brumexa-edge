@@ -351,7 +351,9 @@ const PiMicModule = {
 
     // Gain EN EL MISMO AudioContext que destination — ganancia digital pre-LiveKit.
     // Se persiste en localStorage. Ajustable en vivo con window.lkSetMicGain(valor).
-    const gainValue = parseFloat(localStorage.getItem('lk-mic-gain')) || 2.0;
+    // Default 4.0x (+12 dB) — el Google Voice HAT captura muy bajo, Opus DTX
+    // descartaba como silencio. Combinado con MIC_GAIN=4 del server → ~24 dB total.
+    const gainValue = parseFloat(localStorage.getItem('lk-mic-gain')) || 4.0;
     const gainNode  = audioCtx.createGain();
     gainNode.gain.value = gainValue;
     log(`[mic-pi] GainNode: ${gainValue}x (${(20 * Math.log10(gainValue)).toFixed(1)} dB)  — window.lkSetMicGain(v) para ajustar`, 'info');
@@ -391,15 +393,18 @@ const PiMicModule = {
       // Int16Array no es Transferable y Chrome lanza DOMException silenciosa.
       injectPcm = (int16buf) => workletNode.port.postMessage(int16buf, [int16buf.buffer]);
 
-      // Indicador de voz: worklet envía nivel RMS cada ~20 frames
-      let _speaking = false;
+      // Indicador de voz con histéresis: ON >0.03, OFF <0.015, holdoff 400ms
+      let _speaking = false, _lastChange = 0;
       workletNode.port.onmessage = (e) => {
         if (e.data?.type !== 'level') return;
-        const active = e.data.rms > 0.01;
-        if (active !== _speaking) {
-          _speaking = active;
-          log(`[mic-pi] ${active ? '🎙 hablando' : '— silencio'}`, active ? 'info' : 'info');
-          console.log(`[PiMic] voz: ${active ? 'ON' : 'off'}  rms=${e.data.rms.toFixed(4)}`);
+        const now = performance.now();
+        if (now - _lastChange < 400) return;
+        const newActive = _speaking ? (e.data.rms > 0.015) : (e.data.rms > 0.03);
+        if (newActive !== _speaking) {
+          _speaking   = newActive;
+          _lastChange = now;
+          log(`[mic-pi] ${newActive ? '🎙 hablando' : '— silencio'}`, 'info');
+          console.log(`[PiMic] voz: ${newActive ? 'ON' : 'off'}  rms=${e.data.rms.toFixed(4)}`);
         }
       };
     } else {
@@ -1043,6 +1048,17 @@ const LiveKitModule = {
       log(`[lk-event] LocalTrackUnpublished — kind: ${pub.kind}`, 'warn');
     });
 
+    // Track del remoto publicado — visibilidad aunque todavía no se suscriba
+    room.on(LivekitClient.RoomEvent.TrackPublished, (pub, participant) => {
+      log(`[lk-event] TrackPublished (${participant.identity}) — kind: ${pub.kind}  sid: ${pub.trackSid}  source: ${pub.source}  mime: ${pub.mimeType || '—'}`, 'info');
+      console.log(`[LiveKit:event] TrackPublished ${participant.identity}`, pub);
+    });
+
+    // Estado de suscripción — si falla, aquí lo vemos
+    room.on(LivekitClient.RoomEvent.TrackSubscriptionFailed, (trackSid, participant, reason) => {
+      log(`[lk-event] ✘ TrackSubscriptionFailed  participant: ${participant.identity}  sid: ${trackSid}  reason: ${reason || '—'}`, 'error');
+    });
+
     // Audio activo del participante local — confirma que LiveKit detecta voz
     room.on(LivekitClient.RoomEvent.ActiveSpeakersChanged, (speakers) => {
       const localActive  = speakers.some(s => s.isLocal);
@@ -1062,11 +1078,14 @@ const LiveKitModule = {
     });
 
     room.on(LivekitClient.RoomEvent.TrackSubscribed, async (track, _pub, participant) => {
+      const msState = track.mediaStreamTrack?.readyState ?? 'sin track';
+      log(`[lk-event] TrackSubscribed — ${participant.identity}  kind: ${track.kind}  state: ${msState}`, 'success');
+      console.log(`[LiveKit:event] TrackSubscribed`, { participant: participant.identity, kind: track.kind, state: msState, track });
       if (track.kind !== LivekitClient.Track.Kind.Audio) return;
       const speakerDest = getSelectedSpeakerDest();
-      const msState     = track.mediaStreamTrack?.readyState ?? 'sin track';
-      log(`🔈 Audio de "${participant.identity}" — destino: ${speakerDest}  track: ${msState}`, 'info');
-      console.log(`[LiveKit] TrackSubscribed — participant: ${participant.identity}  speakerDest: ${speakerDest}  trackState: ${msState}`);
+      const alsaDev     = getSelectedAlsaSpeaker();
+      log(`🔈 Audio de "${participant.identity}" — destino UI: ${speakerDest}  ALSA: ${alsaDev}`, 'info');
+      console.log(`[LiveKit] → routear audio  dest: ${speakerDest}  alsa: ${alsaDev}`);
 
       if (speakerDest === 'pi') {
         const device = getSelectedAlsaSpeaker();
