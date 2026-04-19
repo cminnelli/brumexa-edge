@@ -1260,17 +1260,43 @@ const LoopbackModule = {
     this._audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     const src = this._audioCtx.createMediaStreamSource(stream);
     this._analyser = this._audioCtx.createAnalyser();
-    this._analyser.fftSize = 128;
+    this._analyser.fftSize = 256;
     src.connect(this._analyser);
-    const data = new Uint8Array(this._analyser.frequencyBinCount);
+    const timeData = new Uint8Array(this._analyser.fftSize);
+    const freqData = new Uint8Array(this._analyser.frequencyBinCount);
+    let _lastLogAt = 0;
+    let _peakSince = 0;
     const tick = () => {
       if (!this._analyser) return;
-      this._analyser.getByteFrequencyData(data);
+      this._analyser.getByteFrequencyData(freqData);
+      this._analyser.getByteTimeDomainData(timeData);
+      // Peak del waveform para saber si el stream tiene audio real
+      let peak = 0;
+      for (let i = 0; i < timeData.length; i++) {
+        const v = Math.abs(timeData[i] - 128);
+        if (v > peak) peak = v;
+      }
+      if (peak > _peakSince) _peakSince = peak;
       let sum = 0;
-      for (let i = 0; i < data.length; i++) sum += data[i];
-      const pct = Math.min(((sum / data.length) / 255) * 1.8, 1) * 100;
+      for (let i = 0; i < freqData.length; i++) sum += freqData[i];
+      const pct = Math.min(((sum / freqData.length) / 255) * 1.8, 1) * 100;
       const bar = document.getElementById('loopback-level');
       if (bar) bar.style.width = pct + '%';
+
+      // Log cada 2 s: muestra si el MediaStream realmente tiene audio
+      const now = Date.now();
+      if (now - _lastLogAt > 2000) {
+        _lastLogAt = now;
+        const pctNorm = (_peakSince / 127 * 100).toFixed(0);
+        console.log(`[Loopback] analyser peak: ${_peakSince}/127 (${pctNorm}%)  freq avg: ${pct.toFixed(0)}%`);
+        if (_peakSince < 2) {
+          log(`[loopback] ⚠ MediaStream en silencio (peak ${_peakSince}) — el mic no está entrando al stream`, 'warn');
+        } else {
+          log(`[loopback] 🎤 MediaStream nivel: ${pctNorm}%`, 'info');
+        }
+        _peakSince = 0;
+      }
+
       this._animFrame = requestAnimationFrame(tick);
     };
     tick();

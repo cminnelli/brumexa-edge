@@ -294,30 +294,61 @@ app.post('/recordings/play', express.json(), async (req, res) => {
   const filePath = path.join(RECORDINGS_DIR, safeName);
 
   await killAplay(); // espera que el anterior muera
+  // Matar cualquier aplay zombi (incluye los de /ws/speaker)
+  try { require('child_process').execSync('pkill -9 aplay 2>/dev/null || true', { timeout: 1000 }); } catch {}
+
+  // Verificar que el archivo existe y su tamaño
+  try {
+    const stat = require('fs').statSync(filePath);
+    console.log(`[play] archivo: ${safeName}  size: ${stat.size} B`);
+  } catch (err) {
+    console.error(`[play] ✘ archivo no encontrado: ${filePath}`);
+    return res.status(404).json({ ok: false, error: 'archivo no encontrado' });
+  }
 
   _playResult = null;
-  const proc  = spawn('aplay', ['-D', device, filePath]);
+  const proc  = spawn('aplay', ['-D', device, '-v', filePath]);
   _playProc   = proc;
-  console.log(`[play] aplay -D ${device} ${safeName}`);
+  console.log(`[play] ▶ aplay PID ${proc.pid} -D ${device} ${safeName}`);
 
   let stderrBuf = '';
   proc.stderr.on('data', d => {
     const msg = d.toString().trim();
-    if (msg) { console.error('[aplay]', msg); stderrBuf += msg + '\n'; }
+    if (msg) { console.log('[aplay]', msg); stderrBuf += msg + '\n'; }
   });
   proc.on('error', err => {
-    console.error('[play] aplay error:', err.message);
+    console.error(`[play] ✘ aplay PID ${proc.pid} error:`, err.message);
     if (_playProc === proc) { _playProc = null; _playResult = { exitCode: -1, stderr: err.message, filename: safeName }; }
   });
   proc.on('close', code => {
-    console.log(`[play] aplay exited code ${code}`);
+    console.log(`[play] aplay PID ${proc.pid} exited code ${code}`);
     if (_playProc === proc) {
       _playProc   = null;
       _playResult = { exitCode: code, stderr: stderrBuf.trim(), filename: safeName };
     }
   });
 
-  res.json({ ok: true, filename: safeName, device });
+  res.json({ ok: true, filename: safeName, device, pid: proc.pid });
+});
+
+// GET /diag/audio — diagnóstico del estado de audio en la Pi
+app.get('/diag/audio', (_req, res) => {
+  const { execSync } = require('child_process');
+  const run = (cmd) => {
+    try { return execSync(cmd + ' 2>&1', { timeout: 3000, encoding: 'utf8' }).trim(); }
+    catch (e) { return `ERR(${e.status ?? '?'}): ${(e.stdout || e.stderr || e.message || '').toString().trim()}`; }
+  };
+  res.json({
+    platform:       process.platform,
+    aplay_l:        run('aplay -l'),
+    arecord_l:      run('arecord -l'),
+    pgrep_aplay:    run('pgrep -a aplay'),
+    pgrep_arecord:  run('pgrep -a arecord'),
+    amixer_PCM:     run('amixer sget PCM'),
+    amixer_Master:  run('amixer sget Master'),
+    amixer_controls:run('amixer scontrols'),
+    asound_state:   run('cat /proc/asound/cards'),
+  });
 });
 
 // POST /recordings/stop-play — mata aplay y espera que muera antes de responder
