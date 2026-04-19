@@ -1111,22 +1111,23 @@ const MicTestModule = {
 };
 
 // ============================================================
-// MÓDULO LOOPBACK TEST — graba mic → reproduce en speaker
+// MÓDULO LOOPBACK TEST — LIVE: mic → speaker en tiempo real
+//
+// Valida la MISMA ruta que LiveKit:
+//   Pi mic    → /ws/audio    → AudioWorklet → MediaStream
+//   MediaStream → AudioWorklet → /ws/speaker → aplay
+// Si esto funciona, LiveKit tiene la plumbing OK; lo único distinto es
+// que LiveKit en vez de loopear localmente, manda el track al cloud.
 // ============================================================
 const LoopbackModule = {
-  _state:          'idle',   // 'idle' | 'recording' | 'playing'
-  _filename:       null,
+  _state:          'idle',   // 'idle' | 'running'
   _stream:         null,
-  _mediaRecorder:  null,
-  _chunks:         [],
   _audioCtx:       null,
   _analyser:       null,
   _animFrame:      null,
   _audioEl:        null,
-  _localBlobUrl:   null,
   _startedAt:      0,
   _timerInterval:  null,
-  _pollInterval:   null,
 
   show(visible) {
     document.getElementById('loopback-card').style.display = visible ? '' : 'none';
@@ -1144,175 +1145,100 @@ const LoopbackModule = {
   },
 
   async toggle() {
-    if (this._state === 'idle')      return this.startRecording();
-    if (this._state === 'recording') return this.stopAndPlay();
-    if (this._state === 'playing')   return this.cancelPlayback();
+    if (this._state === 'idle')    return this.start();
+    if (this._state === 'running') return this.stop();
   },
 
-  async startRecording() {
+  async start() {
     const src = getSelectedSource();
+    const dst = getSelectedSpeakerDest();
     this._updateRoute();
     log(`[loopback] ─────────────────────────────────────────────`, 'info');
-    log(`[loopback] ▶ Iniciando grabación — fuente: ${src}`, 'info');
-    console.log(`[Loopback] startRecording  source=${src}`);
+    log(`[loopback] ▶ Iniciando LIVE loopback — ${src} mic → ${dst} speaker`, 'info');
+    console.log(`[Loopback] start  src=${src}  dst=${dst}`);
 
-    this._state     = 'recording';
+    this._state     = 'running';
     this._startedAt = Date.now();
     this._setUI();
-    setMicStatus('active', src === 'pi' ? 'Pi (rec)' : 'Browser (rec)');
+    setMicStatus('active', `${src}→${dst}`);
     this._startTimer();
 
     try {
+      // ── 1. MIC: obtener MediaStream ────────────────────────────────────────
+      let stream;
       if (src === 'pi') {
         const device = getSelectedAlsaDevice();
-        log(`[loopback] POST /record/start  device=${device}`, 'info');
-        const res = await fetch('/record/start', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ device, normTarget: 0.85 }),
-        }).then(r => r.json());
-        if (!res.ok) throw new Error(res.error || 'Error iniciando arecord');
-        this._filename = res.filename;
-        log(`[loopback] ✔ arecord activo — ${res.filename}`, 'success');
-        console.log(`[Loopback] arecord file=${res.filename}`);
+        log(`[loopback] [1/2] MIC Pi — abriendo PiMicModule (ALSA ${device})…`, 'info');
+        stream = await PiMicModule.start(device);
+        const tracks = stream.getAudioTracks();
+        log(`[loopback] ✔ PiMic stream activo — tracks: ${tracks.length}  state: ${tracks[0]?.readyState}`, 'success');
+        console.log(`[Loopback] PiMic stream  id=${tracks[0]?.id}`);
       } else {
-        log('[loopback] getUserMedia… (browser mic)', 'info');
-        this._stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const tracks = this._stream.getAudioTracks();
-        const label  = tracks[0]?.label || '—';
-        log(`[loopback] ✔ Mic browser: "${label}"`, 'success');
-        this._chunks = [];
-        const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-                   ? 'audio/webm;codecs=opus' : 'audio/webm';
-        this._mediaRecorder = new MediaRecorder(this._stream, { mimeType: mime });
-        this._mediaRecorder.ondataavailable = e => { if (e.data.size > 0) this._chunks.push(e.data); };
-        this._mediaRecorder.start();
-        log(`[loopback] ✔ MediaRecorder activo (${mime})`, 'success');
-        this._attachAnalyser(this._stream);
+        log('[loopback] [1/2] MIC Browser — getUserMedia…', 'info');
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const label = stream.getAudioTracks()[0]?.label || '—';
+        log(`[loopback] ✔ Browser mic activo — "${label}"`, 'success');
       }
-    } catch (err) {
-      this._stopTimer();
-      log(`[loopback] ✘ Error al grabar: ${err.message}`, 'error');
-      console.error('[Loopback] startRecording error', err);
-      this._finish();
-      throw err;
-    }
-  },
+      this._stream = stream;
+      this._attachAnalyser(stream);
 
-  async stopAndPlay() {
-    const src = getSelectedSource();
-    log(`[loopback] ⏹ Deteniendo grabación…`, 'info');
-    this._stopTimer();
-
-    try {
-      if (src === 'pi') {
-        log('[loopback] POST /record/stop', 'info');
-        const res = await fetch('/record/stop', { method: 'POST' }).then(r => r.json());
-        if (!res.ok) throw new Error(res.error || 'Error deteniendo arecord');
-        log(`[loopback] ✔ arecord stopped — ${res.filename}  duración: ${res.duration}s`, 'success');
-        this._filename = res.filename;
-        // Pequeño delay para que arecord termine de cerrar el header WAV (post-SIGINT)
-        await new Promise(r => setTimeout(r, 600));
-      } else {
-        await new Promise(resolve => {
-          this._mediaRecorder.onstop = resolve;
-          this._mediaRecorder.stop();
-        });
-        this._stream?.getTracks().forEach(t => t.stop());
-        this._stream = null;
-        this._detachAnalyser();
-        const blob = new Blob(this._chunks, { type: 'audio/webm' });
-        log(`[loopback] ✔ Browser rec — ${(blob.size / 1024).toFixed(1)} KB`, 'success');
-        this._localBlobUrl = URL.createObjectURL(blob);
-        this._filename     = null;
-      }
-    } catch (err) {
-      log(`[loopback] ✘ Error al detener: ${err.message}`, 'error');
-      console.error('[Loopback] stopAndPlay error', err);
-      this._finish();
-      throw err;
-    }
-
-    return this._playback();
-  },
-
-  async _playback() {
-    const speakerDest = getSelectedSpeakerDest();
-    const src         = getSelectedSource();
-    this._state       = 'playing';
-    this._setUI();
-    setMicStatus('active', `Reproduciendo (${speakerDest})`);
-
-    try {
-      // CASO 1: speaker Pi + filename WAV en server (solo cuando src === 'pi')
-      if (speakerDest === 'pi' && this._filename) {
+      // ── 2. SPEAKER: rutear el stream al destino ──────────────────────────
+      if (dst === 'pi') {
         const device = getSelectedAlsaSpeaker();
-        log(`[loopback] ▶ POST /recordings/play  filename=${this._filename}  device=${device}`, 'info');
-        const res = await fetch('/recordings/play', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ filename: this._filename, device }),
-        }).then(r => r.json());
-        if (!res.ok) throw new Error('Error iniciando aplay');
-        log(`[loopback] ✔ aplay lanzado — esperando que termine…`, 'success');
-
-        this._pollInterval = setInterval(async () => {
-          try {
-            const s = await fetch('/recordings/play-status').then(r => r.json());
-            if (!s.playing) {
-              clearInterval(this._pollInterval); this._pollInterval = null;
-              if (s.result?.exitCode === 0) {
-                log(`[loopback] ✔ aplay finalizado correctamente — ${s.result.filename}`, 'success');
-              } else {
-                log(`[loopback] ✘ aplay exitCode=${s.result?.exitCode}  stderr: ${s.result?.stderr || '—'}`, 'error');
-              }
-              this._finish();
-            }
-          } catch {/* server reiniciando, seguir */}
-        }, 400);
-        return;
-      }
-
-      // CASO 2: speaker browser, o mic browser (no podemos pasar webm a aplay)
-      if (speakerDest === 'pi' && src === 'browser') {
-        log('[loopback] ⚠ Mic Browser → Speaker Pi no soportado (codec webm). Reproduciendo en browser.', 'warn');
-      }
-
-      const url = this._localBlobUrl || `/recordings/${this._filename}`;
-      log(`[loopback] ▶ Browser playback — ${url}`, 'info');
-      this._audioEl = new Audio(url);
-      this._audioEl.onended = () => { log('[loopback] ✔ Browser playback finalizado', 'success'); this._finish(); };
-      this._audioEl.onerror = () => { log('[loopback] ✘ Error en browser playback', 'error'); this._finish(); };
-      try {
-        await this._audioEl.play();
-      } catch (err) {
-        log(`[loopback] ✘ Autoplay bloqueado: ${err.message}`, 'error');
-        this._finish();
+        log(`[loopback] [2/2] SPEAKER Pi — abriendo PiSpeakerModule (ALSA ${device})…`, 'info');
+        // PiSpeakerModule espera un "track" tipo LiveKit — wrap minimalista
+        const [audioTrack] = stream.getAudioTracks();
+        const fakeTrack    = { mediaStreamTrack: audioTrack, kind: 'audio' };
+        await PiSpeakerModule.start(fakeTrack, device);
+        log(`[loopback] ✔ PiSpeaker activo — aplay corriendo en ${device}`, 'success');
+        log(`[loopback] 🔊 Hablá por el mic — deberías escucharte en el speaker de la Pi`, 'info');
+      } else {
+        log('[loopback] [2/2] SPEAKER Browser — attach via <audio>', 'info');
+        const el = new Audio();
+        el.srcObject  = stream;
+        el.autoplay   = true;
+        el.style.display = 'none';
+        document.body.appendChild(el);
+        this._audioEl = el;
+        try { await el.play(); }
+        catch (err) { log(`[loopback] ⚠ Autoplay bloqueado: ${err.message}`, 'warn'); }
+        log(`[loopback] ✔ Browser speaker activo`, 'success');
+        log(`[loopback] 🔊 Hablá — deberías escucharte en el navegador`, 'info');
       }
     } catch (err) {
-      log(`[loopback] ✘ Error en playback: ${err.message}`, 'error');
-      console.error('[Loopback] playback error', err);
-      this._finish();
+      log(`[loopback] ✘ Error al iniciar: ${err.message}`, 'error');
+      console.error('[Loopback] start error', err);
+      await this._cleanup();
+      this._state = 'idle';
+      this._setUI();
+      setMicStatus('error', err.message);
+      throw err;
     }
   },
 
-  cancelPlayback() {
-    log('[loopback] ⏹ Cancelando playback', 'warn');
-    if (this._pollInterval) { clearInterval(this._pollInterval); this._pollInterval = null; }
-    if (this._audioEl)      { try { this._audioEl.pause(); } catch {} this._audioEl = null; }
-    fetch('/recordings/stop-play', { method: 'POST' }).catch(() => {});
-    this._finish();
-  },
-
-  _finish() {
-    if (this._localBlobUrl) { URL.revokeObjectURL(this._localBlobUrl); this._localBlobUrl = null; }
-    if (this._stream)       { this._stream.getTracks().forEach(t => t.stop()); this._stream = null; }
-    this._detachAnalyser();
-    this._stopTimer();
-    this._state    = 'idle';
-    this._audioEl  = null;
+  async stop() {
+    log('[loopback] ⏹ Deteniendo loopback…', 'info');
+    await this._cleanup();
+    this._state = 'idle';
     this._setUI();
     setMicStatus('idle');
+    log('[loopback] ✔ Loopback detenido', 'success');
+  },
+
+  async _cleanup() {
+    this._stopTimer();
+    // Orden: primero corta el speaker (aplay), después el mic (arecord)
+    try { PiSpeakerModule.stop(); } catch (e) { console.warn('[Loopback] PiSpeaker.stop', e); }
+    if (this._audioEl) {
+      try { this._audioEl.pause(); this._audioEl.srcObject = null; this._audioEl.remove(); } catch {}
+      this._audioEl = null;
+    }
+    try { PiMicModule.stop(); } catch (e) { console.warn('[Loopback] PiMic.stop', e); }
+    if (this._stream) {
+      this._stream.getTracks().forEach(t => { try { t.stop(); } catch {} });
+      this._stream = null;
+    }
+    this._detachAnalyser();
   },
 
   _startTimer() {
@@ -1366,16 +1292,12 @@ const LoopbackModule = {
     btn.disabled = false;
 
     if (this._state === 'idle') {
-      btn.textContent  = '🎙 Grabar';
-      status.innerHTML = 'Listo para grabar — hablá un par de segundos y se reproducirá por el speaker.';
-    } else if (this._state === 'recording') {
-      btn.textContent  = '⏹ Detener y Reproducir';
+      btn.textContent  = '🎙 Iniciar loopback';
+      status.innerHTML = 'Hablá por el mic y deberías escucharte al instante por el speaker. Click para iniciar.';
+    } else if (this._state === 'running') {
+      btn.textContent  = '⏹ Detener';
       btn.classList.add('recording');
-      status.innerHTML = `🔴 Grabando — <span id="loopback-timer">0s</span>`;
-    } else if (this._state === 'playing') {
-      btn.textContent  = '⏹ Cancelar';
-      btn.classList.add('playing');
-      status.innerHTML = '🔊 Reproduciendo en el speaker…';
+      status.innerHTML = `🔴 Loopback activo — <span id="loopback-timer">0s</span> · Hablá y verificá que se escuche`;
     }
   },
 };
