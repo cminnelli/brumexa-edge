@@ -1102,7 +1102,8 @@ const LiveKitModule = {
           audioEl.play().catch(() => {});
         }
       } else {
-        // Browser speaker — attach() crea el <audio> y LiveKit maneja el stream
+        // Browser speaker — attach() crea el <audio> y LiveKit maneja el stream.
+        // ⚠ si el usuario esperaba oír por el parlante de la Pi, esto lo confunde.
         const audioEl = track.attach();
         audioEl.autoplay = true;
         audioEl.style.display = 'none';
@@ -1111,7 +1112,7 @@ const LiveKitModule = {
           console.warn('[LiveKit] autoplay bloqueado:', err.message);
           log('Autoplay bloqueado — hacé clic en la página para habilitar audio', 'warn');
         });
-        log(`[speaker-browser] ✔ Audio enrutado al browser`, 'success');
+        log(`[speaker-browser] ✔ Audio del agente → browser (NO por parlante Pi). Cambiá "Salida" a Raspberry Pi para routear al parlante.`, 'warn');
       }
     });
 
@@ -2463,9 +2464,11 @@ const DebugModule = {
       speakerDestWrap.style.display = '';
 
       // Cargar dispositivos ALSA de reproducción
+      let hasAlsaPlayback = false;
       try {
         const { devices: pbDevices } = await fetch('/audio-playback-devices').then(r => r.json());
         if (pbDevices.length > 0) {
+          hasAlsaPlayback = true;
           alsaSpeakerSel.innerHTML = pbDevices
             .map(d => `<option value="${d.id}">${d.name} (${d.id})</option>`)
             .join('');
@@ -2475,6 +2478,16 @@ const DebugModule = {
         }
       } catch {
         alsaSpeakerSel.innerHTML = '<option value="plughw:0,0">plughw:0,0 (default)</option>';
+      }
+
+      // Default a "pi" cuando la Pi tiene playback — evita que el agente hable
+      // por el browser cuando se esperaba que hable por el parlante del HAT.
+      if (hasAlsaPlayback) {
+        const piRadio = document.querySelector('input[name="speaker-dest"][value="pi"]');
+        if (piRadio) {
+          piRadio.checked = true;
+          log('[speaker] Default → Raspberry Pi (ALSA playback detectado)', 'info');
+        }
       }
 
       // Mostrar/ocultar dropdown ALSA playback
