@@ -95,7 +95,6 @@
           <div class="mode-selector">
             <button class="mode-btn active" data-mode="livekit">🤖 LiveKit — Agente IA</button>
             <button class="mode-btn"        data-mode="mictest">🎙 Test de micrófono</button>
-            <button class="mode-btn"        data-mode="loopback">🔁 Test Mic+Speaker</button>
           </div>
           <p class="field-hint" id="mode-hint">Conecta el micrófono al agente de IA vía LiveKit para hablar en lenguaje natural.</p>
         </div>
@@ -210,35 +209,12 @@
         </div>
 
         <!-- Botón principal -->
-        <div class="connect-row" id="main-connect-row">
+        <div class="connect-row">
           <button id="btn-mic" class="btn-connect">Conectar</button>
           <button id="btn-reconectar" class="btn-reconnect" style="display:none">↺ Reconectar</button>
         </div>
 
       </div><!-- /card conexión -->
-
-      <!-- § Loopback Test (modo Test Mic+Speaker) -->
-      <div class="card" id="loopback-card" style="display:none">
-        <div class="card-section-hdr">
-          <span class="card-section-icon">🔁</span>
-          <div>
-            <div class="card-section-title">Test Mic + Speaker</div>
-            <div class="card-section-desc">Grabá tu voz y se reproducirá automáticamente por el speaker</div>
-          </div>
-        </div>
-
-        <div class="loop-status" id="loopback-status">Listo para grabar — hablá un par de segundos.</div>
-
-        <div class="loop-level-wrap">
-          <div id="loopback-level" class="loop-level-bar"></div>
-        </div>
-
-        <div class="loop-route" id="loopback-route">Mic: — &nbsp;→&nbsp; Speaker: —</div>
-
-        <div class="connect-row">
-          <button id="btn-loopback" class="btn-connect">🎙 Grabar</button>
-        </div>
-      </div>
 
       <!-- § VU Meter (modo Test Mic) -->
       <div class="card" id="vumeter-card" style="display:none">
@@ -440,7 +416,7 @@
 </div><!-- #terminal-section -->
 
 <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-<script src="app.js?v=16"></script>
+<script src="app.js?v=17"></script>
 <script src="terminal.js?v=15"></script>
 </body>
 </html>

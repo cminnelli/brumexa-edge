@@ -10,6 +10,8 @@ const state = {
   // LiveKit
   room:       null,
   localTrack: null,
+  lkMonitor:  null,   // { stop() } — monitor del track local (analyser)
+  lkStats:    null,   // { stop() } — monitor de stats del RTCRtpSender
 
   // Test Mic — Web Audio API
   stream:    null,
@@ -660,6 +662,133 @@ async function getAudioTrack() {
 }
 
 // ============================================================
+// DEBUG HELPERS — LiveKit: inspeccionar track y ver qué se manda
+// ============================================================
+
+/**
+ * Loguea settings / capabilities / constraints del MediaStreamTrack
+ * para verificar qué formato recibe LiveKit (sampleRate, canales, etc).
+ */
+function logLkTrackDetails(prefix, track) {
+  if (!track) { log(`${prefix} ✘ sin MediaStreamTrack`, 'error'); return; }
+  const s = track.getSettings?.()     || {};
+  const c = track.getCapabilities?.() || {};
+  const k = track.getConstraints?.()  || {};
+  log(`${prefix} track: id=${track.id.slice(0,8)} label="${track.label || '—'}" kind=${track.kind} state=${track.readyState} muted=${track.muted} enabled=${track.enabled}`, 'info');
+  log(`${prefix} settings: rate=${s.sampleRate || '?'}Hz  ch=${s.channelCount || '?'}  echoCancel=${s.echoCancellation ?? '—'}  autoGain=${s.autoGainControl ?? '—'}  noiseSupp=${s.noiseSuppression ?? '—'}  latency=${s.latency ?? '—'}`, 'info');
+  console.log(`[LiveKit:track] id=${track.id}`);
+  console.log(`[LiveKit:track] settings:`, s);
+  console.log(`[LiveKit:track] capabilities:`, c);
+  console.log(`[LiveKit:track] constraints:`, k);
+}
+
+/**
+ * Loguea todo lo interesante de la publication (sid, kind, source, codec).
+ */
+function logLkPublication(prefix, pub) {
+  if (!pub) { log(`${prefix} ✘ sin Publication`, 'error'); return; }
+  log(`${prefix} pub: sid=${pub.trackSid} kind=${pub.kind} source=${pub.source} muted=${pub.isMuted} encrypted=${pub.isEncrypted ?? '—'} subscribed=${pub.isSubscribed ?? '—'}`, 'info');
+  log(`${prefix} simulcast=${pub.simulcasted ?? '—'} dimensions=${pub.dimensions ? `${pub.dimensions.width}x${pub.dimensions.height}` : '—'} mimeType=${pub.mimeType || '—'}`, 'info');
+  console.log(`[LiveKit:pub]`, pub);
+  // Sender → nos permite inspeccionar los codec-params (Opus, DTX, FEC, bitrate)
+  const sender = pub.track?.sender || pub.sender;
+  if (sender?.getParameters) {
+    try {
+      const p = sender.getParameters();
+      console.log(`[LiveKit:sender] parameters:`, p);
+      const codec = p?.codecs?.[0];
+      if (codec) log(`${prefix} codec: ${codec.mimeType}  clockRate=${codec.clockRate}  channels=${codec.channels}  sdpFmtpLine="${codec.sdpFmtpLine || '—'}"`, 'info');
+      const enc = p?.encodings?.[0];
+      if (enc) log(`${prefix} encoding: maxBitrate=${enc.maxBitrate || '?'}  priority=${enc.priority || '—'}  active=${enc.active}`, 'info');
+    } catch (err) { console.warn('[LiveKit:sender] getParameters error', err); }
+  }
+}
+
+/**
+ * Monitor del track local — attacha un AnalyserNode y loguea el peak cada 2s.
+ * Así ves si lo que se está publicando a LiveKit tiene audio real o es silencio.
+ */
+function startLkTrackMonitor(track, label) {
+  if (!track) return null;
+  try {
+    const ctx      = new AudioContext();
+    const stream   = new MediaStream([track]);
+    const source   = ctx.createMediaStreamSource(stream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 512;
+    source.connect(analyser);
+    // Muteado — NO conectar a destination (el track va a LiveKit, no al speaker del browser).
+    const buf = new Uint8Array(analyser.fftSize);
+    let peakSince = 0, nSamples = 0, sumSq = 0;
+    const interval = setInterval(() => {
+      analyser.getByteTimeDomainData(buf);
+      let peak = 0, sq = 0;
+      for (let i = 0; i < buf.length; i++) {
+        const v = buf[i] - 128;
+        const a = Math.abs(v);
+        if (a > peak) peak = a;
+        sq += v * v;
+      }
+      if (peak > peakSince) peakSince = peak;
+      sumSq   += sq;
+      nSamples += buf.length;
+      // Cada 2 s loguear
+      if (nSamples >= analyser.fftSize * 40) {  // ~2s @ ~50 Hz tick
+        const rms    = Math.sqrt(sumSq / nSamples) / 128;
+        const rmsDb  = rms > 0 ? (20 * Math.log10(rms)).toFixed(1) : '−∞';
+        const pctPk  = (peakSince / 127 * 100).toFixed(0);
+        if (peakSince < 2) {
+          log(`[lk-track] ⚠ ${label}: SILENCIO en el track (peak ${peakSince}/127  rms ${rmsDb} dB) — no se está mandando audio a LiveKit`, 'warn');
+        } else {
+          log(`[lk-track] 🎙 ${label}: nivel ${pctPk}%  peak ${peakSince}/127  rms ${rmsDb} dB`, 'info');
+        }
+        console.log(`[LiveKit:monitor] ${label} peak=${peakSince}/127 rms=${rmsDb}dB`);
+        peakSince = 0; sumSq = 0; nSamples = 0;
+      }
+    }, 50);
+
+    return {
+      stop() {
+        clearInterval(interval);
+        try { analyser.disconnect(); source.disconnect(); ctx.close(); } catch {}
+      },
+    };
+  } catch (err) {
+    log(`[lk-track] ✘ No se pudo attachar monitor: ${err.message}`, 'warn');
+    return null;
+  }
+}
+
+/**
+ * Monitor de stats del RTCRtpSender — cada 5s pide getStats() y loguea
+ * bytesSent/packetsSent/bitrate. Si bytesSent no crece → nada llega al SFU.
+ */
+function startLkSenderStats(pub, label) {
+  if (!pub) return null;
+  let lastBytes = 0, lastPackets = 0, lastT = Date.now();
+  const interval = setInterval(async () => {
+    try {
+      const sender = pub.track?.sender || pub.sender;
+      if (!sender || !sender.getStats) { log(`[lk-stats] ${label}: sender sin getStats`, 'warn'); return; }
+      const stats = await sender.getStats();
+      const ob = [...stats.values()].find(s => s.type === 'outbound-rtp' && s.kind === 'audio');
+      if (!ob) { log(`[lk-stats] ${label}: sin outbound-rtp audio en stats`, 'warn'); return; }
+      const now      = Date.now();
+      const dt       = (now - lastT) / 1000;
+      const dBytes   = ob.bytesSent  - lastBytes;
+      const dPackets = ob.packetsSent - lastPackets;
+      const kbps     = dt > 0 ? ((dBytes * 8) / dt / 1000).toFixed(1) : '?';
+      log(`[lk-stats] ${label}: +${dBytes} B / +${dPackets} pkt en ${dt.toFixed(1)}s  → ${kbps} kbps  total=${ob.bytesSent} B  nack=${ob.nackCount ?? 0}  target=${ob.targetBitrate ? (ob.targetBitrate/1000).toFixed(1)+'kbps' : '?'}`, 'info');
+      if (dBytes === 0) {
+        log(`[lk-stats] ⚠ ${label}: 0 bytes enviados en ${dt.toFixed(1)}s — no llega audio al SFU`, 'warn');
+      }
+      lastBytes = ob.bytesSent; lastPackets = ob.packetsSent; lastT = now;
+    } catch (err) { console.warn('[lk-stats] error', err); }
+  }, 5000);
+  return { stop() { clearInterval(interval); } };
+}
+
+// ============================================================
 // MÓDULO LIVEKIT
 // ============================================================
 const LiveKitModule = {
@@ -805,11 +934,25 @@ const LiveKitModule = {
     });
 
     room.on(LivekitClient.RoomEvent.LocalTrackPublished, (pub) => {
-      log(`Track local publicado — kind: ${pub.kind} · muted: ${pub.isMuted}`, 'info');
+      log(`[lk-event] LocalTrackPublished — kind: ${pub.kind} · sid: ${pub.trackSid} · muted: ${pub.isMuted} · source: ${pub.source}`, 'info');
+      console.log('[LiveKit:event] LocalTrackPublished', pub);
     });
 
     room.on(LivekitClient.RoomEvent.LocalTrackUnpublished, (pub) => {
-      log(`Track local removido — kind: ${pub.kind}`, 'warn');
+      log(`[lk-event] LocalTrackUnpublished — kind: ${pub.kind}`, 'warn');
+    });
+
+    // Audio activo del participante local — confirma que LiveKit detecta voz
+    room.on(LivekitClient.RoomEvent.ActiveSpeakersChanged, (speakers) => {
+      const localActive  = speakers.some(s => s.isLocal);
+      const ids = speakers.map(s => `${s.identity}(${(s.audioLevel ?? 0).toFixed(2)})`).join(', ') || '—';
+      log(`[lk-event] ActiveSpeakers: ${ids}  [local: ${localActive ? 'SÍ' : 'no'}]`, localActive ? 'success' : 'info');
+    });
+
+    // Track publicación falló (permisos, codec, etc)
+    room.on(LivekitClient.RoomEvent.TrackPublicationFailed, (err, opts) => {
+      log(`[lk-event] ✘ TrackPublicationFailed: ${err?.message || err}  opts: ${JSON.stringify(opts)}`, 'error');
+      console.error('[LiveKit:event] TrackPublicationFailed', err, opts);
     });
 
     room.on(LivekitClient.RoomEvent.MediaDevicesError, (err) => {
@@ -916,16 +1059,25 @@ const LiveKitModule = {
 
         micStream = await PiMicModule.start(alsaDevice);
         const [rawAudioTrack] = micStream.getAudioTracks();
-        log(`[mic-pi] Track: id=${rawAudioTrack.id.slice(0,8)}  state=${rawAudioTrack.readyState}`, 'info');
-        console.log(`[PiMic] track  id=${rawAudioTrack.id}  label="${rawAudioTrack.label}"  state=${rawAudioTrack.readyState}`);
+
+        // Debug: qué formato tiene el track ANTES de publicar
+        logLkTrackDetails('[lk-pre-publish][pi]', rawAudioTrack);
 
         log('[mic-pi] Publicando en LiveKit…', 'info');
         const pub = await room.localParticipant.publishTrack(rawAudioTrack, {
           name: 'pi-mic', source: LivekitClient.Track.Source.Microphone,
         });
         localTrack = pub.track ?? pub;
+
+        // Debug: qué le mandamos a LiveKit y cómo quedó la publication
+        logLkPublication('[lk-post-publish][pi]', pub);
+        logLkTrackDetails('[lk-post-publish][pi]', localTrack.mediaStreamTrack || rawAudioTrack);
+
+        // Monitor del audio real + stats del sender
+        state.lkMonitor = startLkTrackMonitor(localTrack.mediaStreamTrack || rawAudioTrack, 'pi-mic');
+        state.lkStats   = startLkSenderStats(pub, 'pi-mic');
+
         log(`[mic-pi] ✔ Track publicado — sid: ${pub.trackSid}  muted: ${pub.isMuted}`, 'success');
-        console.log(`[PiMic] ✔ publicado  trackSid=${pub.trackSid}  muted=${pub.isMuted}`);
 
       } else {
         log('[mic-browser] getUserMedia…', 'info');
@@ -933,8 +1085,19 @@ const LiveKitModule = {
           echoCancellation: true, noiseSuppression: true, autoGainControl: true,
         });
         const mt = localTrack.mediaStreamTrack;
-        log(`[mic-browser] Track: state=${mt?.readyState}`, 'info');
+
+        // Debug: qué track obtuvimos del getUserMedia
+        logLkTrackDetails('[lk-pre-publish][browser]', mt);
+
         const pub = await room.localParticipant.publishTrack(localTrack);
+
+        // Debug: publication + track post-publish
+        logLkPublication('[lk-post-publish][browser]', pub);
+        logLkTrackDetails('[lk-post-publish][browser]', mt);
+
+        state.lkMonitor = startLkTrackMonitor(mt, 'browser-mic');
+        state.lkStats   = startLkSenderStats(pub, 'browser-mic');
+
         log(`[mic-browser] ✔ publicado — sid: ${pub?.trackSid}`, 'success');
         micStream = mt ? new MediaStream([mt]) : null;
         updateMicName();
@@ -963,6 +1126,12 @@ const LiveKitModule = {
 
   async stop() {
     console.log('[LiveKit] ⏹ stop() iniciado');
+    // Apagar monitores de debug antes de cortar el track
+    try { state.lkMonitor?.stop(); } catch {}
+    try { state.lkStats?.stop();   } catch {}
+    state.lkMonitor = null;
+    state.lkStats   = null;
+
     PiMicModule.stop();
     PiSpeakerModule.stop();
     stopMiniVu();
@@ -991,6 +1160,10 @@ const LiveKitModule = {
   },
 
   _resetState() {
+    try { state.lkMonitor?.stop(); } catch {}
+    try { state.lkStats?.stop();   } catch {}
+    state.lkMonitor  = null;
+    state.lkStats    = null;
     state.room       = null;
     state.localTrack = null;
     state.active     = false;
@@ -1111,224 +1284,6 @@ const MicTestModule = {
 };
 
 // ============================================================
-// MÓDULO LOOPBACK TEST — LIVE: mic → speaker en tiempo real
-//
-// Valida la MISMA ruta que LiveKit:
-//   Pi mic    → /ws/audio    → AudioWorklet → MediaStream
-//   MediaStream → AudioWorklet → /ws/speaker → aplay
-// Si esto funciona, LiveKit tiene la plumbing OK; lo único distinto es
-// que LiveKit en vez de loopear localmente, manda el track al cloud.
-// ============================================================
-const LoopbackModule = {
-  _state:          'idle',   // 'idle' | 'running'
-  _stream:         null,
-  _audioCtx:       null,
-  _analyser:       null,
-  _animFrame:      null,
-  _audioEl:        null,
-  _startedAt:      0,
-  _timerInterval:  null,
-
-  show(visible) {
-    document.getElementById('loopback-card').style.display = visible ? '' : 'none';
-    if (visible) this._updateRoute();
-  },
-
-  _updateRoute() {
-    const el = document.getElementById('loopback-route');
-    if (!el) return;
-    const src = getSelectedSource();
-    const dst = getSelectedSpeakerDest();
-    const srcLabel = src === 'pi' ? `🍓 Pi (${getSelectedAlsaDevice()})` : '🌐 Browser';
-    const dstLabel = dst === 'pi' ? `🍓 Pi (${getSelectedAlsaSpeaker()})` : '🌐 Browser';
-    el.innerHTML = `Mic: <strong>${srcLabel}</strong> &nbsp;→&nbsp; Speaker: <strong>${dstLabel}</strong>`;
-  },
-
-  async toggle() {
-    if (this._state === 'idle')    return this.start();
-    if (this._state === 'running') return this.stop();
-  },
-
-  async start() {
-    const src = getSelectedSource();
-    const dst = getSelectedSpeakerDest();
-    this._updateRoute();
-    log(`[loopback] ─────────────────────────────────────────────`, 'info');
-    log(`[loopback] ▶ Iniciando LIVE loopback — ${src} mic → ${dst} speaker`, 'info');
-    console.log(`[Loopback] start  src=${src}  dst=${dst}`);
-
-    this._state     = 'running';
-    this._startedAt = Date.now();
-    this._setUI();
-    setMicStatus('active', `${src}→${dst}`);
-    this._startTimer();
-
-    try {
-      // ── 1. MIC: obtener MediaStream ────────────────────────────────────────
-      let stream;
-      if (src === 'pi') {
-        const device = getSelectedAlsaDevice();
-        log(`[loopback] [1/2] MIC Pi — abriendo PiMicModule (ALSA ${device})…`, 'info');
-        stream = await PiMicModule.start(device);
-        const tracks = stream.getAudioTracks();
-        log(`[loopback] ✔ PiMic stream activo — tracks: ${tracks.length}  state: ${tracks[0]?.readyState}`, 'success');
-        console.log(`[Loopback] PiMic stream  id=${tracks[0]?.id}`);
-      } else {
-        log('[loopback] [1/2] MIC Browser — getUserMedia…', 'info');
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const label = stream.getAudioTracks()[0]?.label || '—';
-        log(`[loopback] ✔ Browser mic activo — "${label}"`, 'success');
-      }
-      this._stream = stream;
-      this._attachAnalyser(stream);
-
-      // ── 2. SPEAKER: rutear el stream al destino ──────────────────────────
-      if (dst === 'pi') {
-        const device = getSelectedAlsaSpeaker();
-        log(`[loopback] [2/2] SPEAKER Pi — abriendo PiSpeakerModule (ALSA ${device})…`, 'info');
-        // PiSpeakerModule espera un "track" tipo LiveKit — wrap minimalista
-        const [audioTrack] = stream.getAudioTracks();
-        const fakeTrack    = { mediaStreamTrack: audioTrack, kind: 'audio' };
-        await PiSpeakerModule.start(fakeTrack, device);
-        log(`[loopback] ✔ PiSpeaker activo — aplay corriendo en ${device}`, 'success');
-        log(`[loopback] 🔊 Hablá por el mic — deberías escucharte en el speaker de la Pi`, 'info');
-      } else {
-        log('[loopback] [2/2] SPEAKER Browser — attach via <audio>', 'info');
-        const el = new Audio();
-        el.srcObject  = stream;
-        el.autoplay   = true;
-        el.style.display = 'none';
-        document.body.appendChild(el);
-        this._audioEl = el;
-        try { await el.play(); }
-        catch (err) { log(`[loopback] ⚠ Autoplay bloqueado: ${err.message}`, 'warn'); }
-        log(`[loopback] ✔ Browser speaker activo`, 'success');
-        log(`[loopback] 🔊 Hablá — deberías escucharte en el navegador`, 'info');
-      }
-    } catch (err) {
-      log(`[loopback] ✘ Error al iniciar: ${err.message}`, 'error');
-      console.error('[Loopback] start error', err);
-      await this._cleanup();
-      this._state = 'idle';
-      this._setUI();
-      setMicStatus('error', err.message);
-      throw err;
-    }
-  },
-
-  async stop() {
-    log('[loopback] ⏹ Deteniendo loopback…', 'info');
-    await this._cleanup();
-    this._state = 'idle';
-    this._setUI();
-    setMicStatus('idle');
-    log('[loopback] ✔ Loopback detenido', 'success');
-  },
-
-  async _cleanup() {
-    this._stopTimer();
-    // Orden: primero corta el speaker (aplay), después el mic (arecord)
-    try { PiSpeakerModule.stop(); } catch (e) { console.warn('[Loopback] PiSpeaker.stop', e); }
-    if (this._audioEl) {
-      try { this._audioEl.pause(); this._audioEl.srcObject = null; this._audioEl.remove(); } catch {}
-      this._audioEl = null;
-    }
-    try { PiMicModule.stop(); } catch (e) { console.warn('[Loopback] PiMic.stop', e); }
-    if (this._stream) {
-      this._stream.getTracks().forEach(t => { try { t.stop(); } catch {} });
-      this._stream = null;
-    }
-    this._detachAnalyser();
-  },
-
-  _startTimer() {
-    const el = document.getElementById('loopback-timer');
-    if (el) el.textContent = '0s';
-    this._timerInterval = setInterval(() => {
-      const el2 = document.getElementById('loopback-timer');
-      if (!el2) return;
-      const s = Math.floor((Date.now() - this._startedAt) / 1000);
-      el2.textContent = `${s}s`;
-    }, 200);
-  },
-
-  _stopTimer() {
-    if (this._timerInterval) { clearInterval(this._timerInterval); this._timerInterval = null; }
-  },
-
-  _attachAnalyser(stream) {
-    this._audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const src = this._audioCtx.createMediaStreamSource(stream);
-    this._analyser = this._audioCtx.createAnalyser();
-    this._analyser.fftSize = 256;
-    src.connect(this._analyser);
-    const timeData = new Uint8Array(this._analyser.fftSize);
-    const freqData = new Uint8Array(this._analyser.frequencyBinCount);
-    let _lastLogAt = 0;
-    let _peakSince = 0;
-    const tick = () => {
-      if (!this._analyser) return;
-      this._analyser.getByteFrequencyData(freqData);
-      this._analyser.getByteTimeDomainData(timeData);
-      // Peak del waveform para saber si el stream tiene audio real
-      let peak = 0;
-      for (let i = 0; i < timeData.length; i++) {
-        const v = Math.abs(timeData[i] - 128);
-        if (v > peak) peak = v;
-      }
-      if (peak > _peakSince) _peakSince = peak;
-      let sum = 0;
-      for (let i = 0; i < freqData.length; i++) sum += freqData[i];
-      const pct = Math.min(((sum / freqData.length) / 255) * 1.8, 1) * 100;
-      const bar = document.getElementById('loopback-level');
-      if (bar) bar.style.width = pct + '%';
-
-      // Log cada 2 s: muestra si el MediaStream realmente tiene audio
-      const now = Date.now();
-      if (now - _lastLogAt > 2000) {
-        _lastLogAt = now;
-        const pctNorm = (_peakSince / 127 * 100).toFixed(0);
-        console.log(`[Loopback] analyser peak: ${_peakSince}/127 (${pctNorm}%)  freq avg: ${pct.toFixed(0)}%`);
-        if (_peakSince < 2) {
-          log(`[loopback] ⚠ MediaStream en silencio (peak ${_peakSince}) — el mic no está entrando al stream`, 'warn');
-        } else {
-          log(`[loopback] 🎤 MediaStream nivel: ${pctNorm}%`, 'info');
-        }
-        _peakSince = 0;
-      }
-
-      this._animFrame = requestAnimationFrame(tick);
-    };
-    tick();
-  },
-
-  _detachAnalyser() {
-    if (this._animFrame) { cancelAnimationFrame(this._animFrame); this._animFrame = null; }
-    this._analyser = null;
-    if (this._audioCtx) { try { this._audioCtx.close(); } catch {} this._audioCtx = null; }
-    const bar = document.getElementById('loopback-level');
-    if (bar) bar.style.width = '0%';
-  },
-
-  _setUI() {
-    const btn    = document.getElementById('btn-loopback');
-    const status = document.getElementById('loopback-status');
-    if (!btn || !status) return;
-    btn.classList.remove('recording', 'playing');
-    btn.disabled = false;
-
-    if (this._state === 'idle') {
-      btn.textContent  = '🎙 Iniciar loopback';
-      status.innerHTML = 'Hablá por el mic y deberías escucharte al instante por el speaker. Click para iniciar.';
-    } else if (this._state === 'running') {
-      btn.textContent  = '⏹ Detener';
-      btn.classList.add('recording');
-      status.innerHTML = `🔴 Loopback activo — <span id="loopback-timer">0s</span> · Hablá y verificá que se escuche`;
-    }
-  },
-};
-
-// ============================================================
 // BOTÓN PRINCIPAL
 // ============================================================
 function updateMicButton(active) {
@@ -1369,34 +1324,22 @@ ui.btnMic.addEventListener('click', async () => {
 // ============================================================
 // SELECTOR DE MODO
 // ============================================================
-const modeLabels = { livekit: 'LiveKit', mictest: 'Test Mic', loopback: 'Loopback' };
+const modeLabels = { livekit: 'LiveKit', mictest: 'Test Mic' };
 
 function applyMode(mode) {
   state.mode = mode;
-  ui.lkStepsCard.style.display = mode === 'livekit'  ? '' : 'none';
-  // Loopback tiene su propio botón → ocultamos el botón principal "Conectar"
-  document.getElementById('main-connect-row')?.style.setProperty('display', mode === 'loopback' ? 'none' : '');
-  LoopbackModule.show(mode === 'loopback');
+  ui.lkStepsCard.style.display = mode === 'livekit' ? '' : 'none';
   ui.badgeMode.textContent = modeLabels[mode] || mode;
 }
 
 ui.modeBtns.forEach((btn) => {
   btn.addEventListener('click', () => {
-    if (state.active || LoopbackModule._state !== 'idle') return;
+    if (state.active) return;
     ui.modeBtns.forEach((b) => b.classList.remove('active'));
     btn.classList.add('active');
     applyMode(btn.dataset.mode);
     log(`Modo: ${modeLabels[state.mode]}`, 'info');
   });
-});
-
-// Botón "Grabar" del modo loopback
-document.getElementById('btn-loopback')?.addEventListener('click', async () => {
-  const btn = document.getElementById('btn-loopback');
-  btn.disabled = true;
-  try { await LoopbackModule.toggle(); }
-  catch (err) { console.error('[Loopback] toggle error', err); }
-  finally { btn.disabled = false; }
 });
 
 // ============================================================
@@ -2446,16 +2389,10 @@ const DebugModule = {
 
     ui.audioSourceRadios.forEach((radio) => {
       radio.addEventListener('change', updateSourceState);
-      radio.addEventListener('change', () => LoopbackModule._updateRoute());
-    });
-    document.querySelectorAll('input[name="speaker-dest"]').forEach(r => {
-      r.addEventListener('change', () => LoopbackModule._updateRoute());
     });
 
     // También actualizar si cambia el dispositivo ALSA seleccionado
     ui.alsaDeviceSelect.addEventListener('change', updateDeviceCard);
-    ui.alsaDeviceSelect.addEventListener('change', () => LoopbackModule._updateRoute());
-    document.getElementById('alsa-speaker-select')?.addEventListener('change', () => LoopbackModule._updateRoute());
 
     updateSourceState(); // estado inicial
 
