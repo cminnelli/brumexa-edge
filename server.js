@@ -14,6 +14,7 @@ const { startRecording, stopRecording, getStatus,
         deleteRecording, boostCaptureGain } = require('./lib/recorder');
 const { setupBluetooth }                               = require('./lib/bluetooth');
 const { setupWifi, autoStartAP }                       = require('./lib/wifi');
+const { session: lkSession }                           = require('./lib/livekit-session');
 
 const {
   LIVEKIT_URL,
@@ -371,6 +372,92 @@ app.get('/recordings/play-status', (_req, res) => {
   });
 });
 
+
+// ─── LiveKit Session (@livekit/rtc-node) ─────────────────────────────────────
+//   POST /session/start  → pide token, conecta room, publica mic, escucha agente
+//   POST /session/stop   → cierra mic, speaker y room
+//   GET  /session/status → estado actual de la sesión
+//   POST /session/mic-gain { gain } → ajustar gain del mic en vivo
+
+// Re-emitir eventos del session a la consola para diagnóstico
+lkSession.on('mic-stats',    s => { /* ya se imprime dentro del módulo */ });
+lkSession.on('speaker-stats', s => { /* ya se imprime dentro del módulo */ });
+lkSession.on('error',        e => console.error('[lk-session-evt] error:', e.message));
+lkSession.on('disconnected', d => console.log('[lk-session-evt] disconnected:', d.reason));
+
+// Helper interno: pedir token al servidor central (mismo flujo que /token)
+async function fetchTokenFromCentral() {
+  if (!TOKEN_API_URL) throw new Error('TOKEN_API_URL no configurado');
+
+  const arch       = os.arch();
+  const isArm      = /arm/i.test(arch);
+  const deviceType = process.platform === 'linux' && isArm ? 'raspberry' : 'pc';
+  const deviceId   = os.hostname();
+
+  console.log(`[session] → token  ${TOKEN_API_URL}  device=${deviceType}  id=${deviceId}`);
+
+  const r = await fetch(TOKEN_API_URL, {
+    method:  'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(BRUMEXA_API_KEY && { 'x-api-key': BRUMEXA_API_KEY }),
+    },
+    body: JSON.stringify({ deviceType, deviceId }),
+  });
+
+  if (!r.ok) {
+    const txt = await r.text();
+    throw new Error(`Servidor central respondió ${r.status}: ${txt}`);
+  }
+  const data = await r.json();
+  if (!data.token) throw new Error('Respuesta del servidor central sin "token"');
+  return {
+    token:    data.token,
+    url:      data.url      || LIVEKIT_URL,
+    roomName: data.roomName || LIVEKIT_ROOM_NAME,
+    identity: data.participantName || deviceId,
+  };
+}
+
+app.post('/session/start', express.json(), async (req, res) => {
+  try {
+    if (lkSession.isActive()) {
+      return res.status(409).json({ ok: false, error: 'Sesión ya activa', status: lkSession.getStatus() });
+    }
+
+    const micDevice     = req.body?.micDevice     || process.env.MIC_DEVICE     || 'plughw:0,0';
+    const speakerDevice = req.body?.speakerDevice || process.env.SPEAKER_DEVICE || 'plughw:0,0';
+
+    const { token, url, roomName } = await fetchTokenFromCentral();
+
+    await lkSession.start({ token, url, roomName, micDevice, speakerDevice });
+    res.json({ ok: true, status: lkSession.getStatus(), url, roomName });
+
+  } catch (err) {
+    console.error('[session/start]', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/session/stop', async (_req, res) => {
+  try {
+    await lkSession.stop();
+    res.json({ ok: true, status: lkSession.getStatus() });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/session/status', (_req, res) => {
+  res.json(lkSession.getStatus());
+});
+
+app.post('/session/mic-gain', express.json(), (req, res) => {
+  const g = parseFloat(req.body?.gain);
+  if (isNaN(g)) return res.status(400).json({ ok: false, error: 'gain inválido' });
+  const ok = lkSession.setMicGain(g);
+  res.json({ ok, gain: lkSession.getMicGain() });
+});
 
 // ─── POST /terminal/run — ejecutar comando en la Pi ──────────────────────────
 app.post('/terminal/run', express.json(), (req, res) => {

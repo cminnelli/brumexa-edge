@@ -895,6 +895,91 @@ function startLkSenderStats(pub, label) {
 }
 
 // ============================================================
+// MÓDULO PI-NATIVE LIVEKIT
+// El audio NO pasa por el browser. Mic y speaker se manejan
+// en la Pi via @livekit/rtc-node + arecord/aplay.
+// El browser solo dispara start/stop y polea estado para la UI.
+// ============================================================
+const PiNativeModule = {
+  _statusPoll: null,
+
+  async start() {
+    setLiveKitStatus('connecting', 'pidiendo sesión a la Pi…');
+    setStep('token',   'pending', 'Pidiendo token al server central…');
+
+    const r = await fetch('/session/start', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({}),
+    });
+    const data = await r.json();
+    if (!r.ok || !data.ok) throw new Error(data.error || `HTTP ${r.status}`);
+
+    setStep('token',   'ok',  'Token recibido');
+    activateConnector(1);
+    setStep('connect', 'ok',  `Sala "${data.roomName}"`);
+    activateConnector(2);
+    setStep('publish', 'ok',  'Mic publicado por la Pi (arecord)');
+    setLiveKitStatus('connected', data.url?.replace('wss://', '') || '—');
+    setChannelStatus('connected', `sala: ${data.roomName}`);
+    setMicStatus('on', 'arecord → AudioSource (16 kHz)');
+    log(`[pi-native] Sesión iniciada en sala "${data.roomName}"`, 'success');
+
+    startSessionTimer();
+    this._startPolling();
+  },
+
+  async stop() {
+    this._stopPolling();
+    try {
+      const r = await fetch('/session/stop', { method: 'POST' });
+      const data = await r.json();
+      if (!r.ok) log(`[pi-native] stop: ${data.error || r.status}`, 'warn');
+    } catch (e) {
+      log(`[pi-native] stop error: ${e.message}`, 'warn');
+    }
+    setLiveKitStatus('idle');
+    setChannelStatus('idle', 'Sin conexión');
+    setMicStatus('off');
+    resetSteps();
+    stopSessionTimer();
+    log('[pi-native] Sesión cerrada', 'info');
+  },
+
+  _startPolling() {
+    if (this._statusPoll) clearInterval(this._statusPoll);
+    this._statusPoll = setInterval(async () => {
+      try {
+        const s = await fetch('/session/status').then(r => r.json());
+        // Reflejar estado del mic/speaker en la UI
+        if (s.micActive) {
+          setMicStatus('on', `gain ${s.micGain}x`);
+        }
+        // Si se desconectó por fuera (network drop), resetear UI
+        if (!s.isConnected && state.active && state.usePiNative) {
+          log('[pi-native] Sesión perdida — desconectando UI', 'warn');
+          state.active = false;
+          updateMicButton(false);
+          this._stopPolling();
+          setLiveKitStatus('idle');
+          setChannelStatus('idle');
+          setMicStatus('off');
+          resetSteps();
+          stopSessionTimer();
+        }
+      } catch {/* ignore */}
+    }, 2000);
+  },
+
+  _stopPolling() {
+    if (this._statusPoll) {
+      clearInterval(this._statusPoll);
+      this._statusPoll = null;
+    }
+  },
+};
+
+// ============================================================
 // MÓDULO LIVEKIT
 // ============================================================
 const LiveKitModule = {
@@ -1460,13 +1545,21 @@ ui.btnMic.addEventListener('click', async () => {
     if (!state.active) {
       state.active = true;
       updateMicButton(true);
-      if (state.mode === 'livekit') await LiveKitModule.start();
-      else                          await MicTestModule.start();
+      if (state.mode === 'livekit') {
+        if (state.usePiNative) await PiNativeModule.start();
+        else                   await LiveKitModule.start();
+      } else {
+        await MicTestModule.start();
+      }
     } else {
       state.active = false;
       updateMicButton(false);
-      if (state.mode === 'livekit') await LiveKitModule.stop();
-      else                          MicTestModule.stop();
+      if (state.mode === 'livekit') {
+        if (state.usePiNative) await PiNativeModule.stop();
+        else                   await LiveKitModule.stop();
+      } else {
+        MicTestModule.stop();
+      }
     }
   } catch (err) {
     state.active = false;
@@ -2465,8 +2558,17 @@ const DebugModule = {
   // ─── Nombre del micrófono (si ya hay permiso previo) ─────────────────────
   updateMicName();
 
-  // ─── Selector de fuente de audio (siempre visible en Raspberry) ──────────
+  // ─── En Raspberry: usar el cliente nativo @livekit/rtc-node ──────────────
+  // Mic y speaker los maneja la Pi directo (arecord ↔ AudioSource ↔ aplay).
+  // El browser NO toca audio. Ocultamos los selectores de fuente/destino.
   if (isRaspberry) {
+    state.usePiNative = true;
+    ui.audioSourceWrap.style.display = 'none';
+    log('Raspberry detectada → modo Pi-native (rtc-node + ALSA, sin browser audio)', 'success');
+  }
+
+  // ─── Selector de fuente de audio (solo cuando NO es Pi-native) ───────────
+  if (isRaspberry && !state.usePiNative) {
     ui.audioSourceWrap.style.display = '';
 
     // En Raspberry el default es Pi para mic y speaker

@@ -3,7 +3,13 @@
     "allow": [
       "Bash(npm install:*)",
       "Bash(node server.js)",
-      "Bash(curl -s http://localhost:3000/config)"
+      "Bash(curl -s http://localhost:3000/config)",
+      "Bash(node -e \"const {session} = require\\('./lib/livekit-session'\\); console.log\\('OK', session.getStatus\\(\\)\\);\")",
+      "Bash(node --check lib/livekit-session.js)",
+      "Bash(node --check server.js)",
+      "Bash(node -e \"const {session} = require\\('./lib/livekit-session'\\); console.log\\('LOAD OK:', session.getStatus\\(\\)\\);\")",
+      "Bash(grep -nE \"^\\(const|function|//.*═\\)\" d:/Proyectos/Brumexa-raspberry/public/app.js)",
+      "Bash(node --check public/app.js)"
     ]
   }
 }
