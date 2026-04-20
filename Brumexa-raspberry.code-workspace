@@ -4,7 +4,7 @@
 			"path": "."
 		},
 		{
-			"path": "../brumexa-api"
+			"path": "../brumexa-server"
 		}
 	],
 	"settings": {}
