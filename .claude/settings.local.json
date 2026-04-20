@@ -14,7 +14,8 @@
       "Bash(python -c \"import docx; print\\(docx.__version__\\)\")",
       "Bash(pip install *)",
       "Bash(python -c ' *)",
-      "Bash(python _build_docx.py)"
+      "Bash(python _build_docx.py)",
+      "Bash(node --check d:/Proyectos/Brumexa-raspberry/lib/livekit-session.js)"
     ]
   }
 }
