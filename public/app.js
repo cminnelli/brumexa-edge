@@ -953,6 +953,7 @@ const PiNativeModule = {
 
   _startPolling() {
     if (this._statusPoll) clearInterval(this._statusPoll);
+    this._reconnectLogged = false;
     this._statusPoll = setInterval(async () => {
       try {
         const s = await fetch('/session/status').then(r => r.json());
@@ -960,7 +961,19 @@ const PiNativeModule = {
         if (s.micActive) {
           setMicStatus('on', `gain ${s.micGain}x`);
         }
-        // Si se desconectó por fuera (network drop), resetear UI
+        // Auto-reconnect en curso: mantener UI "viva" y loguear una sola vez por ciclo
+        if (s.isReconnecting) {
+          if (!this._reconnectLogged) {
+            log(`[pi-native] Agent no responde — reconectando (${s.reconnectAttempt}/${s.reconnectMax})…`, 'warn');
+            this._reconnectLogged = true;
+          }
+          return;
+        }
+        if (this._reconnectLogged && s.isConnected) {
+          log('[pi-native] Reconectado', 'info');
+          this._reconnectLogged = false;
+        }
+        // Si se desconectó por fuera (network drop o reintentos agotados), resetear UI
         if (!s.isConnected && state.active && state.usePiNative) {
           log('[pi-native] Sesión perdida — desconectando UI', 'warn');
           state.active = false;

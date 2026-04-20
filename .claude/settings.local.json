@@ -15,7 +15,8 @@
       "Bash(pip install *)",
       "Bash(python -c ' *)",
       "Bash(python _build_docx.py)",
-      "Bash(node --check d:/Proyectos/Brumexa-raspberry/lib/livekit-session.js)"
+      "Bash(node --check d:/Proyectos/Brumexa-raspberry/lib/livekit-session.js)",
+      "Bash(node --check d:/Proyectos/Brumexa-raspberry/public/app.js)"
     ]
   }
 }
