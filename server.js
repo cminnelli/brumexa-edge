@@ -385,6 +385,17 @@ lkSession.on('speaker-stats', s => { /* ya se imprime dentro del módulo */ });
 lkSession.on('error',        e => console.error('[lk-session-evt] error:', e.message));
 lkSession.on('disconnected', d => console.log('[lk-session-evt] disconnected:', d.reason));
 
+// Decodifica el payload de un JWT (sin validar firma — solo para debug)
+function decodeJwtPayload(jwt) {
+  try {
+    const parts = jwt.split('.');
+    if (parts.length !== 3) return null;
+    const b64  = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const pad  = b64 + '='.repeat((4 - b64.length % 4) % 4);
+    return JSON.parse(Buffer.from(pad, 'base64').toString('utf8'));
+  } catch { return null; }
+}
+
 // Helper interno: pedir token al servidor central (mismo flujo que /token)
 async function fetchTokenFromCentral() {
   if (!TOKEN_API_URL) throw new Error('TOKEN_API_URL no configurado');
@@ -394,23 +405,44 @@ async function fetchTokenFromCentral() {
   const deviceType = process.platform === 'linux' && isArm ? 'raspberry' : 'pc';
   const deviceId   = os.hostname();
 
-  console.log(`[session] → token  ${TOKEN_API_URL}  device=${deviceType}  id=${deviceId}`);
+  console.log(`[session] ▶ token-fetch START  url=${TOKEN_API_URL}  device=${deviceType}  id=${deviceId}`);
 
-  const r = await fetch(TOKEN_API_URL, {
-    method:  'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(BRUMEXA_API_KEY && { 'x-api-key': BRUMEXA_API_KEY }),
-    },
-    body: JSON.stringify({ deviceType, deviceId }),
-  });
+  const t0 = Date.now();
+  let r;
+  try {
+    r = await fetch(TOKEN_API_URL, {
+      method:  'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(BRUMEXA_API_KEY && { 'x-api-key': BRUMEXA_API_KEY }),
+      },
+      body: JSON.stringify({ deviceType, deviceId }),
+    });
+  } catch (netErr) {
+    throw new Error(`token-fetch network error (${Date.now()-t0}ms): ${netErr.code || ''} ${netErr.message}`);
+  }
+  const elapsed = Date.now() - t0;
 
   if (!r.ok) {
     const txt = await r.text();
-    throw new Error(`Servidor central respondió ${r.status}: ${txt}`);
+    throw new Error(`token-fetch HTTP ${r.status} (${elapsed}ms): ${txt}`);
   }
   const data = await r.json();
   if (!data.token) throw new Error('Respuesta del servidor central sin "token"');
+
+  // Introspección del JWT para debug
+  const payload = decodeJwtPayload(data.token);
+  if (payload) {
+    const now  = Math.floor(Date.now() / 1000);
+    const ttl  = payload.exp ? (payload.exp - now) : null;
+    const room = payload.video?.room || payload.room || '(sin room en claims)';
+    console.log(`[session] ◀ token-fetch OK  ${elapsed}ms`);
+    console.log(`[session]   jwt.sub=${payload.sub}  jwt.iss=${payload.iss}  room=${room}  ttl=${ttl}s  jti=${payload.jti || '-'}`);
+    if (ttl !== null && ttl < 60) console.warn(`[session]   ⚠ token TTL bajo (${ttl}s) — puede expirar antes de conectar`);
+  } else {
+    console.log(`[session] ◀ token-fetch OK  ${elapsed}ms  (no pude decodear JWT)`);
+  }
+
   return {
     token:    data.token,
     url:      data.url      || LIVEKIT_URL,
@@ -420,21 +452,33 @@ async function fetchTokenFromCentral() {
 }
 
 app.post('/session/start', express.json(), async (req, res) => {
+  const reqId = Math.random().toString(36).slice(2, 7);
+  const t0 = Date.now();
+  console.log(`\n[session/start:${reqId}] ▶ BEGIN`);
   try {
     if (lkSession.isActive()) {
+      console.warn(`[session/start:${reqId}] ⚠ sesión ya activa — status=${JSON.stringify(lkSession.getStatus())}`);
       return res.status(409).json({ ok: false, error: 'Sesión ya activa', status: lkSession.getStatus() });
     }
 
     const micDevice     = req.body?.micDevice     || process.env.MIC_DEVICE     || 'plughw:0,0';
     const speakerDevice = req.body?.speakerDevice || process.env.SPEAKER_DEVICE || 'plughw:0,0';
+    console.log(`[session/start:${reqId}]   mic=${micDevice}  speaker=${speakerDevice}`);
 
+    const tokT0 = Date.now();
     const { token, url, roomName } = await fetchTokenFromCentral();
+    console.log(`[session/start:${reqId}]   token OK  (${Date.now()-tokT0}ms)  → connecting to ${url}  room=${roomName || '(auto)'}`);
 
+    const connT0 = Date.now();
     await lkSession.start({ token, url, roomName, micDevice, speakerDevice });
+    console.log(`[session/start:${reqId}]   lkSession.start OK  (${Date.now()-connT0}ms)`);
+
+    console.log(`[session/start:${reqId}] ✔ DONE  total=${Date.now()-t0}ms`);
     res.json({ ok: true, status: lkSession.getStatus(), url, roomName });
 
   } catch (err) {
-    console.error('[session/start]', err.message);
+    console.error(`[session/start:${reqId}] ✘ FAIL  total=${Date.now()-t0}ms  ${err.message}`);
+    if (err.stack) console.error(err.stack);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
