@@ -9,7 +9,12 @@
       "Bash(node --check server.js)",
       "Bash(node -e \"const {session} = require\\('./lib/livekit-session'\\); console.log\\('LOAD OK:', session.getStatus\\(\\)\\);\")",
       "Bash(grep -nE \"^\\(const|function|//.*═\\)\" d:/Proyectos/Brumexa-raspberry/public/app.js)",
-      "Bash(node --check public/app.js)"
+      "Bash(node --check public/app.js)",
+      "Bash(pandoc --version)",
+      "Bash(python -c \"import docx; print\\(docx.__version__\\)\")",
+      "Bash(pip install *)",
+      "Bash(python -c ' *)",
+      "Bash(python _build_docx.py)"
     ]
   }
 }
