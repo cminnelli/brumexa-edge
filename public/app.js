@@ -907,10 +907,15 @@ const PiNativeModule = {
     setLiveKitStatus('connecting', 'pidiendo sesión a la Pi…');
     setStep('token',   'pending', 'Pidiendo token al server central…');
 
+    // Leer dispositivos ALSA elegidos en los dropdowns
+    const micDevice     = getSelectedAlsaDevice() || 'plughw:0,0';
+    const speakerDevice = getSelectedAlsaSpeaker() || 'plughw:0,0';
+    log(`[pi-native] mic=${micDevice}  speaker=${speakerDevice}`, 'info');
+
     const r = await fetch('/session/start', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({}),
+      body:    JSON.stringify({ micDevice, speakerDevice }),
     });
     const data = await r.json();
     if (!r.ok || !data.ok) throw new Error(data.error || `HTTP ${r.status}`);
@@ -919,10 +924,10 @@ const PiNativeModule = {
     activateConnector(1);
     setStep('connect', 'ok',  `Sala "${data.roomName}"`);
     activateConnector(2);
-    setStep('publish', 'ok',  'Mic publicado por la Pi (arecord)');
+    setStep('publish', 'ok',  `Mic publicado (${micDevice})`);
     setLiveKitStatus('connected', data.url?.replace('wss://', '') || '—');
     setChannelStatus('connected', `sala: ${data.roomName}`);
-    setMicStatus('on', 'arecord → AudioSource (16 kHz)');
+    setMicStatus('on', `arecord ${micDevice} → AudioSource (16 kHz)`);
     log(`[pi-native] Sesión iniciada en sala "${data.roomName}"`, 'success');
 
     startSessionTimer();
@@ -1890,18 +1895,28 @@ const PlaybackModule = {
       this._activeBtn = btn || null;
       if (btn) { btn.textContent = '⏹'; btn.classList.add('playing'); }
 
-      const dest       = getSelectedSpeakerDest();
       const isBrowserRec = filename.includes('_browser_');  // WebM — aplay no soporta
 
+      // En modo Pi-native: siempre reproducir en la Pi (ALSA).
+      // Única excepción: grabaciones WebM del browser (aplay no las soporta).
+      if (state.usePiNative) {
+        if (isBrowserRec) {
+          log(`⚠ "${filename}" es WebM — aplay no lo soporta, se ignora`, 'warn');
+          this._finish();
+          return;
+        }
+        log(`▶ Pi ALSA: "${filename}"`, 'info');
+        await this._playOnPi(filename, getSelectedAlsaSpeaker() || 'plughw:0,0');
+        return;
+      }
+
+      // Modo browser clásico (no Pi-native): usar el selector speaker-dest
+      const dest = getSelectedSpeakerDest();
       if (dest === 'pi' && !isBrowserRec) {
         log(`▶ Pi ALSA: "${filename}"`, 'info');
         await this._playOnPi(filename, getSelectedAlsaSpeaker());
       } else {
-        if (dest === 'pi' && isBrowserRec) {
-          log(`▶ Browser (WebM — aplay no compatible): "${filename}"`, 'info');
-        } else {
-          log(`▶ Browser: "${filename}"`, 'info');
-        }
+        log(`▶ Browser: "${filename}"`, 'info');
         this._playInBrowser(filename);
       }
     } finally {
@@ -2028,7 +2043,8 @@ const RecorderModule = {
 
   // ── Arrancar: elige ALSA o browser según la fuente activa ────────────────
   async start() {
-    const source = getSelectedSource();
+    // En modo Pi-native forzamos siempre ALSA (el browser ya no captura audio).
+    const source = state.usePiNative ? 'pi' : getSelectedSource();
 
     if (source === 'pi') {
       // ── ALSA: arecord server-side ──────────────────────────────────────
@@ -2560,15 +2576,15 @@ const DebugModule = {
 
   // ─── En Raspberry: usar el cliente nativo @livekit/rtc-node ──────────────
   // Mic y speaker los maneja la Pi directo (arecord ↔ AudioSource ↔ aplay).
-  // El browser NO toca audio. Ocultamos los selectores de fuente/destino.
+  // El browser NO captura ni reproduce audio.
+  // Mostramos los dropdowns de dispositivos ALSA para elegir mic/speaker.
   if (isRaspberry) {
     state.usePiNative = true;
-    ui.audioSourceWrap.style.display = 'none';
     log('Raspberry detectada → modo Pi-native (rtc-node + ALSA, sin browser audio)', 'success');
   }
 
-  // ─── Selector de fuente de audio (solo cuando NO es Pi-native) ───────────
-  if (isRaspberry && !state.usePiNative) {
+  // ─── Selector de fuente de audio (visible siempre en Raspberry) ──────────
+  if (isRaspberry) {
     ui.audioSourceWrap.style.display = '';
 
     // En Raspberry el default es Pi para mic y speaker
@@ -2668,6 +2684,16 @@ const DebugModule = {
 
     updateSourceState(); // estado inicial
 
+    // En modo Pi-native: el browser ya NO captura ni reproduce audio.
+    // Ocultamos los radios "browser/pi" pero dejamos los dropdowns ALSA
+    // (mic y speaker) siempre visibles para que el usuario elija el dispositivo.
+    if (state.usePiNative) {
+      document.querySelectorAll('#audio-source-wrap .source-selector, #speaker-dest-wrap .source-selector')
+        .forEach(el => { el.style.display = 'none'; });
+      ui.alsaDeviceWrap.style.display       = '';
+      const alsaSpeakerWrap2 = document.getElementById('alsa-speaker-wrap');
+      if (alsaSpeakerWrap2) alsaSpeakerWrap2.style.display = '';
+    }
   }
 
   // ─── Grabaciones — siempre visible (browser recording funciona en cualquier plataforma) ──

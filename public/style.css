@@ -736,18 +736,32 @@ body {
 .recordings-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
 
 .rec-item {
-  display: flex; align-items: center; gap: 6px;
-  padding: 6px 10px;
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 6px;
+  row-gap: 2px;
+  padding: 8px 10px;
   background: var(--bg);
   border: 1px solid var(--border); border-radius: var(--r-sm);
   font-size: 11px;
 }
+.rec-item > :nth-child(1) { grid-row: 1 / span 2; }       /* icono fuente */
 .rec-item-name {
-  flex: 1; min-width: 0;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  color: var(--text); font-family: 'Consolas', monospace; font-size: 11px;
+  grid-column: 2 / span 4;
+  min-width: 0;
+  color: var(--text);
+  font-family: 'Consolas', monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  word-break: break-all;
+  overflow-wrap: anywhere;
 }
-.rec-item-size { font-size: 10px; color: var(--muted); flex-shrink: 0; }
+.rec-item-size {
+  grid-column: 2;
+  font-size: 10px; color: var(--muted);
+}
 .rec-item-dl {
   font-size: 11px; font-weight: 700;
   color: var(--accent); text-decoration: none;
