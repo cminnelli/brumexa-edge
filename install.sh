@@ -69,7 +69,7 @@ ok "npm install completado"
 
 # ─── 8. rpi-ws281x-native (NeoPixel) ─────────────────────────────────────────
 info "Instalando librería NeoPixel..."
-npm install rpi-ws281x-native --silent 2>/dev/null && ok "rpi-ws281x-native instalado" || info "rpi-ws281x-native no disponible (se omite)"
+npm install rpi-ws281x --silent 2>/dev/null && ok "rpi-ws281x instalado" || info "rpi-ws281x no disponible (se omite)"
 
 # ─── 9. Configurar .env ──────────────────────────────────────────────────────
 echo ""
