@@ -15,6 +15,7 @@ const { startRecording, stopRecording, getStatus,
 const { setupBluetooth }                               = require('./lib/bluetooth');
 const { setupWifi, autoStartAP }                       = require('./lib/wifi');
 const { session: lkSession }                           = require('./lib/livekit-session');
+const leds                                             = require('./lib/leds');
 
 const {
   LIVEKIT_URL,
@@ -542,6 +543,9 @@ httpServer.listen(PORT, () => {
   console.log(`  Sala por defecto        → ${LIVEKIT_ROOM_NAME}`);
   console.log(`  Setup WiFi              → http://localhost:${PORT}/setup\n`);
 
+  leds.init();
+  leds.on({ r: 0, g: 0, b: 60 });  // azul suave = servidor activo
+
   // En Linux: maximizar el gain de captura ALSA (Capture/Mic/ADC → 100% cap)
   // Así el mic anda aunque no se haya abierto nunca la UI de grabación.
   if (process.platform === 'linux') {
@@ -552,3 +556,6 @@ httpServer.listen(PORT, () => {
   // Si estamos en Linux y no hay WiFi configurado → activar AP automáticamente
   if (process.platform === 'linux') autoStartAP();
 });
+
+process.on('SIGTERM', () => { leds.cleanup(); process.exit(0); });
+process.on('SIGINT',  () => { leds.cleanup(); process.exit(0); });
