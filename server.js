@@ -536,6 +536,16 @@ setupAudio(app, httpServer);
 setupBluetooth(app, express);
 setupWifi(app);
 
+httpServer.on('error', err => {
+  if (err.code === 'EADDRINUSE') {
+    const { execSync } = require('child_process');
+    try {
+      execSync(`fuser -k ${PORT}/tcp`, { stdio: 'ignore' });
+    } catch {}
+    setTimeout(() => httpServer.listen(PORT), 1000);
+  }
+});
+
 httpServer.listen(PORT, () => {
   console.log(`\n  Brumexa-Edge corriendo en → http://localhost:${PORT}`);
   console.log(`  LiveKit URL             → ${LIVEKIT_URL || '(no configurado)'}`);
