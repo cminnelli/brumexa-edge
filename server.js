@@ -543,8 +543,7 @@ httpServer.listen(PORT, () => {
   console.log(`  Sala por defecto        → ${LIVEKIT_ROOM_NAME}`);
   console.log(`  Setup WiFi              → http://localhost:${PORT}/setup\n`);
 
-  leds.init();
-  leds.on({ r: 0, g: 0, b: 60 });  // azul suave = servidor activo
+  leds.init();  // arranca respiracion automaticamente
 
   // En Linux: maximizar el gain de captura ALSA (Capture/Mic/ADC → 100% cap)
   // Así el mic anda aunque no se haya abierto nunca la UI de grabación.
