@@ -88,7 +88,30 @@ else
   ok ".env configurado"
 fi
 
-# ─── 10. Arranque automático con PM2 ─────────────────────────────────────────
+# ─── 10. Configurar config.txt ───────────────────────────────────────────────
+CONFIG=/boot/firmware/config.txt
+info "Configurando /boot/firmware/config.txt..."
+
+if grep -q "googlevoicehat-soundcard" "$CONFIG"; then
+  ok "config.txt ya tiene audio I2S configurado"
+else
+  echo "" | sudo tee -a "$CONFIG" > /dev/null
+  echo "# Audio I2S (mic INMP441 + speaker MAX98357A)" | sudo tee -a "$CONFIG" > /dev/null
+  echo "dtparam=i2s=on" | sudo tee -a "$CONFIG" > /dev/null
+  echo "dtoverlay=googlevoicehat-soundcard" | sudo tee -a "$CONFIG" > /dev/null
+  ok "Audio I2S agregado al config.txt"
+fi
+
+if grep -q "dtparam=spi=on" "$CONFIG"; then
+  ok "config.txt ya tiene SPI configurado"
+else
+  echo "" | sudo tee -a "$CONFIG" > /dev/null
+  echo "# NeoPixel WS2812 (GPIO 10 SPI MOSI)" | sudo tee -a "$CONFIG" > /dev/null
+  echo "dtparam=spi=on" | sudo tee -a "$CONFIG" > /dev/null
+  ok "SPI (NeoPixel) agregado al config.txt"
+fi
+
+# ─── 11. Arranque automático con PM2 ─────────────────────────────────────────
 echo ""
 read -p "¿Configurar arranque automático al boot con PM2? (s/n): " AUTOSTART
 if [ "$AUTOSTART" = "s" ] || [ "$AUTOSTART" = "S" ]; then
