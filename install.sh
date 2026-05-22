@@ -117,9 +117,9 @@ read -p "¿Configurar arranque automático al boot con PM2? (s/n): " AUTOSTART
 if [ "$AUTOSTART" = "s" ] || [ "$AUTOSTART" = "S" ]; then
   info "Instalando PM2..."
   sudo npm install -g pm2 --silent
-  pm2 start server.js --name brumexa-edge
-  pm2 startup | tail -1 | sudo bash
-  pm2 save
+  sudo pm2 start server.js --name brumexa-edge
+  sudo pm2 startup | tail -1 | sudo bash
+  sudo pm2 save
   ok "PM2 configurado — el server arranca solo al boot"
 fi
 
