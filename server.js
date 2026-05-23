@@ -194,6 +194,7 @@ app.post('/config/mic-gain', express.json(), (req, res) => {
 // ─── POST /record/start — iniciar grabación en la Pi ─────────────────────────
 app.post('/record/start', express.json(), (req, res) => {
   try {
+    stopMicMonitor();  // liberar el dispositivo antes de grabar
     const device     = req.body?.device     || 'default';
     const normTarget = parseFloat(req.body?.normTarget);
     const info       = startRecording(device, isNaN(normTarget) ? 0.85 : Math.min(Math.max(normTarget, 0.3), 1.0));
@@ -207,6 +208,7 @@ app.post('/record/start', express.json(), (req, res) => {
 app.post('/record/stop', (_req, res) => {
   try {
     const info = stopRecording();
+    startMicMonitor();  // reanudar monitor de mic
     res.json({ ok: true, ...info });
   } catch (err) {
     res.status(409).json({ ok: false, error: err.message });
