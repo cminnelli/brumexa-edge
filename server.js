@@ -19,14 +19,13 @@ const leds                                             = require('./lib/leds');
 
 const {
   LIVEKIT_URL,
+  LIVEKIT_TOKEN,
   LIVEKIT_ROOM_NAME = 'brumexa-room',
-  TOKEN_API_URL,
-  BRUMEXA_API_KEY,
   PORT = 3000,
 } = process.env;
 
-if (!TOKEN_API_URL) {
-  console.warn('[warn] TOKEN_API_URL no configurado. El endpoint /token no funcionará.');
+if (!LIVEKIT_TOKEN) {
+  console.warn('[warn] LIVEKIT_TOKEN no configurado. El endpoint /token y las sesiones no funcionarán.');
 }
 
 // ─── App ─────────────────────────────────────────────────────────────────────
@@ -47,8 +46,8 @@ app.get('/', (_req, res) => {
 // ─── GET /config — info del dispositivo y configuración (sin secretos) ───────
 app.get('/config', (_req, res) => {
   res.json({
-    livekitUrl:         LIVEKIT_URL || null,
-    tokenApiConfigured: !!TOKEN_API_URL,
+    livekitUrl:      LIVEKIT_URL || null,
+    tokenConfigured: !!LIVEKIT_TOKEN,
     port:               Number(PORT),
     micGain:            getMicGain(),
     server: {
@@ -111,69 +110,17 @@ app.get('/livekit-health', async (_req, res) => {
   }
 });
 
-// ─── GET /token — pide el token al servidor central y lo reenvía al cliente ──
-app.get('/token', async (_req, res) => {
-  if (!TOKEN_API_URL) {
-    return res.status(503).json({ error: 'TOKEN_API_URL no configurado en .env' });
+// ─── GET /token — devuelve el token estático del .env ────────────────────────
+app.get('/token', (_req, res) => {
+  if (!LIVEKIT_TOKEN) {
+    return res.status(503).json({ error: 'LIVEKIT_TOKEN no configurado en .env' });
   }
-
-  // Identificar el dispositivo para el servidor central
-  const arch        = os.arch();
-  const isArm       = /arm/i.test(arch);
-  const deviceType  = process.platform === 'linux' && isArm ? 'raspberry' : 'pc';
-  const deviceId    = os.hostname();
-
-  console.log(`[token] → POST ${TOKEN_API_URL}  device=${deviceType}  id=${deviceId}`);
-
-  try {
-    const response = await fetch(TOKEN_API_URL, {
-      method:  'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(BRUMEXA_API_KEY && { 'x-api-key': BRUMEXA_API_KEY }),
-      },
-      body: JSON.stringify({ deviceType, deviceId }),
-    });
-
-    const rawText = await response.text();
-    console.log(`[token] ← HTTP ${response.status}  body: ${rawText}`);
-
-    if (!response.ok) {
-      return res.status(502).json({ error: `Servidor central respondió ${response.status}`, detail: rawText });
-    }
-
-    let data;
-    try {
-      data = JSON.parse(rawText);
-    } catch {
-      console.error('[token] Respuesta no es JSON válido');
-      return res.status(502).json({ error: 'Respuesta inválida del servidor central' });
-    }
-
-    if (!data.token) {
-      console.error('[token] Respuesta sin campo "token":', data);
-      return res.status(502).json({ error: 'El servidor central no devolvió token' });
-    }
-
-    // El servidor central devuelve: { token, url, roomName, participantName, ... }
-    const result = {
-      token:    data.token,
-      room:     data.roomName       || LIVEKIT_ROOM_NAME,
-      identity: data.participantName || deviceId,
-      livekitUrl: data.url          || LIVEKIT_URL,
-      expiresIn:  data.expiresIn    || '?',
-    };
-    console.log(`[token] OK`);
-    console.log(`         room       → ${result.room}`);
-    console.log(`         identity   → ${result.identity}`);
-    console.log(`         livekit    → ${result.livekitUrl}`);
-    console.log(`         expiresIn  → ${result.expiresIn}`);
-    res.json(result);
-
-  } catch (err) {
-    console.error('[token] Error de red contactando servidor central:', err.message);
-    res.status(500).json({ error: 'No se pudo contactar al servidor central', detail: err.message });
-  }
+  res.json({
+    token:      LIVEKIT_TOKEN,
+    room:       LIVEKIT_ROOM_NAME,
+    identity:   os.hostname(),
+    livekitUrl: LIVEKIT_URL,
+  });
 });
 
 // ─── GET /config/mic-gain — ganancia actual del mic en vivo ──────────────────
@@ -436,59 +383,18 @@ function decodeJwtPayload(jwt) {
   } catch { return null; }
 }
 
-// Helper interno: pedir token al servidor central (mismo flujo que /token)
-async function fetchTokenFromCentral() {
-  if (!TOKEN_API_URL) throw new Error('TOKEN_API_URL no configurado');
-
-  const arch       = os.arch();
-  const isArm      = /arm/i.test(arch);
-  const deviceType = process.platform === 'linux' && isArm ? 'raspberry' : 'pc';
-  const deviceId   = os.hostname();
-
-  console.log(`[session] ▶ token-fetch START  url=${TOKEN_API_URL}  device=${deviceType}  id=${deviceId}`);
-
-  const t0 = Date.now();
-  let r;
-  try {
-    r = await fetch(TOKEN_API_URL, {
-      method:  'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(BRUMEXA_API_KEY && { 'x-api-key': BRUMEXA_API_KEY }),
-      },
-      body: JSON.stringify({ deviceType, deviceId }),
-    });
-  } catch (netErr) {
-    throw new Error(`token-fetch network error (${Date.now()-t0}ms): ${netErr.code || ''} ${netErr.message}`);
-  }
-  const elapsed = Date.now() - t0;
-
-  if (!r.ok) {
-    const txt = await r.text();
-    throw new Error(`token-fetch HTTP ${r.status} (${elapsed}ms): ${txt}`);
-  }
-  const data = await r.json();
-  if (!data.token) throw new Error('Respuesta del servidor central sin "token"');
-
-  // Introspección del JWT para debug
-  const payload = decodeJwtPayload(data.token);
+// Helper interno: devuelve el token estático del .env
+function getToken() {
+  if (!LIVEKIT_TOKEN) throw new Error('LIVEKIT_TOKEN no configurado en .env');
+  const payload = decodeJwtPayload(LIVEKIT_TOKEN);
   if (payload) {
-    const now  = Math.floor(Date.now() / 1000);
-    const ttl  = payload.exp ? (payload.exp - now) : null;
+    const now = Math.floor(Date.now() / 1000);
+    const ttl = payload.exp ? (payload.exp - now) : null;
     const room = payload.video?.room || payload.room || '(sin room en claims)';
-    console.log(`[session] ◀ token-fetch OK  ${elapsed}ms`);
-    console.log(`[session]   jwt.sub=${payload.sub}  jwt.iss=${payload.iss}  room=${room}  ttl=${ttl}s  jti=${payload.jti || '-'}`);
-    if (ttl !== null && ttl < 60) console.warn(`[session]   ⚠ token TTL bajo (${ttl}s) — puede expirar antes de conectar`);
-  } else {
-    console.log(`[session] ◀ token-fetch OK  ${elapsed}ms  (no pude decodear JWT)`);
+    console.log(`[session] token estático  sub=${payload.sub}  room=${room}  ttl=${ttl}s`);
+    if (ttl !== null && ttl < 60) console.warn(`[session] ⚠ token TTL bajo (${ttl}s) — puede expirar`);
   }
-
-  return {
-    token:    data.token,
-    url:      data.url      || LIVEKIT_URL,
-    roomName: data.roomName || LIVEKIT_ROOM_NAME,
-    identity: data.participantName || deviceId,
-  };
+  return { token: LIVEKIT_TOKEN, url: LIVEKIT_URL, roomName: LIVEKIT_ROOM_NAME, identity: os.hostname() };
 }
 
 app.post('/session/start', express.json(), async (req, res) => {
@@ -505,9 +411,8 @@ app.post('/session/start', express.json(), async (req, res) => {
     const speakerDevice = req.body?.speakerDevice || process.env.SPEAKER_DEVICE || 'plughw:0,0';
     console.log(`[session/start:${reqId}]   mic=${micDevice}  speaker=${speakerDevice}`);
 
-    const tokT0 = Date.now();
-    const { token, url, roomName } = await fetchTokenFromCentral();
-    console.log(`[session/start:${reqId}]   token OK  (${Date.now()-tokT0}ms)  → connecting to ${url}  room=${roomName || '(auto)'}`);
+    const { token, url, roomName } = getToken();
+    console.log(`[session/start:${reqId}]   token OK  → connecting to ${url}  room=${roomName || '(auto)'}`);
 
     const connT0 = Date.now();
     await lkSession.start({ token, url, roomName, micDevice, speakerDevice });
@@ -588,7 +493,7 @@ httpServer.on('error', err => {
 httpServer.listen(PORT, () => {
   console.log(`\n  Brumexa-Edge corriendo en → http://localhost:${PORT}`);
   console.log(`  LiveKit URL             → ${LIVEKIT_URL || '(no configurado)'}`);
-  console.log(`  Token API               → ${TOKEN_API_URL || '(no configurado)'}`);
+  console.log(`  Token                   → ${LIVEKIT_TOKEN ? '✔ configurado' : '(no configurado)'}`);
   console.log(`  Sala por defecto        → ${LIVEKIT_ROOM_NAME}`);
   console.log(`  Setup WiFi              → http://localhost:${PORT}/setup\n`);
 
