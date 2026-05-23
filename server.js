@@ -381,7 +381,11 @@ app.get('/recordings/play-status', (_req, res) => {
 //   POST /session/mic-gain { gain } → ajustar gain del mic en vivo
 
 // Re-emitir eventos del session a la consola para diagnóstico
-lkSession.on('mic-stats',     ({ peak }) => leds.speaking(peak));
+lkSession.on('mic-stats',     ({ peak, dbfs }) => {
+  const level = peak / 32767;
+  console.log(`[leds] mic peak=${peak} level=${level.toFixed(2)} dbfs=${dbfs.toFixed(1)}`);
+  leds.speaking(level);
+});
 lkSession.on('speaker-stats', s => { /* ya se imprime dentro del módulo */ });
 lkSession.on('connected',     () => leds.breathe());
 lkSession.on('error',         e => { console.error('[lk-session-evt] error:', e.message); leds.brumexaError(); });
