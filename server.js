@@ -16,7 +16,6 @@ const { setupBluetooth }                               = require('./lib/bluetoot
 const { setupWifi, autoStartAP }                       = require('./lib/wifi');
 const { session: lkSession }                           = require('./lib/livekit-session');
 const leds                                             = require('./lib/leds');
-const { spawn }                                        = require('child_process');
 
 const {
   LIVEKIT_URL,
