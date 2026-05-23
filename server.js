@@ -362,13 +362,14 @@ function stopMicMonitor() {
   if (_micMonitor) { _micMonitor.kill(); _micMonitor = null; console.log('[mic-monitor] detenido'); }
 }
 
+let _sessionConnectedAt = 0;
 lkSession.on('mic-stats',     ({ peak, dbfs }) => {
   const level = peak / 32767;
   console.log(`[leds] mic peak=${peak} level=${level.toFixed(2)} dbfs=${dbfs.toFixed(1)}`);
-  leds.speaking(level);
+  if (Date.now() - _sessionConnectedAt > 2000) leds.speaking(level);
 });
 lkSession.on('speaker-stats', s => { /* ya se imprime dentro del módulo */ });
-lkSession.on('connected',     () => { stopMicMonitor(); leds.breathe(); });
+lkSession.on('connected',     () => { stopMicMonitor(); _sessionConnectedAt = Date.now(); leds.breathe(); });
 lkSession.on('error',         e => { console.error('[lk-session-evt] error:', e.message); leds.brumexaError(); startMicMonitor(); });
 lkSession.on('disconnected',  d => { console.log('[lk-session-evt] disconnected:', d.reason); leds.breathe(); startMicMonitor(); });
 
@@ -416,6 +417,7 @@ app.post('/session/start', express.json(), async (req, res) => {
     const { token, url, roomName } = getToken();
     console.log(`[session/start:${reqId}]   token OK  → connecting to ${url}  room=${roomName || '(auto)'}`);
 
+    stopMicMonitor();  // liberar ALSA antes de que lkSession tome el mic
     const connT0 = Date.now();
     await lkSession.start({ token, url, roomName, micDevice, speakerDevice });
     console.log(`[session/start:${reqId}]   lkSession.start OK  (${Date.now()-connT0}ms)`);
