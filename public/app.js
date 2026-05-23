@@ -1031,7 +1031,7 @@ const LiveKitModule = {
     } catch (err) {
       setStep('token', 'error', 'falló');
       setChannelStatus('closed', '');
-      log('No se pudo obtener el token — revisá TOKEN_API_URL en .env', 'error');
+      log('No se pudo obtener el token — revisá LIVEKIT_TOKEN en .env', 'error');
       throw err;
     }
 
@@ -2574,8 +2574,8 @@ const DebugModule = {
       ui.smLkSub.textContent = cfg.livekitUrl.replace('wss://', '');
     }
 
-    if (!cfg.tokenApiConfigured) {
-      log('TOKEN_API_URL no configurado en .env', 'warn');
+    if (!cfg.tokenConfigured) {
+      log('LIVEKIT_TOKEN no configurado en .env', 'warn');
     }
 
   } catch {
