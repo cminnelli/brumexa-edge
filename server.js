@@ -376,7 +376,7 @@ lkSession.on('mic-stats',     ({ peak, dbfs }) => {
 });
 lkSession.on('speaker-stats', s => { /* ya se imprime dentro del módulo */ });
 lkSession.on('connected',     () => { stopMicMonitor(); _sessionConnectedAt = Date.now(); leds.breathe(); });
-lkSession.on('error',         e => { console.error('[lk-session-evt] error:', e.message); leds.brumexaError(); startMicMonitor(); });
+lkSession.on('error',         e => { console.error('[lk-session-evt] error:', e.message); leds.brumexaError(4000); startMicMonitor(); });
 lkSession.on('disconnected',  d => { console.log('[lk-session-evt] disconnected:', d.reason); leds.breathe(); startMicMonitor(); });
 
 // Decodifica el payload de un JWT (sin validar firma — solo para debug)
@@ -434,6 +434,7 @@ app.post('/session/start', express.json(), async (req, res) => {
   } catch (err) {
     console.error(`[session/start:${reqId}] ✘ FAIL  total=${Date.now()-t0}ms  ${err.message}`);
     if (err.stack) console.error(err.stack);
+    leds.brumexaError(4000);  // rojo 4s, luego vuelve al breathe
     res.status(500).json({ ok: false, error: err.message });
   }
 });
