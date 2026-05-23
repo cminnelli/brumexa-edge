@@ -359,7 +359,13 @@ function startMicMonitor() {
 }
 
 function stopMicMonitor() {
-  if (_micMonitor) { _micMonitor.kill(); _micMonitor = null; console.log('[mic-monitor] detenido'); }
+  if (!_micMonitor) return Promise.resolve();
+  const proc = _micMonitor;
+  _micMonitor = null;
+  console.log('[mic-monitor] detenido');
+  const gone = new Promise(r => proc.once('close', r));
+  try { proc.kill('SIGTERM'); } catch {}
+  return Promise.race([gone, new Promise(r => setTimeout(r, 800))]);
 }
 
 let _sessionConnectedAt = 0;
@@ -417,7 +423,7 @@ app.post('/session/start', express.json(), async (req, res) => {
     const { token, url, roomName } = getToken();
     console.log(`[session/start:${reqId}]   token OK  → connecting to ${url}  room=${roomName || '(auto)'}`);
 
-    stopMicMonitor();  // liberar ALSA antes de que lkSession tome el mic
+    await stopMicMonitor();  // esperar que ALSA quede libre antes de que lkSession tome el mic
     const connT0 = Date.now();
     await lkSession.start({ token, url, roomName, micDevice, speakerDevice });
     console.log(`[session/start:${reqId}]   lkSession.start OK  (${Date.now()-connT0}ms)`);
@@ -443,6 +449,24 @@ app.post('/session/stop', async (_req, res) => {
 
 app.get('/session/status', (_req, res) => {
   res.json(lkSession.getStatus());
+});
+
+// ─── GET /session/diag — estado detallado del pipeline de audio en la Pi ─────
+app.get('/session/diag', (_req, res) => {
+  const status = lkSession.getStatus();
+  const { execSync } = require('child_process');
+  const run = cmd => { try { return execSync(cmd, { timeout: 2000, encoding: 'utf8' }).trim(); } catch { return null; } };
+  res.json({
+    ...status,
+    arecordRunning: status.micActive,
+    aplayRunning:   status.speakerActive,
+    arecordPid:     lkSession.arecordProc?.pid || null,
+    aplayPid:       lkSession.aplayProc?.pid   || null,
+    // Procesos ALSA activos en el sistema
+    alsaProcs: process.platform === 'linux' ? run('pgrep -a arecord ; pgrep -a aplay') : null,
+    // Nivel de captura ALSA
+    alsaCapture: process.platform === 'linux' ? run('amixer sget Capture 2>/dev/null || amixer sget Mic 2>/dev/null') : null,
+  });
 });
 
 app.post('/session/mic-gain', express.json(), (req, res) => {

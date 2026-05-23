@@ -969,9 +969,22 @@ const PiNativeModule = {
   _startPolling() {
     if (this._statusPoll) clearInterval(this._statusPoll);
     this._reconnectLogged = false;
+    this._diagTick = 0;
     this._statusPoll = setInterval(async () => {
       try {
         const s = await fetch('/session/status').then(r => r.json());
+
+        // Pipeline de audio — log cada 8s (cada 4 ticks de 2s)
+        this._diagTick = (this._diagTick || 0) + 1;
+        if (s.isConnected && this._diagTick % 4 === 0) {
+          const micPct  = s.lastMicPeak     ? (s.lastMicPeak     / 327.67).toFixed(0) : '0';
+          const spkPct  = s.lastSpeakerPeak ? (s.lastSpeakerPeak / 327.67).toFixed(0) : '0';
+          const muted   = s.micMuted ? ' [MUTED half-duplex]' : '';
+          if (!s.micActive)        log('[pi-diag] ⚠ arecord NO está corriendo — mic sin audio', 'error');
+          else if (!s.lastMicPeak) log(`[pi-diag] ⚠ arecord corriendo pero peak=0 — mic sin señal${muted}`, 'warn');
+          else                     log(`[pi-diag] mic ${micPct}% peak  speaker ${spkPct}% peak${muted}`, 'info');
+        }
+
         // Reflejar estado del mic/speaker en la UI
         if (s.micActive) {
           setMicStatus('on', `gain ${s.micGain}x`);
