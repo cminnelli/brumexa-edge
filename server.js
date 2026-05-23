@@ -16,6 +16,7 @@ const { setupBluetooth }                               = require('./lib/bluetoot
 const { setupWifi, autoStartAP }                       = require('./lib/wifi');
 const { session: lkSession }                           = require('./lib/livekit-session');
 const leds                                             = require('./lib/leds');
+const { spawn }                                        = require('child_process');
 
 const {
   LIVEKIT_URL,
@@ -381,15 +382,47 @@ app.get('/recordings/play-status', (_req, res) => {
 //   POST /session/mic-gain { gain } → ajustar gain del mic en vivo
 
 // Re-emitir eventos del session a la consola para diagnóstico
+// ─── Monitor de mic standalone (cuando no hay sesión LiveKit activa) ─────────
+let _micMonitor = null;
+
+function startMicMonitor() {
+  if (_micMonitor || process.platform !== 'linux') return;
+  const MIC = process.env.MIC_DEVICE || 'plughw:0,0';
+  const proc = spawn('arecord', ['-D', MIC, '-f', 'S16_LE', '-r', '16000', '-c', '1', '-t', 'raw', '-q']);
+  let peak = 0;
+  let last = Date.now();
+
+  proc.stdout.on('data', chunk => {
+    for (let i = 0; i < chunk.length - 1; i += 2) {
+      const s = Math.abs(chunk.readInt16LE(i));
+      if (s > peak) peak = s;
+    }
+    if (Date.now() - last > 500) {
+      const level = peak / 32767;
+      console.log(`[mic-monitor] level=${level.toFixed(2)}`);
+      leds.speaking(level);
+      peak = 0;
+      last = Date.now();
+    }
+  });
+  proc.on('error', () => {});
+  _micMonitor = proc;
+  console.log('[mic-monitor] iniciado');
+}
+
+function stopMicMonitor() {
+  if (_micMonitor) { _micMonitor.kill(); _micMonitor = null; console.log('[mic-monitor] detenido'); }
+}
+
 lkSession.on('mic-stats',     ({ peak, dbfs }) => {
   const level = peak / 32767;
   console.log(`[leds] mic peak=${peak} level=${level.toFixed(2)} dbfs=${dbfs.toFixed(1)}`);
   leds.speaking(level);
 });
 lkSession.on('speaker-stats', s => { /* ya se imprime dentro del módulo */ });
-lkSession.on('connected',     () => leds.breathe());
-lkSession.on('error',         e => { console.error('[lk-session-evt] error:', e.message); leds.brumexaError(); });
-lkSession.on('disconnected',  d => { console.log('[lk-session-evt] disconnected:', d.reason); leds.breathe(); });
+lkSession.on('connected',     () => { stopMicMonitor(); leds.breathe(); });
+lkSession.on('error',         e => { console.error('[lk-session-evt] error:', e.message); leds.brumexaError(); startMicMonitor(); });
+lkSession.on('disconnected',  d => { console.log('[lk-session-evt] disconnected:', d.reason); leds.breathe(); startMicMonitor(); });
 
 // Decodifica el payload de un JWT (sin validar firma — solo para debug)
 function decodeJwtPayload(jwt) {
@@ -559,6 +592,7 @@ httpServer.listen(PORT, () => {
   console.log(`  Setup WiFi              → http://localhost:${PORT}/setup\n`);
 
   leds.init();  // arranca respiracion automaticamente
+  if (process.platform === 'linux') startMicMonitor();
 
   // En Linux: maximizar el gain de captura ALSA (Capture/Mic/ADC → 100% cap)
   // Así el mic anda aunque no se haya abierto nunca la UI de grabación.
