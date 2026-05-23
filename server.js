@@ -398,7 +398,7 @@ function startMicMonitor() {
       const s = Math.abs(chunk.readInt16LE(i));
       if (s > peak) peak = s;
     }
-    if (Date.now() - last > 500) {
+    if (Date.now() - last > 100) {
       const level = peak / 32767;
       console.log(`[mic-monitor] level=${level.toFixed(2)}`);
       leds.speaking(level);
