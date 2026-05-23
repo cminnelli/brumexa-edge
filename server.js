@@ -20,7 +20,7 @@ const leds                                             = require('./lib/leds');
 const {
   LIVEKIT_URL,
   LIVEKIT_TOKEN,
-  LIVEKIT_ROOM_NAME = 'brumexa-room',
+  LIVEKIT_ROOM_NAME,
   PORT = 3000,
 } = process.env;
 
