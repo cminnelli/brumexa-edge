@@ -826,6 +826,9 @@ function startLkTrackMonitor(track, label) {
     // Muteado — NO conectar a destination (el track va a LiveKit, no al speaker del browser).
     const buf = new Uint8Array(analyser.fftSize);
     let peakSince = 0, nSamples = 0, sumSq = 0;
+    let _voiceOn = false, _lastVoiceChange = 0;
+    const VOICE_ON_THRESH  = 8;   // peak/127 ~6% — empieza a hablar
+    const VOICE_OFF_THRESH = 3;   // peak/127 ~2% — dejó de hablar
     const interval = setInterval(() => {
       analyser.getByteTimeDomainData(buf);
       let peak = 0, sq = 0;
@@ -838,8 +841,20 @@ function startLkTrackMonitor(track, label) {
       if (peak > peakSince) peakSince = peak;
       sumSq   += sq;
       nSamples += buf.length;
-      // Cada 2 s loguear
-      if (nSamples >= analyser.fftSize * 40) {  // ~2s @ ~50 Hz tick
+
+      // Detección inmediata de voz (sin esperar 2s)
+      const now = Date.now();
+      if (now - _lastVoiceChange > 300) {
+        const newVoice = _voiceOn ? peak > VOICE_OFF_THRESH : peak > VOICE_ON_THRESH;
+        if (newVoice !== _voiceOn) {
+          _voiceOn = newVoice;
+          _lastVoiceChange = now;
+          log(`[${label}] ${newVoice ? '🎙 VOZ detectada' : '— silencio'} (peak ${peak}/127)`, newVoice ? 'success' : 'info');
+        }
+      }
+
+      // Resumen cada 2 s
+      if (nSamples >= analyser.fftSize * 40) {
         const rms    = Math.sqrt(sumSq / nSamples) / 128;
         const rmsDb  = rms > 0 ? (20 * Math.log10(rms)).toFixed(1) : '−∞';
         const pctPk  = (peakSince / 127 * 100).toFixed(0);
@@ -1217,6 +1232,10 @@ const LiveKitModule = {
         });
         log(`[speaker-browser] ✔ Audio del agente → browser (NO por parlante Pi). Cambiá "Salida" a Raspberry Pi para routear al parlante.`, 'warn');
       }
+
+      // Monitor de nivel del agente remoto — detecta cuándo habla/para
+      const remoteMonitor = startLkTrackMonitor(track.mediaStreamTrack, `agente(${participant.identity.slice(0,12)})`);
+      track.on('ended', () => { if (remoteMonitor) remoteMonitor.stop(); });
     });
 
     room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
