@@ -381,10 +381,11 @@ app.get('/recordings/play-status', (_req, res) => {
 //   POST /session/mic-gain { gain } → ajustar gain del mic en vivo
 
 // Re-emitir eventos del session a la consola para diagnóstico
-lkSession.on('mic-stats',    s => { /* ya se imprime dentro del módulo */ });
+lkSession.on('mic-stats',     ({ peak }) => leds.speaking(peak));
 lkSession.on('speaker-stats', s => { /* ya se imprime dentro del módulo */ });
-lkSession.on('error',        e => console.error('[lk-session-evt] error:', e.message));
-lkSession.on('disconnected', d => console.log('[lk-session-evt] disconnected:', d.reason));
+lkSession.on('connected',     () => leds.breathe());
+lkSession.on('error',         e => { console.error('[lk-session-evt] error:', e.message); leds.brumexaError(); });
+lkSession.on('disconnected',  d => { console.log('[lk-session-evt] disconnected:', d.reason); leds.breathe(); });
 
 // Decodifica el payload de un JWT (sin validar firma — solo para debug)
 function decodeJwtPayload(jwt) {
@@ -562,8 +563,13 @@ httpServer.listen(PORT, () => {
     boostCaptureGain();
   }
 
-  // Si estamos en Linux y no hay WiFi configurado → activar AP automáticamente
-  if (process.platform === 'linux') autoStartAP();
+  // Si estamos en Linux y no hay WiFi configurado → activar AP + LEDs rojo
+  if (process.platform === 'linux') {
+    autoStartAP().then(() => {
+      const { getStatus } = require('./lib/wifi');
+      if (!getStatus().connectedSSID) leds.brumexaError();
+    });
+  }
 });
 
 process.on('SIGTERM', () => { leds.cleanup(); process.exit(0); });
