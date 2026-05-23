@@ -387,14 +387,16 @@ function decodeJwtPayload(jwt) {
 function getToken() {
   if (!LIVEKIT_TOKEN) throw new Error('LIVEKIT_TOKEN no configurado en .env');
   const payload = decodeJwtPayload(LIVEKIT_TOKEN);
+  let roomName = LIVEKIT_ROOM_NAME;
   if (payload) {
     const now = Math.floor(Date.now() / 1000);
     const ttl = payload.exp ? (payload.exp - now) : null;
-    const room = payload.video?.room || payload.room || '(sin room en claims)';
-    console.log(`[session] token estático  sub=${payload.sub}  room=${room}  ttl=${ttl}s`);
+    const tokenRoom = payload.video?.room || payload.room;
+    if (!roomName && tokenRoom) roomName = tokenRoom;
+    console.log(`[session] token estático  sub=${payload.sub}  room=${roomName}  ttl=${ttl}s`);
     if (ttl !== null && ttl < 60) console.warn(`[session] ⚠ token TTL bajo (${ttl}s) — puede expirar`);
   }
-  return { token: LIVEKIT_TOKEN, url: LIVEKIT_URL, roomName: LIVEKIT_ROOM_NAME, identity: os.hostname() };
+  return { token: LIVEKIT_TOKEN, url: LIVEKIT_URL, roomName, identity: os.hostname() };
 }
 
 app.post('/session/start', express.json(), async (req, res) => {
