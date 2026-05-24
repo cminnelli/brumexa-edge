@@ -1255,3 +1255,49 @@ body {
   .status-bar { grid-template-columns: 1fr; }
   .site-header__device { display: none; }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   SETUP SECTION
+══════════════════════════════════════════════════════════ */
+.setup-wrap {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 0 1.5rem 2rem;
+}
+
+.setup-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  outline: none;
+  transition: border-color var(--tr);
+}
+.setup-input:focus { border-color: var(--accent); }
+.setup-input::placeholder { color: var(--muted); }
+.setup-input--short { width: 120px; }
+
+.setup-token-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.setup-token-row .setup-input { flex: 1; }
+
+.setup-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.setup-status {
+  font-size: 12px;
+  color: var(--muted);
+}
+.setup-status.success { color: var(--success); }
+.setup-status.error   { color: var(--danger); }

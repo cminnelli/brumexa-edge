@@ -2570,6 +2570,110 @@ const DebugModule = {
 };
 
 // ============================================================
+// SETUP MODULE — editar parámetros del .env desde el browser
+// ============================================================
+const SetupModule = {
+  _bound: false,
+
+  async load() {
+    if (!this._bound) {
+      this._bound = true;
+      const saveBtn = document.getElementById('btn-setup-save');
+      if (saveBtn) saveBtn.addEventListener('click', () => this.save());
+
+      const tokEl  = document.getElementById('setup-lk-token');
+      const togBtn = document.getElementById('btn-toggle-token');
+      const info   = document.getElementById('setup-token-info');
+      if (tokEl && togBtn) {
+        togBtn.addEventListener('click', () => {
+          tokEl.type = tokEl.type === 'password' ? 'text' : 'password';
+          togBtn.textContent = tokEl.type === 'password' ? 'Mostrar' : 'Ocultar';
+        });
+        tokEl.addEventListener('input', () => this._updateTokenInfo(tokEl.value.trim(), info));
+      }
+    }
+
+    const status = document.getElementById('setup-status');
+    if (status) { status.textContent = 'Cargando…'; status.className = 'setup-status'; }
+    try {
+      const cfg = await fetch('/setup/config').then(r => r.json());
+      const get = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+      get('setup-lk-url',      cfg.livekitUrl);
+      get('setup-lk-token',    cfg.livekitToken);
+      get('setup-device-name', cfg.deviceName);
+      get('setup-mic-gain',    cfg.micGain);
+      if (status) status.textContent = '';
+      if (cfg.livekitToken) this._updateTokenInfo(cfg.livekitToken, document.getElementById('setup-token-info'));
+    } catch (err) {
+      if (status) { status.textContent = `Error: ${err.message}`; status.className = 'setup-status error'; }
+    }
+  },
+
+  _updateTokenInfo(token, el) {
+    if (!el) return;
+    if (!token) { el.textContent = ''; return; }
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) { el.textContent = 'Token invalido (no es JWT)'; return; }
+      const b64     = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const pad     = b64 + '='.repeat((4 - b64.length % 4) % 4);
+      const payload = JSON.parse(atob(pad));
+      const room    = payload.video?.room || payload.room || '—';
+      const sub     = payload.sub || '—';
+      const now     = Math.floor(Date.now() / 1000);
+      const ttl     = payload.exp ? payload.exp - now : null;
+      const ttlStr  = ttl === null
+        ? 'sin expiracion'
+        : ttl < 0
+          ? `EXPIRADO (hace ${Math.abs(ttl)}s)`
+          : `${Math.round(ttl / 3600)}h restantes`;
+      el.textContent = `Room: ${room}  ·  sub: ${sub}  ·  TTL: ${ttlStr}`;
+      el.style.color = ttl !== null && ttl < 0 ? 'var(--danger)' : '';
+    } catch {
+      el.textContent = 'No se pudo decodificar el token';
+    }
+  },
+
+  async save() {
+    const btn    = document.getElementById('btn-setup-save');
+    const status = document.getElementById('setup-status');
+    const body   = {
+      livekitUrl:   (document.getElementById('setup-lk-url')?.value      || '').trim(),
+      livekitToken: (document.getElementById('setup-lk-token')?.value     || '').trim(),
+      deviceName:   (document.getElementById('setup-device-name')?.value  || '').trim(),
+      micGain:       document.getElementById('setup-mic-gain')?.value      || '4.0',
+    };
+
+    if (!body.livekitUrl)   { if (status) { status.textContent = 'LiveKit URL es requerido'; status.className = 'setup-status error'; } return; }
+    if (!body.livekitToken) { if (status) { status.textContent = 'LiveKit Token es requerido'; status.className = 'setup-status error'; } return; }
+
+    if (btn) btn.disabled = true;
+    if (status) { status.textContent = 'Guardando…'; status.className = 'setup-status'; }
+
+    try {
+      const res = await fetch('/setup/config', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(body),
+      }).then(r => r.json());
+
+      if (!res.ok) throw new Error(res.error || 'Error desconocido');
+
+      if (status) { status.textContent = 'Guardado. Reiniciando en 3s…'; status.className = 'setup-status success'; }
+      let c = 3;
+      const tick = setInterval(() => {
+        c--;
+        if (c <= 0) { clearInterval(tick); location.reload(); }
+        else if (status) status.textContent = `Guardado. Reiniciando en ${c}s…`;
+      }, 1000);
+    } catch (err) {
+      if (status) { status.textContent = `Error: ${err.message}`; status.className = 'setup-status error'; }
+      if (btn) btn.disabled = false;
+    }
+  },
+};
+
+// ============================================================
 // INIT
 // ============================================================
 (async function init() {
@@ -2745,27 +2849,33 @@ const DebugModule = {
   await RecorderModule.show();
   GainControls.init(state.micGain || 4);
 
-  // ─── Bluetooth y terminal (solo Linux) ───────────────────────────────────
-  if (isLinux) {
-    BluetoothModule.init();
-    const tabNav = document.getElementById('tab-nav');
-    if (tabNav) {
-      tabNav.style.display = 'flex';
-      let terminalInited = false;
-      tabNav.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          tabNav.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-          const tab = btn.dataset.tab;
-          document.getElementById('panel-section').style.display    = tab === 'panel'    ? '' : 'none';
-          document.getElementById('terminal-section').style.display = tab === 'terminal' ? '' : 'none';
-          if (tab === 'terminal' && !terminalInited) {
-            terminalInited = true;
-            TerminalModule.init();
-          }
-        });
-      });
+  // ─── Bluetooth (solo Linux) ───────────────────────────────────────────────
+  if (isLinux) BluetoothModule.init();
+
+  // ─── Tab nav — siempre visible; Terminal solo en Linux ───────────────────
+  const tabNav = document.getElementById('tab-nav');
+  if (tabNav) {
+    tabNav.style.display = 'flex';
+    if (!isLinux) {
+      const termBtn = tabNav.querySelector('[data-tab="terminal"]');
+      if (termBtn) termBtn.style.display = 'none';
     }
+    let terminalInited = false;
+    tabNav.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        tabNav.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const tab = btn.dataset.tab;
+        document.getElementById('panel-section').style.display    = tab === 'panel'    ? '' : 'none';
+        document.getElementById('terminal-section').style.display = tab === 'terminal' ? '' : 'none';
+        document.getElementById('setup-section').style.display    = tab === 'setup'    ? '' : 'none';
+        if (tab === 'terminal' && !terminalInited) {
+          terminalInited = true;
+          TerminalModule.init();
+        }
+        if (tab === 'setup') SetupModule.load();
+      });
+    });
   }
 
   // ─── Verificar conectividad con LiveKit + arrancar chequeo periódico ─────

@@ -26,6 +26,7 @@
     <nav id="tab-nav" class="tab-nav" style="display:none">
       <button class="tab-btn active" data-tab="panel">Panel</button>
       <button class="tab-btn" data-tab="terminal">Terminal Pi</button>
+      <button class="tab-btn" data-tab="setup">Configuracion</button>
     </nav>
   </div>
 </header>
@@ -415,8 +416,61 @@
 
 </div><!-- #terminal-section -->
 
+<!-- ═══════════════════════════════════════════════════════════
+     SETUP — editar parámetros del .env desde el browser
+════════════════════════════════════════════════════════════ -->
+<div id="setup-section" class="page-wrap" style="display:none">
+  <div class="setup-wrap">
+    <div class="card">
+      <div class="card-section-hdr">
+        <span class="card-section-icon">&#9881;</span>
+        <div>
+          <div class="card-section-title">Configuracion del dispositivo</div>
+          <div class="card-section-desc">Parametros del .env — los cambios se aplican al reiniciar</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="setup-lk-url">LiveKit URL</label>
+        <input type="text" id="setup-lk-url" class="setup-input"
+               placeholder="wss://tu-servidor.livekit.cloud" autocomplete="off" spellcheck="false" />
+        <p class="field-hint">URL del servidor LiveKit (empieza con wss://)</p>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="setup-lk-token">LiveKit Token</label>
+        <div class="setup-token-row">
+          <input type="password" id="setup-lk-token" class="setup-input"
+                 placeholder="eyJhbGciOi..." autocomplete="off" spellcheck="false" />
+          <button class="btn-ghost" id="btn-toggle-token">Mostrar</button>
+        </div>
+        <p class="field-hint" id="setup-token-info"></p>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="setup-device-name">Nombre del dispositivo</label>
+        <input type="text" id="setup-device-name" class="setup-input"
+               placeholder="brumexa-edge" autocomplete="off" />
+        <p class="field-hint">Identificador del dispositivo (DEVICE_NAME). Visible en LiveKit como nombre del participante.</p>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="setup-mic-gain">Ganancia del microfono (MIC_GAIN)</label>
+        <input type="number" id="setup-mic-gain" class="setup-input setup-input--short"
+               min="1" max="32" step="0.5" />
+        <p class="field-hint">Multiplicador de ganancia de software. 1.0 = sin boost &nbsp;·&nbsp; 4.0 = +12 dB &nbsp;·&nbsp; 16.0 = +24 dB</p>
+      </div>
+
+      <div class="setup-actions">
+        <button id="btn-setup-save" class="btn-connect">Guardar y reiniciar</button>
+        <span id="setup-status" class="setup-status"></span>
+      </div>
+    </div>
+  </div>
+</div><!-- #setup-section -->
+
 <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-<script src="app.js?v=23"></script>
+<script src="app.js?v=24"></script>
 <script src="terminal.js?v=15"></script>
 </body>
 </html>

@@ -123,6 +123,61 @@ app.get('/token', (_req, res) => {
   });
 });
 
+// ─── GET /setup/config — config editable del .env para el panel de setup ─────
+app.get('/setup/config', (_req, res) => {
+  const envFile = path.join(__dirname, '.env');
+  let content = '';
+  try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
+  const getVal = (key) => {
+    const m = content.match(new RegExp(`^${key}=(.*)$`, 'm'));
+    return m ? m[1].trim() : '';
+  };
+  res.json({
+    livekitUrl:   getVal('LIVEKIT_URL'),
+    livekitToken: getVal('LIVEKIT_TOKEN'),
+    deviceName:   getVal('DEVICE_NAME') || os.hostname(),
+    micGain:      getVal('MIC_GAIN') || '4.0',
+  });
+});
+
+// ─── POST /setup/config — escribir .env y reiniciar proceso (PM2 restart) ────
+app.post('/setup/config', express.json(), (req, res) => {
+  const envFile = path.join(__dirname, '.env');
+  const { livekitUrl, livekitToken, deviceName, micGain } = req.body || {};
+  let content = '';
+  try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
+
+  function setEnvLine(src, key, value) {
+    const lines = src.split('\n');
+    let found = false;
+    const out = lines.map(line => {
+      if (line.startsWith(key + '=') || line.startsWith(key + ' =')) {
+        found = true;
+        return `${key}=${value}`;
+      }
+      return line;
+    });
+    if (!found) {
+      if (src && !src.endsWith('\n')) out.push('');
+      out.push(`${key}=${value}`);
+    }
+    return out.join('\n');
+  }
+
+  if (livekitUrl   !== undefined) content = setEnvLine(content, 'LIVEKIT_URL',   livekitUrl);
+  if (livekitToken !== undefined) content = setEnvLine(content, 'LIVEKIT_TOKEN', livekitToken);
+  if (deviceName   !== undefined) content = setEnvLine(content, 'DEVICE_NAME',   deviceName);
+  if (micGain      !== undefined) content = setEnvLine(content, 'MIC_GAIN',      micGain);
+
+  try {
+    require('fs').writeFileSync(envFile, content, 'utf8');
+    res.json({ ok: true });
+    setTimeout(() => process.exit(0), 600);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // ─── GET /config/mic-gain — ganancia actual del mic en vivo ──────────────────
 app.get('/config/mic-gain', (_req, res) => {
   res.json({ gain: getMicGain() });
