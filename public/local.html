@@ -68,7 +68,7 @@
     <pre class="dump" id="dump-systemlog"></pre>
   </div>
 
-  <div class="refresh-note">Se actualiza solo cada 6 segundos</div>
+  <div class="refresh-note">Se actualiza solo cada 6 segundos (excepto durante el test de parlante)</div>
 
 </main>
 
@@ -195,6 +195,8 @@
         <div>
           <div class="sub-title">Parlante</div>
           <div class="kv">${spkRows}</div>
+          <button class="btn-test" id="btn-speaker-test" onclick="runSpeakerTest()">🔊 Probar parlante (tono 1kHz)</button>
+          <div id="speaker-test-result"></div>
         </div>
       </div>
       <details>
@@ -202,6 +204,26 @@
         <pre class="dump">${esc([audio.arecordList, audio.aplayList, audio.alsaProcs].filter(Boolean).join('\n\n') || '(sin datos)')}</pre>
       </details>
     `;
+  }
+
+  async function runSpeakerTest() {
+    const btn    = document.getElementById('btn-speaker-test');
+    const result = document.getElementById('speaker-test-result');
+    btn.disabled = true;
+    btn.textContent = '🔊 Reproduciendo…';
+    result.innerHTML = '';
+    try {
+      const res  = await fetch('/local/speaker-test', { method: 'POST' });
+      const data = await res.json();
+      result.innerHTML = data.ok
+        ? `<div class="pill ok" style="margin-top:6px">✅ ${esc(data.note || 'Tono reproducido')}</div>`
+        : `<div class="pill bad" style="margin-top:6px">⚠ Error: ${esc(data.error || data.output || 'desconocido')}</div>`;
+    } catch (e) {
+      result.innerHTML = `<div class="pill bad" style="margin-top:6px">⚠ Error: ${esc(e.message)}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🔊 Probar parlante (tono 1kHz)';
+    }
   }
 
   async function refresh() {

@@ -197,6 +197,23 @@ details summary {
 details summary:hover { text-decoration: underline; }
 details pre.dump { margin-top: 8px; }
 
+/* ── Botón de test (parlante, etc.) ── */
+.btn-test {
+  margin-top: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  background: rgba(91,141,239,.12);
+  border: 1px solid rgba(91,141,239,.35);
+  border-radius: var(--r-sm);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .15s, opacity .15s;
+}
+.btn-test:hover:not(:disabled) { background: rgba(91,141,239,.22); }
+.btn-test:disabled { opacity: .6; cursor: wait; }
+
 /* ── Logs del servidor: separar stdout/stderr ── */
 .log-sub {
   font-size: 11px; font-weight: 700; text-transform: uppercase;
