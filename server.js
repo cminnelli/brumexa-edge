@@ -1,5 +1,6 @@
 'use strict';
 
+// ssh -L 3000:localhost:3000 brumelab@brumexa.local
 require('dotenv').config();
 
 const http    = require('http');
@@ -426,7 +427,9 @@ function startMicMonitor() {
     }
     if (Date.now() - last > 100) {
       const level = peak / 32767;
-      console.log(`[mic-monitor] level=${level.toFixed(2)}`);
+      // Comentado: satura el log out de PM2 (10x/seg) mientras el mic físico
+      // está roto (INMP441 en reemplazo). Reactivar cuando vuelva a andar.
+      // console.log(`[mic-monitor] level=${level.toFixed(2)}`);
       leds.speaking(level);
       _micLevel = { level, peak, updatedAt: Date.now(), source: 'idle-monitor' };
       peak = 0;
