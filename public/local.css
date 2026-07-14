@@ -165,6 +165,45 @@ pre.dump {
 .section-empty { font-size: 12.5px; color: var(--muted); font-style: italic; }
 .refresh-note { font-size: 11px; color: var(--muted); text-align: center; grid-column: 1 / -1; }
 
+/* ── Nivel de mic/parlante (meter horizontal) ── */
+.meter {
+  display: inline-block; width: 90px; height: 8px;
+  background: var(--border); border-radius: 999px; overflow: hidden;
+  vertical-align: middle; margin-right: 6px;
+}
+.meter-fill {
+  height: 100%; background: linear-gradient(90deg, var(--accent), #8fb4f5);
+  border-radius: 999px; transition: width .15s ease;
+}
+
+/* ── Audio: grilla mic/parlante lado a lado ── */
+.audio-grid {
+  display: grid; grid-template-columns: 1fr; gap: 1rem;
+}
+@media (min-width: 480px) {
+  .audio-grid { grid-template-columns: 1fr 1fr; }
+}
+.sub-title {
+  font-size: 11.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--muted); margin-bottom: 4px;
+}
+
+/* ── Detalle técnico colapsable ── */
+details { margin-top: 4px; }
+details summary {
+  cursor: pointer; font-size: 12px; color: var(--accent);
+  font-weight: 600; user-select: none;
+}
+details summary:hover { text-decoration: underline; }
+details pre.dump { margin-top: 8px; }
+
+/* ── Logs del servidor: separar stdout/stderr ── */
+.log-sub {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--muted); margin-top: 4px;
+}
+pre.dump.err { color: #ff9a8f; border-color: rgba(240,85,74,.35); }
+
 /* ── Responsive ── */
 @media (max-width: 500px) {
   .header { padding: 0.9rem 1rem; }

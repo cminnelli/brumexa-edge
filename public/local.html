@@ -35,14 +35,14 @@
     <div class="kv" id="kv-wifi"></div>
   </div>
 
+  <div class="card span-2" id="card-audio">
+    <div class="card-title"><span class="ic">🎙️</span>Audio — Micrófono y parlante</div>
+    <div id="body-audio"></div>
+  </div>
+
   <div class="card" id="card-session">
     <div class="card-title"><span class="ic">🔊</span>Sesión LiveKit</div>
     <div class="kv" id="kv-session"></div>
-  </div>
-
-  <div class="card" id="card-audio">
-    <div class="card-title"><span class="ic">🎙️</span>Audio (ALSA)</div>
-    <div id="body-audio"></div>
   </div>
 
   <div class="card" id="card-bluetooth">
@@ -51,8 +51,21 @@
   </div>
 
   <div class="card span-2" id="card-wifilog">
-    <div class="card-title"><span class="ic">📄</span>Log WiFi (últimas líneas)</div>
+    <div class="card-title"><span class="ic">📄</span>Log WiFi (conexión/AP)</div>
     <pre class="dump" id="dump-wifilog"></pre>
+  </div>
+
+  <div class="card span-2" id="card-serverlog">
+    <div class="card-title"><span class="ic">🗒️</span>Log del servidor (app — PM2)</div>
+    <div class="log-sub">stderr</div>
+    <pre class="dump err" id="dump-serverlog-err"></pre>
+    <div class="log-sub">stdout</div>
+    <pre class="dump" id="dump-serverlog-out"></pre>
+  </div>
+
+  <div class="card span-2" id="card-systemlog">
+    <div class="card-title"><span class="ic">🐧</span>Log del sistema (kernel / Raspberry)</div>
+    <pre class="dump" id="dump-systemlog"></pre>
   </div>
 
   <div class="refresh-note">Se actualiza solo cada 6 segundos</div>
@@ -99,6 +112,98 @@
     return `<span class="v ${cls}">${c.toFixed(1)} °C</span>`;
   }
 
+  function throttledBadge(t) {
+    if (!t) return 'no disponible';
+    if (!t.flags || t.flags.length === 0) return `<span class="pill ok">OK (${t.raw})</span>`;
+    const now = t.flags.filter(f => f.endsWith('-ahora'));
+    const cls = now.length ? 'bad' : 'warn';
+    return `<span class="pill ${cls}">${esc(t.flags.join(', '))}</span>`;
+  }
+
+  // Barra horizontal simple de 0 a 1 — usada para el nivel de mic en vivo
+  function levelMeter(level) {
+    const pct = Math.max(0, Math.min(100, Math.round((level || 0) * 100)));
+    return `<div class="meter"><div class="meter-fill" style="width:${pct}%"></div></div><span class="v">${pct}%</span>`;
+  }
+
+  function ageLabel(ts) {
+    if (!ts) return 'sin datos';
+    const s = Math.round((Date.now() - ts) / 1000);
+    if (s < 0) return 'ahora';
+    return s < 60 ? `hace ${s}s` : `hace ${Math.floor(s / 60)}min`;
+  }
+
+  function renderAudio(audio, session) {
+    if (!audio || !audio.available) {
+      return '<div class="section-empty">no disponible en esta plataforma</div>';
+    }
+
+    const mic = audio.mic || {};
+    const micHw = !!(audio.arecordList && !/no soundcards|\*\*\*\* list.*\n\s*$/i.test(audio.arecordList));
+    const micFresh = mic.updatedAt && (Date.now() - mic.updatedAt < 5000);
+
+    const spkHw = !!(audio.aplayList && audio.aplayList.split('\n').some(l => l.includes('card ')));
+    const spkPlaying = !!session?.speakerActive;
+    const spkLevel = session?.lastSpeakerPeak ? session.lastSpeakerPeak / 32767 : 0;
+
+    let micRows;
+    if (!mic || mic.error) {
+      micRows = `<div class="section-empty">Error leyendo mic: ${esc(mic?.error || 'desconocido')}</div>`;
+    } else {
+      micRows = kvRows([
+        ['Hardware detectado', pill(micHw)],
+        ['Monitor activo', pill(mic.monitorActive || session?.micActive)],
+        ['Nivel captado', micFresh ? levelMeter(mic.level) : '<span class="section-empty">sin lectura reciente</span>'],
+        ['Última lectura', `${ageLabel(mic.updatedAt)} (${mic.source || '—'})`],
+      ]);
+    }
+
+    const rec = audio.recorder || {};
+    let recorderBlock = '';
+    if (rec.recording) {
+      recorderBlock = `<div class="pill ok" style="margin-top:6px">🔴 grabando ahora (${rec.duration ?? 0}s) — ${esc(rec.filename || '')}</div>`;
+    } else if (rec.lastError) {
+      const causa = /busy|ocupad|resource/i.test(rec.lastError.message || '')
+        ? 'dispositivo ocupado (otro proceso ya lo tenía abierto)'
+        : /no such|cannot open|not found/i.test(rec.lastError.message || '')
+          ? 'dispositivo no encontrado — revisá el nombre (ej. "plughw:0,0")'
+          : 'ver mensaje de arecord abajo';
+      recorderBlock = `
+        <div class="pill bad" style="margin-top:6px">⚠ última grabación falló — ${ageLabel(rec.lastError.at)}</div>
+        <div class="kv" style="margin-top:4px">${kvRows([
+          ['Dispositivo', rec.lastError.device],
+          ['Código de salida', rec.lastError.exitCode],
+          ['Causa probable', causa],
+          ['Mensaje arecord', esc(rec.lastError.message || '—')],
+        ])}</div>
+      `;
+    }
+
+    const spkRows = kvRows([
+      ['Hardware detectado', pill(spkHw)],
+      ['Reproduciendo ahora', pill(spkPlaying)],
+      ['Último nivel (sesión)', spkPlaying ? levelMeter(spkLevel) : '<span class="section-empty">sin sesión activa</span>'],
+    ]);
+
+    return `
+      <div class="audio-grid">
+        <div>
+          <div class="sub-title">Micrófono</div>
+          <div class="kv">${micRows}</div>
+          ${recorderBlock}
+        </div>
+        <div>
+          <div class="sub-title">Parlante</div>
+          <div class="kv">${spkRows}</div>
+        </div>
+      </div>
+      <details>
+        <summary>Detalle técnico ALSA</summary>
+        <pre class="dump">${esc([audio.arecordList, audio.aplayList, audio.alsaProcs].filter(Boolean).join('\n\n') || '(sin datos)')}</pre>
+      </details>
+    `;
+  }
+
   async function refresh() {
     const chip = document.getElementById('chip-refresh');
     const txt  = document.getElementById('txt-refresh');
@@ -117,6 +222,7 @@
         ['Uptime', sys.uptimeSec != null ? `${Math.floor(sys.uptimeSec / 60)} min` : null],
         ['Memoria libre', sys.freeMemMB != null ? `${sys.freeMemMB} / ${sys.totalMemMB} MB` : null],
         ['Temp. CPU', tempBadge(sys.cpuTempC)],
+        ['Undervoltage/throttle', throttledBadge(sys.throttled)],
       ]);
 
       const wifi = data.wifi || {};
@@ -137,15 +243,10 @@
             ['Estado', session.status],
             ['Sala', session.roomName],
             ['Conectado', pill(session.isConnected)],
-            ['Mic activo', pill(session.micActive)],
-            ['Speaker activo', pill(session.speakerActive)],
             ['Reintentando', pill(session.isReconnecting, 'sí', 'no')],
           ]) : '<div class="section-empty">no disponible</div>');
 
-      const audio = data.audio || {};
-      document.getElementById('body-audio').innerHTML = audio.available
-        ? `<pre class="dump">${esc([audio.arecordList, audio.aplayList, audio.alsaProcs].filter(Boolean).join('\n\n') || '(sin datos)')}</pre>`
-        : '<div class="section-empty">no disponible en esta plataforma</div>';
+      document.getElementById('body-audio').innerHTML = renderAudio(data.audio, session);
 
       const bt = data.bluetooth || {};
       document.getElementById('body-bluetooth').innerHTML = bt.available
@@ -153,6 +254,12 @@
         : '<div class="section-empty">no disponible en esta plataforma</div>';
 
       document.getElementById('dump-wifilog').textContent = data.wifiLog || '(sin registros todavía)';
+
+      const serverLog = data.serverLog || {};
+      document.getElementById('dump-serverlog-err').textContent = serverLog.error || '(sin errores)';
+      document.getElementById('dump-serverlog-out').textContent = serverLog.out || '(sin registros)';
+
+      document.getElementById('dump-systemlog').textContent = data.systemLog || '(no disponible — permisos o plataforma)';
     } catch (e) {
       chip.className = 'status-chip error';
       txt.textContent = `Error: ${e.message}`;

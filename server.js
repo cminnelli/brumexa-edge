@@ -209,9 +209,12 @@ app.post('/config/mic-gain', express.json(), (req, res) => {
 });
 
 // ─── POST /record/start — iniciar grabación en la Pi ─────────────────────────
-app.post('/record/start', express.json(), (req, res) => {
+app.post('/record/start', express.json(), async (req, res) => {
   try {
-    stopMicMonitor();  // liberar el dispositivo antes de grabar
+    // IMPORTANTE: hay que esperar a que el monitor idle suelte el dispositivo
+    // ALSA antes de abrir uno nuevo — si no, arecord choca con el device
+    // todavía ocupado y sale con "terminó inesperadamente" (código != 0).
+    await stopMicMonitor();
     const device     = req.body?.device     || 'default';
     const normTarget = parseFloat(req.body?.normTarget);
     const info       = startRecording(device, isNaN(normTarget) ? 0.85 : Math.min(Math.max(normTarget, 0.3), 1.0));
@@ -403,6 +406,12 @@ app.get('/recordings/play-status', (_req, res) => {
 // ─── Monitor de mic standalone (cuando no hay sesión LiveKit activa) ─────────
 let _micMonitor = null;
 
+// Última lectura de nivel de mic — la actualiza tanto el monitor idle (abajo)
+// como los eventos 'mic-stats' de lkSession durante una sesión activa.
+// Expuesta a /local/status para saber si el mic está captando algo sin tener
+// que arrancar una sesión — es la misma señal que ya alimenta los LEDs.
+let _micLevel = { level: 0, peak: 0, updatedAt: 0, source: null };
+
 function startMicMonitor() {
   if (_micMonitor || process.platform !== 'linux') return;
   const MIC = process.env.MIC_DEVICE || 'plughw:0,0';
@@ -419,6 +428,7 @@ function startMicMonitor() {
       const level = peak / 32767;
       console.log(`[mic-monitor] level=${level.toFixed(2)}`);
       leds.speaking(level);
+      _micLevel = { level, peak, updatedAt: Date.now(), source: 'idle-monitor' };
       peak = 0;
       last = Date.now();
     }
@@ -442,6 +452,7 @@ let _sessionConnectedAt = 0;
 lkSession.on('mic-stats',     ({ peak, dbfs }) => {
   const level = peak / 32767;
   console.log(`[leds] mic peak=${peak} level=${level.toFixed(2)} dbfs=${dbfs.toFixed(1)}`);
+  _micLevel = { level, peak, updatedAt: Date.now(), source: 'session' };
   if (Date.now() - _sessionConnectedAt > 2000) leds.speaking(level);
 });
 lkSession.on('speaker-stats', s => { /* ya se imprime dentro del módulo */ });
@@ -555,6 +566,8 @@ setupWifi(app);
 setupLocalDebug(app, {
   getWifiStatus: getWifiStatus,
   lkSession,
+  getMicLevel: () => ({ ..._micLevel, monitorActive: !!_micMonitor }),
+  getRecorderStatus: getStatus,
   getDeviceConfig: () => ({
     tokenConfigured: DEVICE_CONFIGURED,
     livekitUrl:      lastKnownLivekitUrl,
