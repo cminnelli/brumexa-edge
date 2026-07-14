@@ -13,20 +13,26 @@ const { startRecording, stopRecording, getStatus,
         reserveBrowserFilename, saveBrowserRecording,
         deleteRecording, boostCaptureGain } = require('./lib/recorder');
 const { setupBluetooth }                               = require('./lib/bluetooth');
-const { setupWifi, autoStartAP }                       = require('./lib/wifi');
+const { setupWifi, autoStartAP, startHealthMonitor, getStatus: getWifiStatus } = require('./lib/wifi');
+const { setupLocalDebug }                              = require('./lib/local-debug');
 const { session: lkSession }                           = require('./lib/livekit-session');
 const leds                                             = require('./lib/leds');
+const ragAuth                                          = require('./lib/rag-auth');
+const { requestRoomToken }                             = require('./lib/rag-token');
 
 const {
-  LIVEKIT_URL,
-  LIVEKIT_TOKEN,
-  LIVEKIT_ROOM_NAME,
   PORT = 3000,
 } = process.env;
 
-if (!LIVEKIT_TOKEN) {
-  console.warn('[warn] LIVEKIT_TOKEN no configurado. El endpoint /token y las sesiones no funcionarán.');
+const DEVICE_CONFIGURED = !!(process.env.BRUMEXA_DEVICE_ID && process.env.BRUMEXA_API_KEY);
+if (!DEVICE_CONFIGURED) {
+  console.warn('[warn] BRUMEXA_DEVICE_ID / BRUMEXA_API_KEY no configurados. El endpoint /token y las sesiones no funcionarán.');
 }
+
+// Último serverUrl de LiveKit visto (llega dinámico en cada respuesta de
+// requestRoomToken() — ya no es un valor fijo de .env). Se usa solo para
+// mostrar estado en /config y /livekit-health antes de la primera sesión.
+let lastKnownLivekitUrl = null;
 
 // ─── App ─────────────────────────────────────────────────────────────────────
 const app = express();
@@ -46,8 +52,8 @@ app.get('/', (_req, res) => {
 // ─── GET /config — info del dispositivo y configuración (sin secretos) ───────
 app.get('/config', (_req, res) => {
   res.json({
-    livekitUrl:      LIVEKIT_URL || null,
-    tokenConfigured: !!LIVEKIT_TOKEN,
+    livekitUrl:      lastKnownLivekitUrl,
+    tokenConfigured: DEVICE_CONFIGURED,
     port:               Number(PORT),
     micGain:            getMicGain(),
     server: {
@@ -93,9 +99,9 @@ app.get('/debug', (_req, res) => {
 
 // ─── GET /livekit-health — verifica que el host LiveKit responde ──────────────
 app.get('/livekit-health', async (_req, res) => {
-  if (!LIVEKIT_URL) return res.json({ online: false, reason: 'no-config' });
+  if (!lastKnownLivekitUrl) return res.json({ online: false, reason: 'no-config' });
 
-  const httpUrl = LIVEKIT_URL.replace(/^wss?:\/\//, 'https://');
+  const httpUrl = lastKnownLivekitUrl.replace(/^wss?:\/\//, 'https://');
   const t0      = Date.now();
 
   try {
@@ -110,17 +116,24 @@ app.get('/livekit-health', async (_req, res) => {
   }
 });
 
-// ─── GET /token — devuelve el token estático del .env ────────────────────────
-app.get('/token', (_req, res) => {
-  if (!LIVEKIT_TOKEN) {
-    return res.status(503).json({ error: 'LIVEKIT_TOKEN no configurado en .env' });
+// ─── GET /token — pide un token de LiveKit nuevo al servidor central (rag-api) ─
+app.get('/token', async (_req, res) => {
+  if (!DEVICE_CONFIGURED) {
+    return res.status(503).json({ error: 'BRUMEXA_DEVICE_ID / BRUMEXA_API_KEY no configurados en .env' });
   }
-  res.json({
-    token:      LIVEKIT_TOKEN,
-    room:       LIVEKIT_ROOM_NAME,
-    identity:   os.hostname(),
-    livekitUrl: LIVEKIT_URL,
-  });
+  try {
+    const data = await requestRoomToken();
+    lastKnownLivekitUrl = data.serverUrl;
+    res.json({
+      token:      data.token,
+      room:       data.roomName,
+      identity:   data.identity,
+      livekitUrl: data.serverUrl,
+      expiresIn:  '1h',
+    });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
 });
 
 // ─── GET /setup/config — config editable del .env para el panel de setup ─────
@@ -133,17 +146,18 @@ app.get('/setup/config', (_req, res) => {
     return m ? m[1].trim() : '';
   };
   res.json({
-    livekitUrl:   getVal('LIVEKIT_URL'),
-    livekitToken: getVal('LIVEKIT_TOKEN'),
-    deviceName:   getVal('DEVICE_NAME') || os.hostname(),
-    micGain:      getVal('MIC_GAIN') || '4.0',
+    ragApiUrl: getVal('RAG_API_URL') || 'http://localhost:4000',
+    deviceId:  getVal('BRUMEXA_DEVICE_ID'),
+    apiKey:    getVal('BRUMEXA_API_KEY'),
+    deviceName: getVal('DEVICE_NAME') || os.hostname(),
+    micGain:    getVal('MIC_GAIN') || '4.0',
   });
 });
 
 // ─── POST /setup/config — escribir .env y reiniciar proceso (PM2 restart) ────
 app.post('/setup/config', express.json(), (req, res) => {
   const envFile = path.join(__dirname, '.env');
-  const { livekitUrl, livekitToken, deviceName, micGain } = req.body || {};
+  const { ragApiUrl, deviceId, apiKey, deviceName, micGain } = req.body || {};
   let content = '';
   try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
 
@@ -164,10 +178,11 @@ app.post('/setup/config', express.json(), (req, res) => {
     return out.join('\n');
   }
 
-  if (livekitUrl   !== undefined) content = setEnvLine(content, 'LIVEKIT_URL',   livekitUrl);
-  if (livekitToken !== undefined) content = setEnvLine(content, 'LIVEKIT_TOKEN', livekitToken);
-  if (deviceName   !== undefined) content = setEnvLine(content, 'DEVICE_NAME',   deviceName);
-  if (micGain      !== undefined) content = setEnvLine(content, 'MIC_GAIN',      micGain);
+  if (ragApiUrl  !== undefined) content = setEnvLine(content, 'RAG_API_URL',       ragApiUrl);
+  if (deviceId   !== undefined) content = setEnvLine(content, 'BRUMEXA_DEVICE_ID', deviceId);
+  if (apiKey     !== undefined) content = setEnvLine(content, 'BRUMEXA_API_KEY',   apiKey);
+  if (deviceName !== undefined) content = setEnvLine(content, 'DEVICE_NAME',       deviceName);
+  if (micGain    !== undefined) content = setEnvLine(content, 'MIC_GAIN',          micGain);
 
   try {
     require('fs').writeFileSync(envFile, content, 'utf8');
@@ -430,36 +445,9 @@ lkSession.on('mic-stats',     ({ peak, dbfs }) => {
   if (Date.now() - _sessionConnectedAt > 2000) leds.speaking(level);
 });
 lkSession.on('speaker-stats', s => { /* ya se imprime dentro del módulo */ });
-lkSession.on('connected',     () => { stopMicMonitor(); _sessionConnectedAt = Date.now(); leds.breathe(); });
+lkSession.on('connected',     () => { stopMicMonitor(); _sessionConnectedAt = Date.now(); leds.idle(); });
 lkSession.on('error',         e => { console.error('[lk-session-evt] error:', e.message); leds.brumexaError(4000); startMicMonitor(); });
-lkSession.on('disconnected',  d => { console.log('[lk-session-evt] disconnected:', d.reason); leds.breathe(); startMicMonitor(); });
-
-// Decodifica el payload de un JWT (sin validar firma — solo para debug)
-function decodeJwtPayload(jwt) {
-  try {
-    const parts = jwt.split('.');
-    if (parts.length !== 3) return null;
-    const b64  = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    const pad  = b64 + '='.repeat((4 - b64.length % 4) % 4);
-    return JSON.parse(Buffer.from(pad, 'base64').toString('utf8'));
-  } catch { return null; }
-}
-
-// Helper interno: devuelve el token estático del .env
-function getToken() {
-  if (!LIVEKIT_TOKEN) throw new Error('LIVEKIT_TOKEN no configurado en .env');
-  const payload = decodeJwtPayload(LIVEKIT_TOKEN);
-  let roomName = LIVEKIT_ROOM_NAME;
-  if (payload) {
-    const now = Math.floor(Date.now() / 1000);
-    const ttl = payload.exp ? (payload.exp - now) : null;
-    const tokenRoom = payload.video?.room || payload.room;
-    if (!roomName && tokenRoom) roomName = tokenRoom;
-    console.log(`[session] token estático  sub=${payload.sub}  room=${roomName}  ttl=${ttl}s`);
-    if (ttl !== null && ttl < 60) console.warn(`[session] ⚠ token TTL bajo (${ttl}s) — puede expirar`);
-  }
-  return { token: LIVEKIT_TOKEN, url: LIVEKIT_URL, roomName, identity: os.hostname() };
-}
+lkSession.on('disconnected',  d => { console.log('[lk-session-evt] disconnected:', d.reason); leds.idle(); startMicMonitor(); });
 
 app.post('/session/start', express.json(), async (req, res) => {
   const reqId = Math.random().toString(36).slice(2, 7);
@@ -475,7 +463,8 @@ app.post('/session/start', express.json(), async (req, res) => {
     const speakerDevice = req.body?.speakerDevice || process.env.SPEAKER_DEVICE || 'plughw:0,0';
     console.log(`[session/start:${reqId}]   mic=${micDevice}  speaker=${speakerDevice}`);
 
-    const { token, url, roomName } = getToken();
+    const { token, roomName, serverUrl: url } = await requestRoomToken();
+    lastKnownLivekitUrl = url;
     console.log(`[session/start:${reqId}]   token OK  → connecting to ${url}  room=${roomName || '(auto)'}`);
 
     await stopMicMonitor();  // esperar que ALSA quede libre antes de que lkSession tome el mic
@@ -563,6 +552,14 @@ const httpServer = http.createServer(app);
 setupAudio(app, httpServer);
 setupBluetooth(app, express);
 setupWifi(app);
+setupLocalDebug(app, {
+  getWifiStatus: getWifiStatus,
+  lkSession,
+  getDeviceConfig: () => ({
+    tokenConfigured: DEVICE_CONFIGURED,
+    livekitUrl:      lastKnownLivekitUrl,
+  }),
+});
 
 httpServer.on('error', err => {
   if (err.code === 'EADDRINUSE') {
@@ -576,10 +573,11 @@ httpServer.on('error', err => {
 
 httpServer.listen(PORT, () => {
   console.log(`\n  Brumexa-Edge corriendo en → http://localhost:${PORT}`);
-  console.log(`  LiveKit URL             → ${LIVEKIT_URL || '(no configurado)'}`);
-  console.log(`  Token                   → ${LIVEKIT_TOKEN ? '✔ configurado' : '(no configurado)'}`);
-  console.log(`  Sala por defecto        → ${LIVEKIT_ROOM_NAME}`);
+  console.log(`  RAG API                 → ${process.env.RAG_API_URL || 'http://localhost:4000'}`);
+  console.log(`  Device                  → ${DEVICE_CONFIGURED ? `✔ ${process.env.BRUMEXA_DEVICE_ID}` : '(no configurado)'}`);
   console.log(`  Setup WiFi              → http://localhost:${PORT}/setup\n`);
+
+  if (DEVICE_CONFIGURED) ragAuth.initAuth();
 
   leds.init();  // arranca respiracion automaticamente
   if (process.platform === 'linux') startMicMonitor();
@@ -597,6 +595,9 @@ httpServer.listen(PORT, () => {
       const { getStatus } = require('./lib/wifi');
       if (!getStatus().connectedSSID) leds.brumexaError();
     });
+    // Monitor continuo — a diferencia del chequeo de arriba (una sola vez al
+    // boot), esto detecta caídas de señal/conexión que pasan después.
+    startHealthMonitor();
   }
 });
 

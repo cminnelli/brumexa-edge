@@ -7,26 +7,28 @@ Cliente de voz para LiveKit que corre en **Raspberry Pi** (Ubuntu ARM) o **PC** 
 ```
 Browser (frontend)
   │
-  ├── GET /config        → info del dispositivo y URL de LiveKit
-  ├── GET /token         → pide token al servidor central → lo reenvía al browser
+  ├── GET /config        → info del dispositivo (estado de auth, última URL LiveKit conocida)
+  ├── GET /token         → pide un token NUEVO a brumexa-rag-api-v2 → lo reenvía al browser
+  ├── POST /session/*    → modo nativo Pi (arecord/aplay + @livekit/rtc-node, sin pasar por el browser)
   └── (estático)         → sirve index.html / app.js / style.css
         │
-        └── WebSocket wss://livekit.cloud  (browser conecta directo con el token)
-              └── getUserMedia() → publica audio vía WebRTC
+        └── WebSocket wss://...  (browser o proceso Node conecta con el token recién emitido)
+              └── getUserMedia() / arecord → publica audio vía WebRTC
 ```
 
-El servidor Express **no genera tokens localmente** — los solicita al servidor central de Brumexa, que tiene la lógica de LiveKit y el API Key/Secret.
+El servidor Express **no genera tokens localmente** — se autentica como dispositivo contra `brumexa-rag-api-v2` (`POST /auth/device`) y le pide un token de LiveKit nuevo por cada conversación (`POST /livekit/token`). Ver `lib/rag-auth.js` y `lib/rag-token.js`.
 
 ## Requisitos
 
 - Node.js 20+
-- Acceso al servidor central de Brumexa en la red local
+- `brumexa-rag-api-v2` corriendo y accesible en la red (local o LAN)
+- Un dispositivo dado de alta en `brumexa-admin-v2` (Devices) con su `deviceId` y `apiKey`
 
 ## Instalación
 
 ```bash
 cp .env.example .env
-# completar los valores en .env
+# completar RAG_API_URL / BRUMEXA_DEVICE_ID / BRUMEXA_API_KEY en .env
 npm install
 ```
 
@@ -34,11 +36,12 @@ npm install
 
 | Variable | Descripción |
 |---|---|
-| `LIVEKIT_URL` | URL WebSocket del servidor LiveKit (`wss://...`) |
-| `LIVEKIT_ROOM_NAME` | Nombre de sala por defecto (fallback) |
+| `RAG_API_URL` | URL del servidor central `brumexa-rag-api-v2` |
+| `BRUMEXA_DEVICE_ID` | ID del dispositivo, dado de alta en `brumexa-admin-v2` |
+| `BRUMEXA_API_KEY` | API key del dispositivo (se genera/rota desde el admin panel) |
+| `DEFAULT_BUSINESS_ID` | Fallback opcional si `/auth/device` no devolviera `businessId` |
 | `PORT` | Puerto del servidor Express (default: 3000) |
-| `TOKEN_API_URL` | Endpoint del servidor central para obtener tokens |
-| `BRUMEXA_API_KEY` | API key para autenticarse con el servidor central |
+| `MIC_GAIN` | Ganancia de software del micrófono |
 
 ## Uso
 
@@ -51,17 +54,15 @@ Abrir `http://localhost:3000` en el browser.
 
 ## Modos
 
-- **LiveKit** — conecta a la sala LiveKit y publica el micrófono del OS. Requiere servidor central activo.
+- **LiveKit** — conecta a una sala LiveKit nueva y publica el micrófono del OS. Requiere `brumexa-rag-api-v2` activo y el dispositivo autenticado.
 - **Test Mic** — verifica el micrófono localmente con un VU meter. Sin servidor, sin internet.
 
-## Detección de dispositivo
-
-El servidor detecta automáticamente si está corriendo en una **Raspberry Pi** (Linux ARM) o una **PC**, y envía ese `deviceType` al servidor central al pedir el token. El servidor central construye el `roomName` como `{deviceType}-{deviceId}` (ej: `raspberry-brumexa` o `pc-DESKTOP-ABC`).
+Funciona igual corriendo en una Raspberry Pi (modo nativo, `@livekit/rtc-node` + ALSA) que en una PC de desarrollo (modo browser, `getUserMedia`) — las credenciales de dispositivo son las mismas, no hay lógica distinta por plataforma.
 
 ## Token flow
 
-1. Browser llama a `GET /token` en el Express local
-2. Express hace `POST TOKEN_API_URL` con `{ deviceType, deviceId }` y header `x-api-key`
-3. Servidor central responde con `{ token, url, roomName, participantName, expiresIn }`
-4. Express reenvía el token al browser
-5. Browser conecta directamente a LiveKit con ese token vía WebSocket
+1. Al bootear, el servidor llama `POST {RAG_API_URL}/auth/device` con `{ device_id, api_key }` → obtiene un JWT de dispositivo (24h, se renueva solo ~30min antes de vencer). Ver `lib/rag-auth.js`.
+2. Al iniciar una sesión (`GET /token` o `POST /session/start`), pide un token de LiveKit **nuevo** con `POST {RAG_API_URL}/livekit/token` (`Authorization: Bearer <JWT device>`, body `{ businessId, deviceId, branchId?, identity }`). Ver `lib/rag-token.js`.
+3. `rag-api-v2` responde `{ token, roomName, serverUrl, businessId, ... }` — la sala es efímera, una nueva por cada conversación.
+4. El servidor reenvía esas credenciales al browser (modo LiveKit) o las usa directo con `@livekit/rtc-node` (modo nativo Pi).
+5. Si la sesión se corta y hay que reconectar, se pide un token nuevo — nunca se reutiliza uno viejo.

@@ -1,0 +1,135 @@
+===========================================================
+ COMO LEVANTAR BRUMEXA
+===========================================================
+
+Servicios que existen:
+
+  1. DB      -> Postgres + pgvector (Docker)          puerto 5432
+  2. API     -> brumexa-rag-api-v2                     puerto 4000
+  3. Agent   -> brumexa-livekit-agent                   (sin puerto, background)
+  4. Admin   -> brumexa-admin-v2 (panel Angular)        puerto 4200
+  5. Device  -> Brumexa-raspberry (cliente de voz)      puerto 3000
+
+Todos (menos Raspberry) viven dentro de Brumexa-general.
+Brumexa-raspberry es un repo hermano, al lado de Brumexa-general.
+
+
+-----------------------------------------------------------
+OPCION 1 - TODO JUNTO, UN SOLO CLICK (la mas comoda)
+-----------------------------------------------------------
+
+Doble click en:
+  D:\Proyectos\Brumexa\start-brumexa.bat
+
+o desde una terminal:
+  D:\Proyectos\Brumexa\start-brumexa.bat
+
+Esto hace TODO solo:
+  - chequea que Docker Desktop este corriendo (si no, lo arranca y espera)
+  - abre VS Code con el workspace Brumexa-general.code-workspace
+  - ese workspace tiene tasks configuradas para arrancar solas al abrir
+    la carpeta (una terminal integrada por servicio):
+
+      1) DB: Postgres (docker)
+      2) API: rag-api-v2        -> localhost:4000
+      3) Agent: livekit-agent   -> conecta a LiveKit en background
+      4) Admin: admin-v2        -> localhost:4200
+      5) Raspberry: brumexa-raspberry -> localhost:3000
+
+  La primera vez VS Code va a preguntar:
+  "Allow Automatic Tasks in This Workspace" -> aceptar.
+  Las siguientes veces ya no pregunta mas.
+
+  Si el auto-run no dispara, hacerlo a mano:
+  Ctrl+Shift+P -> Tasks: Run Task -> "Start All (Brumexa)"
+
+  Para bajar todo: cerrar las terminales o Ctrl+C en cada una.
+
+
+-----------------------------------------------------------
+OPCION 2 - TODO JUNTO PERO SIN RASPBERRY, EN UNA SOLA TERMINAL
+-----------------------------------------------------------
+
+Desde Brumexa-general:
+
+  npm run dev:all
+
+Levanta DB + API + Agent + Admin (SIN Raspberry) en una sola
+terminal, con logs coloreados (concurrently). Util si no
+necesitas terminales separadas y no vas a probar el device.
+
+  (npm run dev  -> lo mismo pero sin Device, por si se agrega
+   despues; hoy dev y dev:all difieren solo en Raspberry)
+
+
+-----------------------------------------------------------
+OPCION 3 - CADA SERVICIO POR SEPARADO (a mano, terminales propias)
+-----------------------------------------------------------
+
+ORDEN IDEAL (respetar este orden, cada uno depende del anterior):
+
+  1) Base de datos (Postgres/pgvector) - desde Brumexa-general:
+
+       npm run db:up
+
+     Espera ~2 seg a que levante antes de seguir.
+
+  2) API (rag-api-v2) - todo lo demas depende de que esta este arriba:
+
+       npm run dev --prefix brumexa-rag-api-v2
+
+     Verificar que respondio: http://localhost:4000/health
+
+  3) Agent (livekit-agent) - necesita la API arriba para resolver
+     config de negocio:
+
+       npm run dev --prefix brumexa-livekit-agent
+
+  4) Admin (admin-v2) - panel para gestionar negocios/devices:
+
+       npm start --prefix brumexa-admin-v2
+
+     (usa proxy hacia localhost:4000, no necesita .env propio)
+
+  5) Raspberry / Device - se autentica contra la API y despues
+     se une a LiveKit, por eso va ULTIMO:
+
+       npm run brumexa --prefix ../Brumexa-raspberry
+
+     (desde adentro de Brumexa-raspberry seria: npm run brumexa)
+
+
+-----------------------------------------------------------
+SOLO BRUMEXA-RASPBERRY (sin tocar el resto del ecosistema)
+-----------------------------------------------------------
+
+Requiere que la API (brumexa-rag-api-v2, puerto 4000) ya este
+corriendo en algun lado (local o remoto) y que el .env de
+Brumexa-raspberry apunte bien a esa API.
+
+Parado dentro de D:\Proyectos\Brumexa\Brumexa-raspberry:
+
+  npm run brumexa        -> nodemon server.js (con autoreload)
+
+  o bien:
+
+  npm start               -> node server.js (sin autoreload)
+
+Escucha en http://localhost:3000
+
+
+-----------------------------------------------------------
+TROUBLESHOOTING RAPIDO
+-----------------------------------------------------------
+
+- La API no conecta a Postgres al arrancar: el contenedor tarda
+  unos segundos en estar listo. Reintentar el paso de la API.
+
+- El agente LiveKit o el Raspberry no autentican: confirmar que
+  brumexa-rag-api-v2 este arriba (http://localhost:4000/health)
+  y que las credenciales del .env coincidan con lo dado de alta
+  en el admin (Devices -> dispositivo -> provisioning).
+
+- El .bat se queda esperando a Docker: Docker Desktop puede tardar
+  en arrancar la primera vez. Si pasa ~2 min de timeout, abrirlo
+  manual y correr el script de nuevo.

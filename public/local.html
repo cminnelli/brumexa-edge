@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brumexa — Diagnóstico local</title>
+  <link rel="stylesheet" href="setup.css" />
+  <style>
+    .kv { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+    .kv-row { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px dashed var(--border); padding: 3px 0; }
+    .kv-row .k { color: var(--text2); }
+    .kv-row .v { font-family: 'Consolas', monospace; text-align: right; word-break: break-all; }
+    pre.dump {
+      background: #f8f9fc;
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      padding: 8px 10px;
+      font-size: 11.5px;
+      font-family: 'Consolas', monospace;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 220px;
+      overflow-y: auto;
+      color: var(--text2);
+    }
+    .section-empty { font-size: 12px; color: var(--muted); font-style: italic; }
+    .refresh-note { font-size: 11px; color: var(--muted); text-align: center; }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <span class="header-icon">🩺</span>
+  <div>
+    <div class="header-title">Brumexa — Diagnóstico local</div>
+    <div class="header-sub">Situación del dispositivo, sin internet</div>
+  </div>
+</header>
+
+<main class="page">
+
+  <div class="card" id="card-refresh">
+    <div class="status-chip ok" id="chip-refresh">
+      <span class="status-dot connected pulse"></span>
+      <span id="txt-refresh">Actualizando…</span>
+    </div>
+  </div>
+
+  <div class="card" id="card-system">
+    <div class="card-title">Sistema</div>
+    <div class="kv" id="kv-system"></div>
+  </div>
+
+  <div class="card" id="card-wifi">
+    <div class="card-title">WiFi</div>
+    <div class="kv" id="kv-wifi"></div>
+  </div>
+
+  <div class="card" id="card-session">
+    <div class="card-title">Sesión LiveKit</div>
+    <div class="kv" id="kv-session"></div>
+  </div>
+
+  <div class="card" id="card-audio">
+    <div class="card-title">Audio (ALSA)</div>
+    <div id="body-audio"></div>
+  </div>
+
+  <div class="card" id="card-bluetooth">
+    <div class="card-title">Bluetooth</div>
+    <div id="body-bluetooth"></div>
+  </div>
+
+  <div class="card" id="card-wifilog">
+    <div class="card-title">Log WiFi (últimas líneas)</div>
+    <pre class="dump" id="dump-wifilog"></pre>
+  </div>
+
+  <div class="refresh-note">Se actualiza solo cada 6 segundos</div>
+
+</main>
+
+<script>
+  const REFRESH_MS = 6000;
+
+  function kvRows(pairs) {
+    return pairs
+      .map(([k, v]) => `<div class="kv-row"><span class="k">${k}</span><span class="v">${v === null || v === undefined || v === '' ? '—' : v}</span></div>`)
+      .join('');
+  }
+
+  function fmtBool(b) { return b ? '✅ sí' : '❌ no'; }
+
+  async function refresh() {
+    const chip = document.getElementById('chip-refresh');
+    const txt  = document.getElementById('txt-refresh');
+    try {
+      const res = await fetch('/local/status', { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      chip.className = 'status-chip ok';
+      txt.textContent = `Actualizado ${new Date(data.generatedAt).toLocaleTimeString()}`;
+
+      const sys = data.system || {};
+      document.getElementById('kv-system').innerHTML = kvRows([
+        ['Hostname', sys.hostname],
+        ['Plataforma', `${sys.platform} (${sys.arch})`],
+        ['Uptime', sys.uptimeSec != null ? `${Math.floor(sys.uptimeSec / 60)} min` : null],
+        ['Memoria libre', sys.freeMemMB != null ? `${sys.freeMemMB} / ${sys.totalMemMB} MB` : null],
+        ['Temp. CPU', sys.cpuTempC != null ? `${sys.cpuTempC.toFixed(1)} °C` : 'no disponible'],
+      ]);
+
+      const wifi = data.wifi || {};
+      document.getElementById('kv-wifi').innerHTML = wifi.error
+        ? `<div class="section-empty">Error: ${wifi.error}</div>`
+        : kvRows([
+            ['SSID conectado', wifi.connectedSSID],
+            ['IP', wifi.ipAddress],
+            ['Señal', wifi.signal != null ? `${wifi.signal}%` : null],
+            ['AP activo', fmtBool(wifi.apActive)],
+            ['AP SSID/IP', wifi.apSsid ? `${wifi.apSsid} — ${wifi.apIp}` : null],
+          ]);
+
+      const session = data.session || {};
+      document.getElementById('kv-session').innerHTML = session.error
+        ? `<div class="section-empty">Error: ${session.error}</div>`
+        : (data.session ? kvRows([
+            ['Estado', session.status],
+            ['Sala', session.roomName],
+            ['Conectado', fmtBool(session.isConnected)],
+            ['Mic activo', fmtBool(session.micActive)],
+            ['Speaker activo', fmtBool(session.speakerActive)],
+            ['Reintentando', fmtBool(session.isReconnecting)],
+          ]) : '<div class="section-empty">no disponible</div>');
+
+      const audio = data.audio || {};
+      document.getElementById('body-audio').innerHTML = audio.available
+        ? `<pre class="dump">${[audio.arecordList, audio.aplayList, audio.alsaProcs].filter(Boolean).join('\n\n') || '(sin datos)'}</pre>`
+        : '<div class="section-empty">no disponible en esta plataforma</div>';
+
+      const bt = data.bluetooth || {};
+      document.getElementById('body-bluetooth').innerHTML = bt.available
+        ? `<pre class="dump">Emparejados:\n${bt.paired || '(ninguno)'}\n\nConectados:\n${bt.connected || '(ninguno)'}</pre>`
+        : '<div class="section-empty">no disponible en esta plataforma</div>';
+
+      document.getElementById('dump-wifilog').textContent = data.wifiLog || '(sin registros todavía)';
+    } catch (e) {
+      chip.className = 'status-chip error';
+      txt.textContent = `Error: ${e.message}`;
+    }
+  }
+
+  refresh();
+  setInterval(refresh, REFRESH_MS);
+</script>
+
+</body>
+</html>

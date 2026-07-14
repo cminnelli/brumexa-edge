@@ -431,20 +431,27 @@
       </div>
 
       <div class="field">
-        <label class="field-label" for="setup-lk-url">LiveKit URL</label>
-        <input type="text" id="setup-lk-url" class="setup-input"
-               placeholder="wss://tu-servidor.livekit.cloud" autocomplete="off" spellcheck="false" />
-        <p class="field-hint">URL del servidor LiveKit (empieza con wss://)</p>
+        <label class="field-label" for="setup-rag-url">RAG API URL</label>
+        <input type="text" id="setup-rag-url" class="setup-input"
+               placeholder="http://192.168.1.50:4000" autocomplete="off" spellcheck="false" />
+        <p class="field-hint">URL del servidor central brumexa-rag-api-v2 (el que emite los tokens de LiveKit)</p>
       </div>
 
       <div class="field">
-        <label class="field-label" for="setup-lk-token">LiveKit Token</label>
+        <label class="field-label" for="setup-device-id">Device ID</label>
+        <input type="text" id="setup-device-id" class="setup-input"
+               placeholder="brume-1" autocomplete="off" spellcheck="false" />
+        <p class="field-hint">Identificador del dispositivo, dado de alta en brumexa-admin-v2</p>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="setup-api-key">API Key</label>
         <div class="setup-token-row">
-          <input type="password" id="setup-lk-token" class="setup-input"
-                 placeholder="eyJhbGciOi..." autocomplete="off" spellcheck="false" />
+          <input type="password" id="setup-api-key" class="setup-input"
+                 placeholder="brx_..." autocomplete="off" spellcheck="false" />
           <button class="btn-ghost" id="btn-toggle-token">Mostrar</button>
         </div>
-        <p class="field-hint" id="setup-token-info"></p>
+        <p class="field-hint" id="setup-token-info">Se genera/rota en brumexa-admin-v2 → Devices</p>
       </div>
 
       <div class="field">

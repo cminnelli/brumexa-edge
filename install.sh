@@ -79,13 +79,13 @@ else
   info "Configurando variables de entorno..."
   cp .env.example .env
 
-  read -p "LIVEKIT_URL (ej: wss://brumexa-agent-xyz.livekit.cloud): " LK_URL
-  read -p "LIVEKIT_TOKEN (token JWT que te entregó el programador): " LK_TOKEN
-  read -p "LIVEKIT_ROOM_NAME (ej: charlie-shopp-preview-123): " LK_ROOM
+  read -p "RAG_API_URL (ej: http://192.168.1.50:4000): " RAG_URL
+  read -p "BRUMEXA_DEVICE_ID (ej: brume-1): " DEV_ID
+  read -p "BRUMEXA_API_KEY (generado/rotado en brumexa-admin-v2 → Devices): " DEV_KEY
 
-  sed -i "s|LIVEKIT_URL=.*|LIVEKIT_URL=${LK_URL}|" .env
-  sed -i "s|LIVEKIT_TOKEN=.*|LIVEKIT_TOKEN=${LK_TOKEN}|" .env
-  sed -i "s|LIVEKIT_ROOM_NAME=.*|LIVEKIT_ROOM_NAME=${LK_ROOM}|" .env
+  sed -i "s|RAG_API_URL=.*|RAG_API_URL=${RAG_URL}|" .env
+  sed -i "s|BRUMEXA_DEVICE_ID=.*|BRUMEXA_DEVICE_ID=${DEV_ID}|" .env
+  sed -i "s|BRUMEXA_API_KEY=.*|BRUMEXA_API_KEY=${DEV_KEY}|" .env
 
   ok ".env configurado"
 fi

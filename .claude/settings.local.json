@@ -16,7 +16,14 @@
       "Bash(python -c ' *)",
       "Bash(python _build_docx.py)",
       "Bash(node --check d:/Proyectos/Brumexa-raspberry/lib/livekit-session.js)",
-      "Bash(node --check d:/Proyectos/Brumexa-raspberry/public/app.js)"
+      "Bash(node --check d:/Proyectos/Brumexa-raspberry/public/app.js)",
+      "Bash(ssh brumelab@brumexa.local \"cat ~/proyectos/brumexa-edge/node_modules/rpi-ws281x/index.js | head -50\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "WebFetch(domain:picovoice.ai)",
+      "WebSearch",
+      "WebFetch(domain:github.com)"
     ]
   }
 }
