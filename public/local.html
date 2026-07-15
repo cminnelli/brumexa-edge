@@ -40,6 +40,11 @@
     <div id="body-audio"></div>
   </div>
 
+  <div class="card span-2" id="card-ragchain">
+    <div class="card-title"><span class="ic">🔗</span>Conexión LiveKit / RAG API</div>
+    <div id="body-ragchain"></div>
+  </div>
+
   <div class="card" id="card-session">
     <div class="card-title"><span class="ic">🔊</span>Sesión LiveKit</div>
     <div class="kv" id="kv-session"></div>
@@ -226,6 +231,41 @@
     }
   }
 
+  function chainStep(ok, label, detail) {
+    const icon = ok === null ? '⚪' : ok ? '✅' : '❌';
+    return `<div class="chain-step ${ok === false ? 'bad' : ok ? 'ok' : ''}">
+      <span class="chain-icon">${icon}</span>
+      <div><div class="chain-label">${label}</div>${detail ? `<div class="chain-detail">${detail}</div>` : ''}</div>
+    </div>`;
+  }
+
+  function renderRagChain(ragAuth, ragApi, session) {
+    if (!ragAuth) return '<div class="section-empty">no disponible</div>';
+    if (ragAuth.error) return `<div class="section-empty">Error: ${esc(ragAuth.error)}</div>`;
+
+    const credsOk = ragAuth.deviceIdSet && ragAuth.apiKeySet;
+    const apiOk   = !!ragApi?.reachable;
+    const authOk  = !!ragAuth.authenticated;
+    const sessOk  = !!session?.isConnected;
+
+    const steps = [
+      chainStep(credsOk, 'Credenciales en .env', credsOk
+        ? `BRUMEXA_DEVICE_ID=${esc(ragAuth.deviceId || '—')}`
+        : 'Falta BRUMEXA_DEVICE_ID y/o BRUMEXA_API_KEY'),
+      chainStep(apiOk, 'RAG API alcanzable', apiOk
+        ? `${esc(ragAuth.ragApiUrl)} → HTTP ${ragApi.status ?? '—'}`
+        : `${esc(ragAuth.ragApiUrl || '(sin configurar)')} → ${esc(ragApi?.error || 'sin respuesta')}`),
+      chainStep(authOk, 'Dispositivo autenticado', authOk
+        ? `negocio=${esc(ragAuth.businessId || '—')}  expira=${ragAuth.tokenExpiresAt ? new Date(ragAuth.tokenExpiresAt).toLocaleString() : '—'}`
+        : (ragAuth.lastError ? `${esc(ragAuth.lastError.message)} (${ageLabel(ragAuth.lastError.at)})` : 'sin intentar todavía')),
+      chainStep(sessOk ? true : null, 'Sesión LiveKit conectada', sessOk
+        ? `sala=${esc(session.roomName || '—')}`
+        : 'sin sesión activa (normal si no apretaste "Conectar")'),
+    ];
+
+    return `<div class="chain">${steps.join('')}</div>`;
+  }
+
   async function refresh() {
     const chip = document.getElementById('chip-refresh');
     const txt  = document.getElementById('txt-refresh');
@@ -269,6 +309,7 @@
           ]) : '<div class="section-empty">no disponible</div>');
 
       document.getElementById('body-audio').innerHTML = renderAudio(data.audio, session);
+      document.getElementById('body-ragchain').innerHTML = renderRagChain(data.ragAuth, data.ragApi, session);
 
       const bt = data.bluetooth || {};
       document.getElementById('body-bluetooth').innerHTML = bt.available

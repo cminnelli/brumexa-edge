@@ -571,6 +571,7 @@ setupLocalDebug(app, {
   lkSession,
   getMicLevel: () => ({ ..._micLevel, monitorActive: !!_micMonitor }),
   getRecorderStatus: getStatus,
+  getRagAuthStatus: ragAuth.getStatus,
   getDeviceConfig: () => ({
     tokenConfigured: DEVICE_CONFIGURED,
     livekitUrl:      lastKnownLivekitUrl,
