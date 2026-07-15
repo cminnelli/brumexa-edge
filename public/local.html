@@ -190,11 +190,20 @@
       ['Último nivel (sesión)', spkPlaying ? levelMeter(spkLevel) : '<span class="section-empty">sin sesión activa</span>'],
     ]);
 
+    const micEnabled = session?.micEnabled !== false; // default true si no hay dato aun
+    const micToggleBlock = `
+      <button class="btn-test ${micEnabled ? '' : 'btn-test-off'}" id="btn-mic-toggle" onclick="toggleMic()">
+        ${micEnabled ? '🎤 Mic ACTIVADO — tocar para desactivar' : '🚫 Mic DESACTIVADO — tocar para activar'}
+      </button>
+      <div class="section-empty" style="margin-top:4px">Aplica en la próxima sesión que arranques, no afecta una ya conectada. No se guarda en .env — vuelve a "activado" si reiniciás el server.</div>
+    `;
+
     return `
       <div class="audio-grid">
         <div>
           <div class="sub-title">Micrófono</div>
           <div class="kv">${micRows}</div>
+          ${micToggleBlock}
           ${recorderBlock}
         </div>
         <div>
@@ -209,6 +218,24 @@
         <pre class="dump">${esc([audio.arecordList, audio.aplayList, audio.alsaProcs].filter(Boolean).join('\n\n') || '(sin datos)')}</pre>
       </details>
     `;
+  }
+
+  async function toggleMic() {
+    const btn = document.getElementById('btn-mic-toggle');
+    const currentlyOn = !btn.textContent.includes('DESACTIVADO');
+    btn.disabled = true;
+    try {
+      const res  = await fetch('/local/mic-toggle', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ enabled: !currentlyOn }),
+      });
+      await res.json();
+    } catch (e) {
+      alert(`Error cambiando el mic: ${e.message}`);
+    }
+    btn.disabled = false;
+    await refresh();
   }
 
   async function runSpeakerTest() {

@@ -454,7 +454,6 @@ function stopMicMonitor() {
 let _sessionConnectedAt = 0;
 lkSession.on('mic-stats',     ({ peak, dbfs }) => {
   const level = peak / 32767;
-  console.log(`[leds] mic peak=${peak} level=${level.toFixed(2)} dbfs=${dbfs.toFixed(1)}`);
   _micLevel = { level, peak, updatedAt: Date.now(), source: 'session' };
   if (Date.now() - _sessionConnectedAt > 2000) leds.speaking(level);
 });

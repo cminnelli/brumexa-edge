@@ -284,6 +284,12 @@ code {
 }
 .btn-test:hover:not(:disabled) { background: rgba(91,141,239,.22); }
 .btn-test:disabled { opacity: .6; cursor: wait; }
+.btn-test-off {
+  background: rgba(240,85,74,.12);
+  border-color: rgba(240,85,74,.35);
+  color: var(--danger);
+}
+.btn-test-off:hover:not(:disabled) { background: rgba(240,85,74,.22); }
 
 /* ── Logs del servidor: separar stdout/stderr ── */
 .log-sub {
