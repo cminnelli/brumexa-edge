@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brumexa — Configuración</title>
+  <link rel="stylesheet" href="local.css" />
+</head>
+<body>
+
+<header class="header">
+  <span class="header-icon">⚙️</span>
+  <div>
+    <div class="header-title">Brumexa — Configuración</div>
+    <div class="header-sub">Credenciales, mic, parlante y pruebas de conexión</div>
+  </div>
+</header>
+
+<main class="page">
+
+  <div class="card span-2" id="card-refresh">
+    <div class="status-chip ok" id="chip-refresh">
+      <span class="status-dot pulse"></span>
+      <span id="txt-refresh">Cargando…</span>
+    </div>
+  </div>
+
+  <div class="card span-2" id="card-creds">
+    <div class="card-title"><span class="ic">🔑</span>Credenciales (.env)</div>
+    <div class="field-edit">
+      <label for="inp-rag-url">RAG_API_URL</label>
+      <div class="field-edit-row">
+        <input type="text" id="inp-rag-url" placeholder="http://192.168.0.x:4000" />
+      </div>
+    </div>
+    <div class="field-edit">
+      <label for="inp-device-id">BRUMEXA_DEVICE_ID</label>
+      <div class="field-edit-row">
+        <input type="text" id="inp-device-id" placeholder="mi-dispositivo-01" />
+      </div>
+    </div>
+    <div class="field-edit">
+      <label for="inp-api-key">BRUMEXA_API_KEY</label>
+      <div class="field-edit-row">
+        <input type="text" id="inp-api-key" placeholder="brx_..." />
+      </div>
+    </div>
+    <div class="field-edit">
+      <label for="inp-device-name">DEVICE_NAME</label>
+      <div class="field-edit-row">
+        <input type="text" id="inp-device-name" placeholder="brumexa-01" />
+      </div>
+    </div>
+    <div class="field-edit">
+      <label for="inp-mic-gain">MIC_GAIN</label>
+      <div class="field-edit-row">
+        <input type="text" id="inp-mic-gain" placeholder="4.0" />
+      </div>
+    </div>
+    <button class="btn-test" id="btn-save-creds" onclick="saveCreds()" style="margin-top:10px">💾 Guardar credenciales</button>
+    <div id="creds-save-result"></div>
+  </div>
+
+  <div class="card" id="card-auth">
+    <div class="card-title"><span class="ic">🔐</span>Autenticación RAG API</div>
+    <div class="kv" id="kv-auth"></div>
+    <button class="btn-test" id="btn-force-auth" onclick="forceAuth()">🔐 Forzar autenticación</button>
+    <div id="auth-result"></div>
+  </div>
+
+  <div class="card" id="card-token">
+    <div class="card-title"><span class="ic">🎫</span>Token de LiveKit</div>
+    <div id="token-status" class="section-empty">sin probar todavía en esta sesión</div>
+    <button class="btn-test" id="btn-force-token" onclick="forceToken()">🎫 Forzar token</button>
+    <div id="token-result"></div>
+  </div>
+
+  <div class="card" id="card-mic">
+    <div class="card-title"><span class="ic">🎤</span>Micrófono</div>
+    <div class="section-empty" style="margin-bottom:8px">Aplica en la próxima sesión que arranques, no afecta una ya conectada. No se guarda en .env — vuelve a "activado" si reiniciás el server.</div>
+    <button class="btn-test" id="btn-mic-toggle" onclick="toggleMic()">Cargando…</button>
+  </div>
+
+  <div class="card" id="card-speaker">
+    <div class="card-title"><span class="ic">🔊</span>Parlante</div>
+    <button class="btn-test" id="btn-speaker-test" onclick="runSpeakerTest()">🔊 Probar parlante (tono 1kHz)</button>
+    <div id="speaker-test-result"></div>
+  </div>
+
+  <div class="refresh-note"><a href="/local" style="color:var(--accent)">← Ver diagnóstico de solo lectura en /local</a></div>
+
+</main>
+
+<script>
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  }
+  function kvRows(pairs) {
+    return pairs
+      .map(([k, v]) => {
+        const val = (v === null || v === undefined || v === '') ? '—' : v;
+        return `<div class="kv-row"><span class="k">${k}</span><span class="v">${val}</span></div>`;
+      })
+      .join('');
+  }
+  function ageLabel(ts) {
+    if (!ts) return 'sin datos';
+    const s = Math.round((Date.now() - ts) / 1000);
+    if (s < 0) return 'ahora';
+    return s < 60 ? `hace ${s}s` : `hace ${Math.floor(s / 60)}min`;
+  }
+
+  let micEnabledState = true;
+
+  async function loadAll() {
+    const chip = document.getElementById('chip-refresh');
+    const txt  = document.getElementById('txt-refresh');
+    try {
+      const [cfgRes, statusRes] = await Promise.all([
+        fetch('/setup/config', { cache: 'no-store' }),
+        fetch('/configuracion/status', { cache: 'no-store' }),
+      ]);
+      const cfg    = await cfgRes.json();
+      const status = await statusRes.json();
+
+      document.getElementById('inp-rag-url').value    = cfg.ragApiUrl    || '';
+      document.getElementById('inp-device-id').value   = cfg.deviceId     || '';
+      document.getElementById('inp-api-key').value      = cfg.apiKey       || '';
+      document.getElementById('inp-device-name').value = cfg.deviceName   || '';
+      document.getElementById('inp-mic-gain').value     = cfg.micGain      || '';
+
+      const auth = status.ragAuth || {};
+      document.getElementById('kv-auth').innerHTML = auth.error
+        ? `<div class="section-empty">Error: ${esc(auth.error)}</div>`
+        : kvRows([
+            ['Autenticado', auth.authenticated ? '✅ sí' : '❌ no'],
+            ['Negocio', auth.businessId],
+            ['Expira', auth.tokenExpiresAt ? new Date(auth.tokenExpiresAt).toLocaleString() : '—'],
+            ['Último error', auth.lastError ? `${esc(auth.lastError.message)} (${ageLabel(auth.lastError.at)})` : '—'],
+          ]);
+
+      micEnabledState = status.micEnabled !== false;
+      updateMicButton();
+
+      chip.className = 'status-chip ok';
+      txt.textContent = `Actualizado ${new Date().toLocaleTimeString()}`;
+    } catch (e) {
+      chip.className = 'status-chip error';
+      txt.textContent = `Error: ${e.message}`;
+    }
+  }
+
+  async function saveCreds() {
+    const btn    = document.getElementById('btn-save-creds');
+    const result = document.getElementById('creds-save-result');
+    btn.disabled = true;
+    btn.textContent = '💾 Guardando…';
+    result.innerHTML = '';
+    try {
+      const res = await fetch('/setup/config', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          ragApiUrl:  document.getElementById('inp-rag-url').value.trim(),
+          deviceId:   document.getElementById('inp-device-id').value.trim(),
+          apiKey:     document.getElementById('inp-api-key').value.trim(),
+          deviceName: document.getElementById('inp-device-name').value.trim(),
+          micGain:    document.getElementById('inp-mic-gain').value.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'error desconocido');
+      result.innerHTML = '<div class="flow-note ok">✔ Guardado — esperando que el servidor vuelva…</div>';
+      pollServerBack(result, btn, '💾 Guardar credenciales');
+    } catch (e) {
+      result.innerHTML = `<div class="flow-note bad">✘ ${esc(e.message)}</div>`;
+      btn.disabled = false;
+      btn.textContent = '💾 Guardar credenciales';
+    }
+  }
+
+  // Sondea /configuracion/status cada 2s hasta 20s. Si vuelve, recarga la
+  // pagina. Si no vuelve (tipico de nodemon, que no reinicia solo ante un
+  // exit limpio), avisa que hay que reiniciar a mano con "rs" en la terminal.
+  async function pollServerBack(result, btn, restoreText) {
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      try {
+        const res = await fetch('/configuracion/status', { cache: 'no-store' });
+        if (res.ok) { location.reload(); return; }
+      } catch {}
+    }
+    result.innerHTML = `
+      <div class="flow-note bad">
+        ⚠ Guardado en el .env, pero el servidor no volvió solo.
+        Si estás corriendo con <code>nodemon</code> (npm run brumexa),
+        andá a esa terminal y escribí <code>rs</code> + Enter — con PM2
+        debería haber vuelto solo, revisá <code>sudo pm2 list</code>.
+      </div>`;
+    btn.disabled = false;
+    btn.textContent = restoreText;
+  }
+
+  async function forceAuth() {
+    const btn = document.getElementById('btn-force-auth');
+    const result = document.getElementById('auth-result');
+    btn.disabled = true; btn.textContent = '🔐 Autenticando…';
+    let data;
+    try {
+      const res = await fetch('/configuracion/force-auth', { method: 'POST' });
+      data = await res.json();
+    } catch (e) {
+      data = { ok: false, error: e.message };
+    }
+    result.innerHTML = data.ok
+      ? `<div class="flow-note ok">✔ Login OK — negocio=${esc(data.status?.businessId || '—')}</div>`
+      : `<div class="flow-note bad">✘ ${esc(data.error)}</div>`;
+    alert(data.ok
+      ? `✔ Autenticación OK\nNegocio: ${data.status?.businessId || '—'}\nExpira: ${data.status?.tokenExpiresAt ? new Date(data.status.tokenExpiresAt).toLocaleString() : '—'}`
+      : `✘ Falló la autenticación\n${data.error}`);
+    btn.disabled = false; btn.textContent = '🔐 Forzar autenticación';
+    loadAll();
+  }
+
+  async function forceToken() {
+    const btn = document.getElementById('btn-force-token');
+    const result = document.getElementById('token-result');
+    btn.disabled = true; btn.textContent = '🎫 Pidiendo token…';
+    let data;
+    try {
+      const res = await fetch('/configuracion/force-token', { method: 'POST' });
+      data = await res.json();
+    } catch (e) {
+      data = { ok: false, error: e.message };
+    }
+    document.getElementById('token-status').innerHTML = '';
+    result.innerHTML = data.ok
+      ? `<div class="flow-note ok">✔ Token OK — sala=${esc(data.roomName)}<br>server=${esc(data.serverUrl)}<br>token=${esc(data.tokenPreview)}</div>`
+      : `<div class="flow-note bad">✘ ${esc(data.error)}</div>`;
+    alert(data.ok
+      ? `✔ Token OK\nSala: ${data.roomName}\nServidor: ${data.serverUrl}\nToken: ${data.tokenPreview}`
+      : `✘ Falló pedir el token\n${data.error}`);
+    btn.disabled = false; btn.textContent = '🎫 Forzar token';
+  }
+
+  function updateMicButton() {
+    const btn = document.getElementById('btn-mic-toggle');
+    btn.className = 'btn-test' + (micEnabledState ? '' : ' btn-test-off');
+    btn.textContent = micEnabledState ? '🎤 Mic ACTIVADO — tocar para desactivar' : '🚫 Mic DESACTIVADO — tocar para activar';
+  }
+
+  async function toggleMic() {
+    const btn = document.getElementById('btn-mic-toggle');
+    btn.disabled = true;
+    try {
+      const res = await fetch('/configuracion/mic-toggle', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ enabled: !micEnabledState }),
+      });
+      const data = await res.json();
+      micEnabledState = data.micEnabled;
+    } catch (e) {
+      alert(`Error cambiando el mic: ${e.message}`);
+    }
+    updateMicButton();
+    btn.disabled = false;
+  }
+
+  async function runSpeakerTest() {
+    const btn    = document.getElementById('btn-speaker-test');
+    const result = document.getElementById('speaker-test-result');
+    btn.disabled = true;
+    btn.textContent = '🔊 Reproduciendo…';
+    result.innerHTML = '';
+    try {
+      const res  = await fetch('/configuracion/speaker-test', { method: 'POST' });
+      const data = await res.json();
+      result.innerHTML = data.ok
+        ? `<div class="pill ok" style="margin-top:6px">✅ ${esc(data.note || 'Tono reproducido')}</div>`
+        : `<div class="pill bad" style="margin-top:6px">⚠ Error: ${esc(data.error || data.output || 'desconocido')}</div>`;
+    } catch (e) {
+      result.innerHTML = `<div class="pill bad" style="margin-top:6px">⚠ Error: ${esc(e.message)}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🔊 Probar parlante (tono 1kHz)';
+    }
+  }
+
+  loadAll();
+</script>
+
+</body>
+</html>

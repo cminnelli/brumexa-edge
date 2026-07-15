@@ -1612,11 +1612,24 @@ ui.btnMic.addEventListener('click', async () => {
       }
     }
   } catch (err) {
-    state.active = false;
-    updateMicButton(false);
-    setMicStatus('error');
-    log(formatError(err), 'error');
-    console.error(err);
+    // Si el server dice "sesión ya activa" (409), no es un error real —
+    // significa que YA hay una sesión corriendo (quizás iniciada desde otra
+    // pestaña/dispositivo) y el botón se había desincronizado. En vez de
+    // dejarlo trabado en "Conectar" (que siempre va a chocar con el mismo
+    // 409), lo sincronizamos a "Desconectar" para que el usuario pueda
+    // frenarla desde acá.
+    if (/sesión ya activa/i.test(err.message)) {
+      state.active = true;
+      updateMicButton(true);
+      log('[pi-native] Ya había una sesión activa — sincronizando botón a "Desconectar"', 'warn');
+      if (state.usePiNative) PiNativeModule._startPolling();
+    } else {
+      state.active = false;
+      updateMicButton(false);
+      setMicStatus('error');
+      log(formatError(err), 'error');
+      console.error(err);
+    }
   } finally {
     ui.btnMic.disabled = false;
   }
@@ -2817,6 +2830,24 @@ const SetupModule = {
       ui.alsaDeviceWrap.style.display       = '';
       const alsaSpeakerWrap2 = document.getElementById('alsa-speaker-wrap');
       if (alsaSpeakerWrap2) alsaSpeakerWrap2.style.display = '';
+
+      // Sincronizar el botón con el estado REAL del server al cargar la
+      // página — si ya había una sesión activa (p.ej. recargaste el
+      // navegador), el botón tiene que arrancar en "Desconectar", no en
+      // "Conectar" (que chocaría con un 409 "Sesión ya activa").
+      try {
+        const s = await fetch('/session/status').then(r => r.json());
+        if (s.isConnected) {
+          state.active = true;
+          updateMicButton(true);
+          setLiveKitStatus('connected', 'sesión ya activa');
+          setChannelStatus('connected', s.roomName ? `sala: ${s.roomName}` : 'conectado');
+          setMicStatus(s.micActive ? 'on' : 'off');
+          log('[pi-native] Sesión ya estaba activa — sincronizando UI', 'info');
+          startSessionTimer();
+          PiNativeModule._startPolling();
+        }
+      } catch { /* si falla, arrancamos como si no hubiera sesión */ }
     }
   }
 

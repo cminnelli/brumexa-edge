@@ -12,7 +12,7 @@
   <span class="header-icon">🩺</span>
   <div>
     <div class="header-title">Brumexa — Diagnóstico local</div>
-    <div class="header-sub">Situación del dispositivo, sin internet</div>
+    <div class="header-sub">Situación del dispositivo, sin internet — solo lectura</div>
   </div>
 </header>
 
@@ -73,7 +73,10 @@
     <pre class="dump" id="dump-systemlog"></pre>
   </div>
 
-  <div class="refresh-note">Se actualiza solo cada 6 segundos (excepto durante el test de parlante)</div>
+  <div class="refresh-note">
+    Se actualiza solo cada 6 segundos —
+    <a href="/configuracion" style="color:var(--accent)">⚙️ ir a Configuración para editar credenciales, mic, parlante y forzar pruebas</a>
+  </div>
 
 </main>
 
@@ -146,6 +149,7 @@
     const mic = audio.mic || {};
     const micHw = !!(audio.arecordList && !/no soundcards|\*\*\*\* list.*\n\s*$/i.test(audio.arecordList));
     const micFresh = mic.updatedAt && (Date.now() - mic.updatedAt < 5000);
+    const micEnabled = session?.micEnabled !== false;
 
     const spkHw = !!(audio.aplayList && audio.aplayList.split('\n').some(l => l.includes('card ')));
     const spkPlaying = !!session?.speakerActive;
@@ -156,6 +160,7 @@
       micRows = `<div class="section-empty">Error leyendo mic: ${esc(mic?.error || 'desconocido')}</div>`;
     } else {
       micRows = kvRows([
+        ['Activado (toggle)', pill(micEnabled, 'sí', 'no — ver Configuración')],
         ['Hardware detectado', pill(micHw)],
         ['Monitor activo', pill(mic.monitorActive || session?.micActive)],
         ['Nivel captado', micFresh ? levelMeter(mic.level) : '<span class="section-empty">sin lectura reciente</span>'],
@@ -190,27 +195,16 @@
       ['Último nivel (sesión)', spkPlaying ? levelMeter(spkLevel) : '<span class="section-empty">sin sesión activa</span>'],
     ]);
 
-    const micEnabled = session?.micEnabled !== false; // default true si no hay dato aun
-    const micToggleBlock = `
-      <button class="btn-test ${micEnabled ? '' : 'btn-test-off'}" id="btn-mic-toggle" onclick="toggleMic()">
-        ${micEnabled ? '🎤 Mic ACTIVADO — tocar para desactivar' : '🚫 Mic DESACTIVADO — tocar para activar'}
-      </button>
-      <div class="section-empty" style="margin-top:4px">Aplica en la próxima sesión que arranques, no afecta una ya conectada. No se guarda en .env — vuelve a "activado" si reiniciás el server.</div>
-    `;
-
     return `
       <div class="audio-grid">
         <div>
           <div class="sub-title">Micrófono</div>
           <div class="kv">${micRows}</div>
-          ${micToggleBlock}
           ${recorderBlock}
         </div>
         <div>
           <div class="sub-title">Parlante</div>
           <div class="kv">${spkRows}</div>
-          <button class="btn-test" id="btn-speaker-test" onclick="runSpeakerTest()">🔊 Probar parlante (tono 1kHz)</button>
-          <div id="speaker-test-result"></div>
         </div>
       </div>
       <details>
@@ -220,50 +214,7 @@
     `;
   }
 
-  async function toggleMic() {
-    const btn = document.getElementById('btn-mic-toggle');
-    const currentlyOn = !btn.textContent.includes('DESACTIVADO');
-    btn.disabled = true;
-    try {
-      const res  = await fetch('/local/mic-toggle', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ enabled: !currentlyOn }),
-      });
-      await res.json();
-    } catch (e) {
-      alert(`Error cambiando el mic: ${e.message}`);
-    }
-    btn.disabled = false;
-    await refresh();
-  }
-
-  async function runSpeakerTest() {
-    const btn    = document.getElementById('btn-speaker-test');
-    const result = document.getElementById('speaker-test-result');
-    btn.disabled = true;
-    btn.textContent = '🔊 Reproduciendo…';
-    result.innerHTML = '';
-    try {
-      const res  = await fetch('/local/speaker-test', { method: 'POST' });
-      const data = await res.json();
-      result.innerHTML = data.ok
-        ? `<div class="pill ok" style="margin-top:6px">✅ ${esc(data.note || 'Tono reproducido')}</div>`
-        : `<div class="pill bad" style="margin-top:6px">⚠ Error: ${esc(data.error || data.output || 'desconocido')}</div>`;
-    } catch (e) {
-      result.innerHTML = `<div class="pill bad" style="margin-top:6px">⚠ Error: ${esc(e.message)}</div>`;
-    } finally {
-      btn.disabled = false;
-      btn.textContent = '🔊 Probar parlante (tono 1kHz)';
-    }
-  }
-
-  // Resultados de los botones "forzar" — se guardan acá para que no
-  // desaparezcan en el próximo auto-refresh (cada 6s), hasta el próximo test.
-  let lastAuthResult  = null;
-  let lastTokenResult = null;
-
-  function flowStep(n, ok, title, body, action) {
+  function flowStep(n, ok, title, body) {
     const icon = ok === null ? '⚪' : ok ? '✅' : '❌';
     return `
       <div class="flow-step ${ok === false ? 'bad' : ok ? 'ok' : ''}">
@@ -271,7 +222,6 @@
         <div class="flow-body">
           <div class="flow-title">${title}</div>
           ${body}
-          ${action || ''}
         </div>
       </div>`;
   }
@@ -285,139 +235,29 @@
     const authOk  = !!ragAuth.authenticated;
     const sessOk  = !!session?.isConnected;
 
-    // Paso 1 — credenciales (RAG_API_URL editable, el resto solo lectura)
     const step1 = flowStep(1, credsOk, 'Credenciales (.env)', `
       <div class="kv">${kvRows([
+        ['RAG_API_URL', ragAuth.ragApiUrl],
         ['BRUMEXA_DEVICE_ID', ragAuth.deviceId],
         ['BRUMEXA_API_KEY', ragAuth.apiKeyMasked],
         ['Business ID (fallback)', ragAuth.businessIdEnv],
       ])}</div>
-      <div class="field-edit">
-        <label for="inp-rag-url">RAG_API_URL</label>
-        <div class="field-edit-row">
-          <input type="text" id="inp-rag-url" value="${esc(ragAuth.ragApiUrl || '')}" placeholder="http://192.168.0.x:4000" />
-          <button class="btn-test" id="btn-save-rag-url" onclick="saveRagApiUrl()" style="width:auto; margin-top:0">💾 Guardar</button>
-        </div>
-        <div id="rag-url-save-result"></div>
-      </div>
       ${!apiOk ? `<div class="flow-note bad">API no alcanzable ahora: ${esc(ragApi?.error || `HTTP ${ragApi?.status}`)}</div>` : ''}
     `);
 
-    // Paso 2 — autenticación, con botón para forzarla
-    const authDetail = lastAuthResult
-      ? (lastAuthResult.ok
-          ? `<div class="flow-note ok">✔ Login OK — negocio=${esc(lastAuthResult.status?.businessId || '—')}</div>`
-          : `<div class="flow-note bad">✘ ${esc(lastAuthResult.error)}</div>`)
-      : (authOk
-          ? `<div class="flow-note ok">Autenticado — negocio=${esc(ragAuth.businessId || '—')}, expira ${ragAuth.tokenExpiresAt ? new Date(ragAuth.tokenExpiresAt).toLocaleString() : '—'}</div>`
-          : (ragAuth.lastError ? `<div class="flow-note bad">${esc(ragAuth.lastError.message)} (${ageLabel(ragAuth.lastError.at)})</div>` : '<div class="section-empty">sin intentar todavía</div>'));
-    const step2 = flowStep(2, authOk, 'Autenticación con RAG API', authDetail, `
-      <button class="btn-test" id="btn-force-auth" onclick="forceAuth()">🔐 Forzar autenticación</button>
-    `);
+    const step2 = flowStep(2, authOk, 'Autenticación con RAG API',
+      authOk
+        ? `<div class="flow-note ok">Autenticado — negocio=${esc(ragAuth.businessId || '—')}, expira ${ragAuth.tokenExpiresAt ? new Date(ragAuth.tokenExpiresAt).toLocaleString() : '—'}</div>`
+        : (ragAuth.lastError ? `<div class="flow-note bad">${esc(ragAuth.lastError.message)} (${ageLabel(ragAuth.lastError.at)})</div>` : '<div class="section-empty">sin datos todavía</div>')
+    );
 
-    // Paso 3 — token de LiveKit, con botón para forzarlo
-    const tokenDetail = lastTokenResult
-      ? (lastTokenResult.ok
-          ? `<div class="flow-note ok">✔ Token OK — sala=${esc(lastTokenResult.roomName)}<br>server=${esc(lastTokenResult.serverUrl)}<br>token=${esc(lastTokenResult.tokenPreview)}</div>`
-          : `<div class="flow-note bad">✘ ${esc(lastTokenResult.error)}</div>`)
-      : '<div class="section-empty">sin probar todavía en esta sesión</div>';
-    const step3 = flowStep(3, lastTokenResult ? lastTokenResult.ok : null, 'Token de LiveKit', tokenDetail, `
-      <button class="btn-test" id="btn-force-token" onclick="forceToken()">🎫 Forzar token</button>
-    `);
-
-    // Paso 4 — sesión real (solo lectura, ya se ve tambien en la tarjeta de Sesión)
-    const step4 = flowStep(4, sessOk ? true : null, 'Sesión LiveKit conectada',
+    const step3 = flowStep(3, sessOk ? true : null, 'Sesión LiveKit conectada',
       sessOk
         ? `<div class="flow-note ok">Conectado — sala=${esc(session.roomName || '—')}</div>`
         : '<div class="section-empty">sin sesión activa (normal si no apretaste "Conectar" en la app)</div>'
     );
 
-    return `<div class="flow">${step1}${step2}${step3}${step4}</div>`;
-  }
-
-  // Sondea /local/status cada 2s hasta 20s. Si vuelve, recarga la pagina.
-  // Si no vuelve (tipico de nodemon, que no reinicia solo ante un exit
-  // limpio), avisa que hay que reiniciar a mano con "rs" en la terminal.
-  async function pollServerBack(result, btn) {
-    const maxTries = 10;
-    for (let i = 0; i < maxTries; i++) {
-      await new Promise(r => setTimeout(r, 2000));
-      try {
-        const res = await fetch('/local/status', { cache: 'no-store' });
-        if (res.ok) { location.reload(); return; }
-      } catch {}
-    }
-    result.innerHTML = `
-      <div class="flow-note bad">
-        ⚠ Guardado en el .env, pero el servidor no volvió solo.
-        Si estás corriendo con <code>nodemon</code> (npm run brumexa),
-        andá a esa terminal y escribí <code>rs</code> + Enter — con PM2
-        debería haber vuelto solo, revisá <code>sudo pm2 list</code>.
-      </div>`;
-    btn.disabled = false;
-    btn.textContent = '💾 Guardar';
-  }
-
-  async function saveRagApiUrl() {
-    const input  = document.getElementById('inp-rag-url');
-    const btn    = document.getElementById('btn-save-rag-url');
-    const result = document.getElementById('rag-url-save-result');
-    const value  = input.value.trim();
-    if (!value) return;
-
-    btn.disabled = true;
-    btn.textContent = '💾 Guardando…';
-    result.innerHTML = '';
-    try {
-      const res  = await fetch('/setup/config', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ ragApiUrl: value }),
-      });
-      const data = await res.json();
-      if (!data.ok) throw new Error(data.error || 'error desconocido');
-      // El server escribe el .env y hace process.exit(0). Con PM2 eso
-      // dispara un restart automático — con nodemon NO (nodemon solo
-      // reinicia ante cambios de archivo, no ante una salida limpia), así
-      // que hay que sondear si volvió y avisar si no.
-      result.innerHTML = '<div class="flow-note ok">✔ Guardado — esperando que el servidor vuelva…</div>';
-      btn.textContent = '💾 Reiniciando…';
-      pollServerBack(result, btn);
-    } catch (e) {
-      result.innerHTML = `<div class="flow-note bad">✘ ${esc(e.message)}</div>`;
-      btn.disabled = false;
-      btn.textContent = '💾 Guardar';
-    }
-  }
-
-  async function forceAuth() {
-    const btn = document.getElementById('btn-force-auth');
-    btn.disabled = true; btn.textContent = '🔐 Autenticando…';
-    try {
-      const res = await fetch('/local/force-auth', { method: 'POST' });
-      lastAuthResult = await res.json();
-    } catch (e) {
-      lastAuthResult = { ok: false, error: e.message };
-    }
-    alert(lastAuthResult.ok
-      ? `✔ Autenticación OK\nNegocio: ${lastAuthResult.status?.businessId || '—'}\nExpira: ${lastAuthResult.status?.tokenExpiresAt ? new Date(lastAuthResult.status.tokenExpiresAt).toLocaleString() : '—'}`
-      : `✘ Falló la autenticación\n${lastAuthResult.error}`);
-    await refresh();
-  }
-
-  async function forceToken() {
-    const btn = document.getElementById('btn-force-token');
-    btn.disabled = true; btn.textContent = '🎫 Pidiendo token…';
-    try {
-      const res = await fetch('/local/force-token', { method: 'POST' });
-      lastTokenResult = await res.json();
-    } catch (e) {
-      lastTokenResult = { ok: false, error: e.message };
-    }
-    alert(lastTokenResult.ok
-      ? `✔ Token OK\nSala: ${lastTokenResult.roomName}\nServidor: ${lastTokenResult.serverUrl}\nToken: ${lastTokenResult.tokenPreview}`
-      : `✘ Falló pedir el token\n${lastTokenResult.error}`);
-    await refresh();
+    return `<div class="flow">${step1}${step2}${step3}</div>`;
   }
 
   async function refresh() {

@@ -16,6 +16,7 @@ const { startRecording, stopRecording, getStatus,
 const { setupBluetooth }                               = require('./lib/bluetooth');
 const { setupWifi, autoStartAP, startHealthMonitor, getStatus: getWifiStatus } = require('./lib/wifi');
 const { setupLocalDebug }                              = require('./lib/local-debug');
+const { setupConfiguracion }                           = require('./lib/configuracion');
 const { session: lkSession }                           = require('./lib/livekit-session');
 const leds                                             = require('./lib/leds');
 const ragAuth                                          = require('./lib/rag-auth');
@@ -414,6 +415,11 @@ let _micMonitor = null;
 let _micLevel = { level: 0, peak: 0, updatedAt: 0, source: null };
 
 function startMicMonitor() {
+  // Respeta el toggle "Mic desactivado" de /configuracion — si el usuario
+  // lo apagó a mano, nada debe volver a abrir arecord (ni el watchdog de
+  // error/disconnect, ni el reanudar tras record/stop), hasta que lo
+  // reactive él mismo.
+  if (!lkSession.getMicEnabled()) return;
   if (_micMonitor || process.platform !== 'linux') return;
   const MIC = process.env.MIC_DEVICE || 'plughw:0,0';
   const proc = spawn('arecord', ['-D', MIC, '-f', 'S16_LE', '-r', '16000', '-c', '1', '-t', 'raw', '-q']);
@@ -571,13 +577,12 @@ setupLocalDebug(app, {
   getMicLevel: () => ({ ..._micLevel, monitorActive: !!_micMonitor }),
   getRecorderStatus: getStatus,
   getRagAuthStatus: ragAuth.getStatus,
-  ragAuth,
-  requestRoomToken,
   getDeviceConfig: () => ({
     tokenConfigured: DEVICE_CONFIGURED,
     livekitUrl:      lastKnownLivekitUrl,
   }),
 });
+setupConfiguracion(app, { lkSession, ragAuth, requestRoomToken });
 
 httpServer.on('error', err => {
   if (err.code === 'EADDRINUSE') {
