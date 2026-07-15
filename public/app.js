@@ -2866,20 +2866,18 @@ const SetupModule = {
       const termBtn = tabNav.querySelector('[data-tab="terminal"]');
       if (termBtn) termBtn.style.display = 'none';
     }
-    let terminalInited = false;
     tabNav.querySelectorAll('.tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
+        const tab = btn.dataset.tab;
+        // "Terminal Pi" y "Configuracion" ahora son páginas propias
+        // (/terminal, /configuracion) en vez de tabs internos — navegar
+        // en vez de cambiar de sección en esta misma página.
+        if (tab === 'terminal') { window.location.href = '/terminal'; return; }
+        if (tab === 'setup')    { window.location.href = '/configuracion'; return; }
+
         tabNav.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        const tab = btn.dataset.tab;
-        document.getElementById('panel-section').style.display    = tab === 'panel'    ? '' : 'none';
-        document.getElementById('terminal-section').style.display = tab === 'terminal' ? '' : 'none';
-        document.getElementById('setup-section').style.display    = tab === 'setup'    ? '' : 'none';
-        if (tab === 'terminal' && !terminalInited) {
-          terminalInited = true;
-          TerminalModule.init();
-        }
-        if (tab === 'setup') SetupModule.load();
+        document.getElementById('panel-section').style.display    = tab === 'panel' ? '' : 'none';
       });
     });
   }

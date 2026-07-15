@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brumexa — Terminal Pi</title>
+  <link rel="stylesheet" href="style.css?v=16" />
+  <style>
+    body { display: flex; flex-direction: column; height: 100vh; margin: 0; }
+    .term-page-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px; flex-shrink: 0;
+      border-bottom: 1px solid var(--border, #2a2f45);
+    }
+    .term-page-header a { color: inherit; text-decoration: none; opacity: .8; font-size: 13px; }
+    .term-page-header a:hover { opacity: 1; }
+    .term-page-header h1 { font-size: 15px; margin: 0; }
+    .terminal-wrap { flex: 1; min-height: 0; display: flex; }
+  </style>
+</head>
+<body>
+
+<div class="term-page-header">
+  <a href="/">← Panel</a>
+  <h1>💻 Terminal Pi</h1>
+</div>
+
+<div id="terminal-section" class="terminal-wrap">
+
+  <!-- Sidebar: categorías y comandos -->
+  <aside class="term-sidebar">
+    <div class="term-sidebar__header">
+      <span>Comandos</span>
+      <span class="term-sidebar__hint">Clic para ejecutar</span>
+    </div>
+    <!-- Buscador -->
+    <div class="term-search-wrap">
+      <span class="term-search-icon">🔍</span>
+      <input id="term-search" class="term-search" type="search"
+             placeholder="Buscar comando…" autocomplete="off" />
+    </div>
+    <div id="term-groups" class="term-groups"></div>
+    <div class="term-custom">
+      <div class="term-custom__label">Comando libre</div>
+      <div class="term-input-row">
+        <span class="term-prompt">$</span>
+        <input id="term-input" class="term-input" type="text"
+               placeholder="bash comando…" autocomplete="off" spellcheck="false" />
+      </div>
+      <button id="btn-term-run" class="btn-term-run">Ejecutar ↵</button>
+    </div>
+  </aside>
+
+  <!-- Output -->
+  <div class="term-main">
+    <div class="term-main__header">
+      <span class="term-main__title">Output</span>
+      <button class="btn-ghost" id="btn-term-clear">Limpiar</button>
+    </div>
+    <div id="term-output" class="term-output"></div>
+  </div>
+
+</div><!-- #terminal-section -->
+
+<script src="terminal.js?v=15"></script>
+<script>
+  TerminalModule.init();
+</script>
+
+</body>
+</html>

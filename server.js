@@ -51,6 +51,11 @@ app.get('/', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// ─── GET /terminal — terminal remota como página propia (antes era un tab) ───
+app.get('/terminal', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'terminal.html'));
+});
+
 // ─── GET /config — info del dispositivo y configuración (sin secretos) ───────
 app.get('/config', (_req, res) => {
   res.json({
