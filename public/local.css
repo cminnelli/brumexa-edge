@@ -239,6 +239,35 @@ details pre.dump { margin-top: 8px; }
 .flow-note.ok  { color: var(--success); border-color: rgba(62,207,142,.3); }
 .flow-note.bad { color: var(--danger);  border-color: rgba(240,85,74,.3); }
 
+code {
+  font-family: 'Consolas', monospace;
+  background: rgba(255,255,255,.08);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: .95em;
+}
+
+/* ── Campo editable (RAG_API_URL, etc.) ── */
+.field-edit { margin-top: 8px; }
+.field-edit label {
+  display: block; font-size: 11.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--muted); margin-bottom: 4px;
+}
+.field-edit-row { display: flex; gap: 8px; }
+.field-edit-row input {
+  flex: 1; min-width: 0;
+  padding: 8px 10px;
+  background: var(--surface2);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-family: 'Consolas', monospace;
+  font-size: 12.5px;
+  outline: none;
+}
+.field-edit-row input:focus { border-color: var(--accent); }
+.field-edit-row .btn-test { flex-shrink: 0; padding-left: 14px; padding-right: 14px; }
+
 /* ── Botón de test (parlante, etc.) ── */
 .btn-test {
   margin-top: 8px;
