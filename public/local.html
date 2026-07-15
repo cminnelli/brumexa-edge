@@ -310,6 +310,9 @@
     } catch (e) {
       lastAuthResult = { ok: false, error: e.message };
     }
+    alert(lastAuthResult.ok
+      ? `✔ Autenticación OK\nNegocio: ${lastAuthResult.status?.businessId || '—'}\nExpira: ${lastAuthResult.status?.tokenExpiresAt ? new Date(lastAuthResult.status.tokenExpiresAt).toLocaleString() : '—'}`
+      : `✘ Falló la autenticación\n${lastAuthResult.error}`);
     await refresh();
   }
 
@@ -322,6 +325,9 @@
     } catch (e) {
       lastTokenResult = { ok: false, error: e.message };
     }
+    alert(lastTokenResult.ok
+      ? `✔ Token OK\nSala: ${lastTokenResult.roomName}\nServidor: ${lastTokenResult.serverUrl}\nToken: ${lastTokenResult.tokenPreview}`
+      : `✘ Falló pedir el token\n${lastTokenResult.error}`);
     await refresh();
   }
 
