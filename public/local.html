@@ -231,12 +231,22 @@
     }
   }
 
-  function chainStep(ok, label, detail) {
+  // Resultados de los botones "forzar" — se guardan acá para que no
+  // desaparezcan en el próximo auto-refresh (cada 6s), hasta el próximo test.
+  let lastAuthResult  = null;
+  let lastTokenResult = null;
+
+  function flowStep(n, ok, title, body, action) {
     const icon = ok === null ? '⚪' : ok ? '✅' : '❌';
-    return `<div class="chain-step ${ok === false ? 'bad' : ok ? 'ok' : ''}">
-      <span class="chain-icon">${icon}</span>
-      <div><div class="chain-label">${label}</div>${detail ? `<div class="chain-detail">${detail}</div>` : ''}</div>
-    </div>`;
+    return `
+      <div class="flow-step ${ok === false ? 'bad' : ok ? 'ok' : ''}">
+        <div class="flow-num">${icon !== '⚪' ? icon : n}</div>
+        <div class="flow-body">
+          <div class="flow-title">${title}</div>
+          ${body}
+          ${action || ''}
+        </div>
+      </div>`;
   }
 
   function renderRagChain(ragAuth, ragApi, session) {
@@ -248,22 +258,71 @@
     const authOk  = !!ragAuth.authenticated;
     const sessOk  = !!session?.isConnected;
 
-    const steps = [
-      chainStep(credsOk, 'Credenciales en .env', credsOk
-        ? `BRUMEXA_DEVICE_ID=${esc(ragAuth.deviceId || '—')}`
-        : 'Falta BRUMEXA_DEVICE_ID y/o BRUMEXA_API_KEY'),
-      chainStep(apiOk, 'RAG API alcanzable', apiOk
-        ? `${esc(ragAuth.ragApiUrl)} → HTTP ${ragApi.status ?? '—'}`
-        : `${esc(ragAuth.ragApiUrl || '(sin configurar)')} → ${esc(ragApi?.error || 'sin respuesta')}`),
-      chainStep(authOk, 'Dispositivo autenticado', authOk
-        ? `negocio=${esc(ragAuth.businessId || '—')}  expira=${ragAuth.tokenExpiresAt ? new Date(ragAuth.tokenExpiresAt).toLocaleString() : '—'}`
-        : (ragAuth.lastError ? `${esc(ragAuth.lastError.message)} (${ageLabel(ragAuth.lastError.at)})` : 'sin intentar todavía')),
-      chainStep(sessOk ? true : null, 'Sesión LiveKit conectada', sessOk
-        ? `sala=${esc(session.roomName || '—')}`
-        : 'sin sesión activa (normal si no apretaste "Conectar")'),
-    ];
+    // Paso 1 — credenciales (solo lectura, enmascaradas)
+    const step1 = flowStep(1, credsOk, 'Credenciales (.env)', `
+      <div class="kv">${kvRows([
+        ['RAG_API_URL', ragAuth.ragApiUrl],
+        ['BRUMEXA_DEVICE_ID', ragAuth.deviceId],
+        ['BRUMEXA_API_KEY', ragAuth.apiKeyMasked],
+        ['Business ID (fallback)', ragAuth.businessIdEnv],
+      ])}</div>
+      ${!apiOk ? `<div class="flow-note bad">API no alcanzable ahora: ${esc(ragApi?.error || `HTTP ${ragApi?.status}`)}</div>` : ''}
+    `);
 
-    return `<div class="chain">${steps.join('')}</div>`;
+    // Paso 2 — autenticación, con botón para forzarla
+    const authDetail = lastAuthResult
+      ? (lastAuthResult.ok
+          ? `<div class="flow-note ok">✔ Login OK — negocio=${esc(lastAuthResult.status?.businessId || '—')}</div>`
+          : `<div class="flow-note bad">✘ ${esc(lastAuthResult.error)}</div>`)
+      : (authOk
+          ? `<div class="flow-note ok">Autenticado — negocio=${esc(ragAuth.businessId || '—')}, expira ${ragAuth.tokenExpiresAt ? new Date(ragAuth.tokenExpiresAt).toLocaleString() : '—'}</div>`
+          : (ragAuth.lastError ? `<div class="flow-note bad">${esc(ragAuth.lastError.message)} (${ageLabel(ragAuth.lastError.at)})</div>` : '<div class="section-empty">sin intentar todavía</div>'));
+    const step2 = flowStep(2, authOk, 'Autenticación con RAG API', authDetail, `
+      <button class="btn-test" id="btn-force-auth" onclick="forceAuth()">🔐 Forzar autenticación</button>
+    `);
+
+    // Paso 3 — token de LiveKit, con botón para forzarlo
+    const tokenDetail = lastTokenResult
+      ? (lastTokenResult.ok
+          ? `<div class="flow-note ok">✔ Token OK — sala=${esc(lastTokenResult.roomName)}<br>server=${esc(lastTokenResult.serverUrl)}<br>token=${esc(lastTokenResult.tokenPreview)}</div>`
+          : `<div class="flow-note bad">✘ ${esc(lastTokenResult.error)}</div>`)
+      : '<div class="section-empty">sin probar todavía en esta sesión</div>';
+    const step3 = flowStep(3, lastTokenResult ? lastTokenResult.ok : null, 'Token de LiveKit', tokenDetail, `
+      <button class="btn-test" id="btn-force-token" onclick="forceToken()">🎫 Forzar token</button>
+    `);
+
+    // Paso 4 — sesión real (solo lectura, ya se ve tambien en la tarjeta de Sesión)
+    const step4 = flowStep(4, sessOk ? true : null, 'Sesión LiveKit conectada',
+      sessOk
+        ? `<div class="flow-note ok">Conectado — sala=${esc(session.roomName || '—')}</div>`
+        : '<div class="section-empty">sin sesión activa (normal si no apretaste "Conectar" en la app)</div>'
+    );
+
+    return `<div class="flow">${step1}${step2}${step3}${step4}</div>`;
+  }
+
+  async function forceAuth() {
+    const btn = document.getElementById('btn-force-auth');
+    btn.disabled = true; btn.textContent = '🔐 Autenticando…';
+    try {
+      const res = await fetch('/local/force-auth', { method: 'POST' });
+      lastAuthResult = await res.json();
+    } catch (e) {
+      lastAuthResult = { ok: false, error: e.message };
+    }
+    await refresh();
+  }
+
+  async function forceToken() {
+    const btn = document.getElementById('btn-force-token');
+    btn.disabled = true; btn.textContent = '🎫 Pidiendo token…';
+    try {
+      const res = await fetch('/local/force-token', { method: 'POST' });
+      lastTokenResult = await res.json();
+    } catch (e) {
+      lastTokenResult = { ok: false, error: e.message };
+    }
+    await refresh();
   }
 
   async function refresh() {

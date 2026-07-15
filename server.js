@@ -572,6 +572,8 @@ setupLocalDebug(app, {
   getMicLevel: () => ({ ..._micLevel, monitorActive: !!_micMonitor }),
   getRecorderStatus: getStatus,
   getRagAuthStatus: ragAuth.getStatus,
+  ragAuth,
+  requestRoomToken,
   getDeviceConfig: () => ({
     tokenConfigured: DEVICE_CONFIGURED,
     livekitUrl:      lastKnownLivekitUrl,
