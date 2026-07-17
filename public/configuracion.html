@@ -57,6 +57,12 @@
         <input type="text" id="inp-mic-gain" placeholder="4.0" />
       </div>
     </div>
+    <div class="field-edit">
+      <label for="inp-speaker-gain">SPEAKER_GAIN (volumen de la voz del agente)</label>
+      <div class="field-edit-row">
+        <input type="text" id="inp-speaker-gain" placeholder="3.0" />
+      </div>
+    </div>
     <button class="btn-test" id="btn-save-creds" onclick="saveCreds()" style="margin-top:10px">💾 Guardar credenciales</button>
     <div id="creds-save-result"></div>
   </div>
@@ -128,6 +134,7 @@
       document.getElementById('inp-api-key').value      = cfg.apiKey       || '';
       document.getElementById('inp-device-name').value = cfg.deviceName   || '';
       document.getElementById('inp-mic-gain').value     = cfg.micGain      || '';
+      document.getElementById('inp-speaker-gain').value = cfg.speakerGain  || '';
 
       const auth = status.ragAuth || {};
       document.getElementById('kv-auth').innerHTML = auth.error
@@ -165,7 +172,8 @@
           deviceId:   document.getElementById('inp-device-id').value.trim(),
           apiKey:     document.getElementById('inp-api-key').value.trim(),
           deviceName: document.getElementById('inp-device-name').value.trim(),
-          micGain:    document.getElementById('inp-mic-gain').value.trim(),
+          micGain:     document.getElementById('inp-mic-gain').value.trim(),
+          speakerGain: document.getElementById('inp-speaker-gain').value.trim(),
         }),
       });
       const data = await res.json();

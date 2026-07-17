@@ -157,14 +157,15 @@ app.get('/setup/config', (_req, res) => {
     deviceId:  getVal('BRUMEXA_DEVICE_ID'),
     apiKey:    getVal('BRUMEXA_API_KEY'),
     deviceName: getVal('DEVICE_NAME') || os.hostname(),
-    micGain:    getVal('MIC_GAIN') || '4.0',
+    micGain:      getVal('MIC_GAIN')      || '4.0',
+    speakerGain:  getVal('SPEAKER_GAIN')  || '3.0',
   });
 });
 
 // ─── POST /setup/config — escribir .env y reiniciar proceso (PM2 restart) ────
 app.post('/setup/config', express.json(), (req, res) => {
   const envFile = path.join(__dirname, '.env');
-  const { ragApiUrl, deviceId, apiKey, deviceName, micGain } = req.body || {};
+  const { ragApiUrl, deviceId, apiKey, deviceName, micGain, speakerGain } = req.body || {};
   let content = '';
   try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
 
@@ -189,7 +190,8 @@ app.post('/setup/config', express.json(), (req, res) => {
   if (deviceId   !== undefined) content = setEnvLine(content, 'BRUMEXA_DEVICE_ID', deviceId);
   if (apiKey     !== undefined) content = setEnvLine(content, 'BRUMEXA_API_KEY',   apiKey);
   if (deviceName !== undefined) content = setEnvLine(content, 'DEVICE_NAME',       deviceName);
-  if (micGain    !== undefined) content = setEnvLine(content, 'MIC_GAIN',          micGain);
+  if (micGain     !== undefined) content = setEnvLine(content, 'MIC_GAIN',      micGain);
+  if (speakerGain !== undefined) content = setEnvLine(content, 'SPEAKER_GAIN',  speakerGain);
 
   try {
     require('fs').writeFileSync(envFile, content, 'utf8');
