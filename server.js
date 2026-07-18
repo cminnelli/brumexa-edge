@@ -591,14 +591,45 @@ setupLocalDebug(app, {
 });
 setupConfiguracion(app, { lkSession, ragAuth, requestRoomToken });
 
+// Antes esto reintentaba en silencio para siempre si el puerto ya estaba
+// ocupado — si "fuser -k" fallaba (ej. el proceso viejo es de otro usuario
+// y hace falta sudo para matarlo), el server se quedaba mudo reintentando
+// cada 1s sin avisar nada, y el único síntoma visible era que nunca
+// aparecía la línea final "Brumexa-Edge corriendo en...". Ahora es ruidoso:
+// avisa qué encontró en cada paso, y se rinde después de varios intentos
+// en vez de colgarse en silencio.
+let _eaddrinuseAttempts = 0;
+const EADDRINUSE_MAX_ATTEMPTS = 5;
+
 httpServer.on('error', err => {
-  if (err.code === 'EADDRINUSE') {
-    const { execSync } = require('child_process');
-    try {
-      execSync(`fuser -k ${PORT}/tcp`, { stdio: 'ignore' });
-    } catch {}
-    setTimeout(() => httpServer.listen(PORT), 1000);
+  if (err.code !== 'EADDRINUSE') {
+    console.error(`[boot] ✘ Error inesperado al levantar el server: ${err.message}`);
+    return;
   }
+
+  _eaddrinuseAttempts++;
+  console.error(`\n⚠ Puerto ${PORT} ya está ocupado por otro proceso (intento ${_eaddrinuseAttempts}/${EADDRINUSE_MAX_ATTEMPTS}).`);
+
+  if (_eaddrinuseAttempts > EADDRINUSE_MAX_ATTEMPTS) {
+    console.error(
+      `❌ No se pudo liberar el puerto ${PORT} después de ${EADDRINUSE_MAX_ATTEMPTS} intentos — me rindo.\n` +
+      `   Buscá quién lo tiene con: sudo ss -tlnp | grep ${PORT}\n` +
+      `   Y matalo con: sudo kill -9 <PID>\n`
+    );
+    process.exit(1);
+  }
+
+  const { execSync } = require('child_process');
+  try {
+    execSync(`fuser -k ${PORT}/tcp`, { stdio: 'ignore' });
+    console.error(`   → Maté al proceso que lo tenía (fuser -k). Reintentando en 1s…`);
+  } catch (killErr) {
+    console.error(
+      `   → No pude matarlo yo solo (${killErr.message.split('\n')[0]}) — probablemente es de otro` +
+      ` usuario (ej. root) y hace falta sudo. Reintentando igual por si se libera solo…`
+    );
+  }
+  setTimeout(() => httpServer.listen(PORT), 1000);
 });
 
 httpServer.listen(PORT, () => {
