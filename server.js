@@ -605,11 +605,18 @@ setupConfiguracion(app, { lkSession, ragAuth, requestRoomToken });
 let _eaddrinuseAttempts = 0;
 const EADDRINUSE_MAX_ATTEMPTS = 2;
 
+// IMPORTANTE: solo devuelve un PID si el proceso que tiene el puerto es
+// literalmente "node" — nunca matamos otra cosa. Un intento anterior mataba
+// lo que fuera que tuviera el puerto, y una vez terminó matando el proceso
+// sshd-session que sostenía el propio túnel SSH del usuario, cortándole la
+// conexión. Mejor no liberar el puerto que arriesgar matar algo ajeno.
 function _findPortHolderPid(port) {
   const { execSync } = require('child_process');
   try {
     const out = execSync(`ss -tlnp sport = :${port}`, { encoding: 'utf8', timeout: 3000 });
-    const m = out.match(/pid=(\d+)/);
+    const line = out.split('\n').find(l => /users:\(\("node/.test(l));
+    if (!line) return null;
+    const m = line.match(/pid=(\d+)/);
     return m ? parseInt(m[1], 10) : null;
   } catch {
     return null;
@@ -636,7 +643,7 @@ httpServer.on('error', err => {
 
   const pid = _findPortHolderPid(PORT);
   if (!pid) {
-    console.error(`   → No pude identificar el PID que tiene el puerto (¿"ss" no disponible?). Reintentando en 1s…`);
+    console.error(`   → Lo que tiene el puerto no es un proceso "node" (o "ss" no está disponible) — no lo toco. Reintentando en 1s por si se libera solo…`);
   } else {
     try {
       process.kill(pid, 'SIGKILL');
