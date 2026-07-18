@@ -591,15 +591,30 @@ setupLocalDebug(app, {
 });
 setupConfiguracion(app, { lkSession, ragAuth, requestRoomToken });
 
-// Antes esto reintentaba en silencio para siempre si el puerto ya estaba
-// ocupado — si "fuser -k" fallaba (ej. el proceso viejo es de otro usuario
-// y hace falta sudo para matarlo), el server se quedaba mudo reintentando
-// cada 1s sin avisar nada, y el único síntoma visible era que nunca
-// aparecía la línea final "Brumexa-Edge corriendo en...". Ahora es ruidoso:
-// avisa qué encontró en cada paso, y se rinde después de varios intentos
-// en vez de colgarse en silencio.
+// Antes esto dependía de "fuser -k", un binario externo (paquete psmisc)
+// que puede no estar instalado en la Pi -- si fallaba, reintentaba en
+// silencio para siempre sin decir por qué, y el único síntoma visible era
+// que nunca aparecía la línea final "Brumexa-Edge corriendo en...".
+//
+// Ahora busca el PID que tiene el puerto directamente con "ss" (siempre
+// disponible) y lo mata desde Node mismo (sin depender de fuser). Casi
+// siempre es un "npm run brumexa" viejo que quedó huérfano de una terminal
+// que se cerró sin Ctrl+C — mismo usuario, así que este proceso SÍ tiene
+// permiso de matarlo sin sudo. Si es de otro usuario (ej. quedó algo
+// corriendo como root), avisa y se rinde rápido en vez de reintentar 5 veces.
 let _eaddrinuseAttempts = 0;
-const EADDRINUSE_MAX_ATTEMPTS = 5;
+const EADDRINUSE_MAX_ATTEMPTS = 2;
+
+function _findPortHolderPid(port) {
+  const { execSync } = require('child_process');
+  try {
+    const out = execSync(`ss -tlnp sport = :${port}`, { encoding: 'utf8', timeout: 3000 });
+    const m = out.match(/pid=(\d+)/);
+    return m ? parseInt(m[1], 10) : null;
+  } catch {
+    return null;
+  }
+}
 
 httpServer.on('error', err => {
   if (err.code !== 'EADDRINUSE') {
@@ -612,22 +627,26 @@ httpServer.on('error', err => {
 
   if (_eaddrinuseAttempts > EADDRINUSE_MAX_ATTEMPTS) {
     console.error(
-      `❌ No se pudo liberar el puerto ${PORT} después de ${EADDRINUSE_MAX_ATTEMPTS} intentos — me rindo.\n` +
+      `❌ No se pudo liberar el puerto ${PORT} — me rindo.\n` +
       `   Buscá quién lo tiene con: sudo ss -tlnp | grep ${PORT}\n` +
       `   Y matalo con: sudo kill -9 <PID>\n`
     );
     process.exit(1);
   }
 
-  const { execSync } = require('child_process');
-  try {
-    execSync(`fuser -k ${PORT}/tcp`, { stdio: 'ignore' });
-    console.error(`   → Maté al proceso que lo tenía (fuser -k). Reintentando en 1s…`);
-  } catch (killErr) {
-    console.error(
-      `   → No pude matarlo yo solo (${killErr.message.split('\n')[0]}) — probablemente es de otro` +
-      ` usuario (ej. root) y hace falta sudo. Reintentando igual por si se libera solo…`
-    );
+  const pid = _findPortHolderPid(PORT);
+  if (!pid) {
+    console.error(`   → No pude identificar el PID que tiene el puerto (¿"ss" no disponible?). Reintentando en 1s…`);
+  } else {
+    try {
+      process.kill(pid, 'SIGKILL');
+      console.error(`   → Maté el proceso viejo (PID ${pid}) que tenía el puerto tomado. Reintentando en 1s…`);
+    } catch (killErr) {
+      console.error(
+        `   → El puerto lo tiene el PID ${pid}, pero no pude matarlo (${killErr.code === 'EPERM' ? 'permiso denegado — es de otro usuario, hace falta sudo' : killErr.message}).\n` +
+        `      Si es de otro usuario: sudo kill -9 ${pid}`
+      );
+    }
   }
   setTimeout(() => httpServer.listen(PORT), 1000);
 });
