@@ -2628,7 +2628,7 @@ const SetupModule = {
       get('setup-mic-gain',    cfg.micGain);
       get('setup-talk-threshold', cfg.talkThreshold);
       const valEl = document.getElementById('val-talk-threshold');
-      if (valEl) valEl.textContent = document.getElementById('setup-talk-threshold')?.value || cfg.talkThreshold || '-50';
+      if (valEl) valEl.textContent = document.getElementById('setup-talk-threshold')?.value || cfg.talkThreshold || '-25';
       if (status) status.textContent = '';
     } catch (err) {
       if (status) { status.textContent = `Error: ${err.message}`; status.className = 'setup-status error'; }
@@ -2659,7 +2659,7 @@ const SetupModule = {
       apiKey:     (document.getElementById('setup-api-key')?.value    || '').trim(),
       deviceName: (document.getElementById('setup-device-name')?.value || '').trim(),
       micGain:     document.getElementById('setup-mic-gain')?.value    || '4.0',
-      talkThreshold: document.getElementById('setup-talk-threshold')?.value || '-50',
+      talkThreshold: document.getElementById('setup-talk-threshold')?.value || '-25',
     };
 
     if (!body.ragApiUrl) { if (status) { status.textContent = 'RAG API URL es requerido'; status.className = 'setup-status error'; } return; }

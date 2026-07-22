@@ -469,16 +469,16 @@
       </div>
 
       <div class="field">
-        <label class="field-label" for="setup-talk-threshold">Sensibilidad del micrófono (umbral)</label>
+        <label class="field-label" for="setup-talk-threshold">Sensibilidad de la voz (umbral)</label>
         <div class="gain-controls">
           <div class="gain-row">
             <input type="range" id="setup-talk-threshold" class="gain-slider"
-                   min="-70" max="-20" step="1" value="-50">
-            <span class="gain-val" id="val-talk-threshold">-50</span>
+                   min="-50" max="-15" step="1" value="-25">
+            <span class="gain-val" id="val-talk-threshold">-25</span>
             <span class="gain-db" id="lbl-talk-threshold">dBFS</span>
           </div>
         </div>
-        <p class="field-hint">Se aplica al toque, sin reiniciar. Hacia la izquierda (más negativo) = más sensible, detecta voz más baja. Hacia la derecha = menos sensible, hace falta hablar más fuerte. Se guarda en .env con "Guardar y reiniciar" para que quede como default.</p>
+        <p class="field-hint">Un solo umbral conectado a dos cosas: corta el "respirando" del LED y pasa a ámbar ("hablando"), y controla cuándo el servidor lo imprime en consola. Se aplica al toque, sin reiniciar. Hacia la izquierda (más negativo) = más sensible — pero por debajo de -30 puede empezar a dispararse con ruido ambiente. Se guarda en .env con "Guardar y reiniciar" para que quede como default.</p>
       </div>
 
       <div class="setup-actions">
@@ -490,7 +490,7 @@
 </div><!-- #setup-section -->
 
 <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-<script src="app.js?v=25"></script>
+<script src="app.js?v=26"></script>
 <script src="terminal.js?v=15"></script>
 </body>
 </html>

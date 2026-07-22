@@ -159,7 +159,7 @@ app.get('/setup/config', (_req, res) => {
     deviceName: getVal('DEVICE_NAME') || os.hostname(),
     micGain:      getVal('MIC_GAIN')      || '4.0',
     speakerGain:  getVal('SPEAKER_GAIN')  || '3.0',
-    talkThreshold: getVal('MIC_TALK_THRESHOLD_DBFS') || '-50',
+    talkThreshold: getVal('MIC_TALK_THRESHOLD_DBFS') || '-25',
   });
 });
 
@@ -549,12 +549,14 @@ app.post('/session/mic-gain', express.json(), (req, res) => {
   res.json({ ok, gain: lkSession.getMicGain() });
 });
 
-// ─── POST /session/talk-threshold — umbral (dBFS) para detectar "hablando" ────
+// ─── POST /session/talk-threshold — umbral (dBFS) de voz, conectado a AMBOS: ─
+// el texto del log en consola ("empezó/dejó de hablar") Y el LED (corta el
+// breathing y pasa a "hablando"). Un solo umbral, un solo slider.
 app.post('/session/talk-threshold', express.json(), (req, res) => {
   const t = parseFloat(req.body?.threshold);
   if (isNaN(t)) return res.status(400).json({ ok: false, error: 'threshold inválido' });
-  const ok = lkSession.setTalkThreshold(t);
-  res.json({ ok, threshold: lkSession.getTalkThreshold() });
+  const ok = lkSession.setTalkThreshold(t) && leds.setSpeakThresholdDbfs(t);
+  res.json({ ok, threshold: lkSession.getTalkThreshold(), ledThreshold: leds.getSpeakThresholdDbfs() });
 });
 
 // ─── POST /terminal/run — ejecutar comando en la Pi ──────────────────────────
