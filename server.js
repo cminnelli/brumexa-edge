@@ -159,13 +159,14 @@ app.get('/setup/config', (_req, res) => {
     deviceName: getVal('DEVICE_NAME') || os.hostname(),
     micGain:      getVal('MIC_GAIN')      || '4.0',
     speakerGain:  getVal('SPEAKER_GAIN')  || '3.0',
+    talkThreshold: getVal('MIC_TALK_THRESHOLD_DBFS') || '-50',
   });
 });
 
 // ─── POST /setup/config — escribir .env y reiniciar proceso (PM2 restart) ────
 app.post('/setup/config', express.json(), (req, res) => {
   const envFile = path.join(__dirname, '.env');
-  const { ragApiUrl, deviceId, apiKey, deviceName, micGain, speakerGain } = req.body || {};
+  const { ragApiUrl, deviceId, apiKey, deviceName, micGain, speakerGain, talkThreshold } = req.body || {};
   let content = '';
   try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
 
@@ -192,6 +193,7 @@ app.post('/setup/config', express.json(), (req, res) => {
   if (deviceName !== undefined) content = setEnvLine(content, 'DEVICE_NAME',       deviceName);
   if (micGain     !== undefined) content = setEnvLine(content, 'MIC_GAIN',      micGain);
   if (speakerGain !== undefined) content = setEnvLine(content, 'SPEAKER_GAIN',  speakerGain);
+  if (talkThreshold !== undefined) content = setEnvLine(content, 'MIC_TALK_THRESHOLD_DBFS', talkThreshold);
 
   try {
     require('fs').writeFileSync(envFile, content, 'utf8');
@@ -545,6 +547,14 @@ app.post('/session/mic-gain', express.json(), (req, res) => {
   if (isNaN(g)) return res.status(400).json({ ok: false, error: 'gain inválido' });
   const ok = lkSession.setMicGain(g);
   res.json({ ok, gain: lkSession.getMicGain() });
+});
+
+// ─── POST /session/talk-threshold — umbral (dBFS) para detectar "hablando" ────
+app.post('/session/talk-threshold', express.json(), (req, res) => {
+  const t = parseFloat(req.body?.threshold);
+  if (isNaN(t)) return res.status(400).json({ ok: false, error: 'threshold inválido' });
+  const ok = lkSession.setTalkThreshold(t);
+  res.json({ ok, threshold: lkSession.getTalkThreshold() });
 });
 
 // ─── POST /terminal/run — ejecutar comando en la Pi ──────────────────────────

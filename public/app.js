@@ -2602,6 +2602,18 @@ const SetupModule = {
           togBtn.textContent = keyEl.type === 'password' ? 'Mostrar' : 'Ocultar';
         });
       }
+
+      // Umbral de sensibilidad — label en vivo + push al servidor con debounce
+      const threshEl = document.getElementById('setup-talk-threshold');
+      const valEl     = document.getElementById('val-talk-threshold');
+      if (threshEl) {
+        let _threshTimer = null;
+        threshEl.addEventListener('input', () => {
+          if (valEl) valEl.textContent = threshEl.value;
+          clearTimeout(_threshTimer);
+          _threshTimer = setTimeout(() => this._pushTalkThreshold(), 400);
+        });
+      }
     }
 
     const status = document.getElementById('setup-status');
@@ -2614,9 +2626,27 @@ const SetupModule = {
       get('setup-api-key',     cfg.apiKey);
       get('setup-device-name', cfg.deviceName);
       get('setup-mic-gain',    cfg.micGain);
+      get('setup-talk-threshold', cfg.talkThreshold);
+      const valEl = document.getElementById('val-talk-threshold');
+      if (valEl) valEl.textContent = document.getElementById('setup-talk-threshold')?.value || cfg.talkThreshold || '-50';
       if (status) status.textContent = '';
     } catch (err) {
       if (status) { status.textContent = `Error: ${err.message}`; status.className = 'setup-status error'; }
+    }
+  },
+
+  async _pushTalkThreshold() {
+    const v = parseFloat(document.getElementById('setup-talk-threshold')?.value);
+    if (isNaN(v)) return;
+    try {
+      await fetch('/session/talk-threshold', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ threshold: v }),
+      });
+      log(`Sensibilidad mic → ${v} dBFS`, 'info');
+    } catch (err) {
+      log(`Error actualizando sensibilidad: ${err.message}`, 'error');
     }
   },
 
@@ -2629,6 +2659,7 @@ const SetupModule = {
       apiKey:     (document.getElementById('setup-api-key')?.value    || '').trim(),
       deviceName: (document.getElementById('setup-device-name')?.value || '').trim(),
       micGain:     document.getElementById('setup-mic-gain')?.value    || '4.0',
+      talkThreshold: document.getElementById('setup-talk-threshold')?.value || '-50',
     };
 
     if (!body.ragApiUrl) { if (status) { status.textContent = 'RAG API URL es requerido'; status.className = 'setup-status error'; } return; }

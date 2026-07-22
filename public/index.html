@@ -468,6 +468,19 @@
         <p class="field-hint">Multiplicador de ganancia de software. 1.0 = sin boost &nbsp;·&nbsp; 4.0 = +12 dB &nbsp;·&nbsp; 16.0 = +24 dB</p>
       </div>
 
+      <div class="field">
+        <label class="field-label" for="setup-talk-threshold">Sensibilidad del micrófono (umbral)</label>
+        <div class="gain-controls">
+          <div class="gain-row">
+            <input type="range" id="setup-talk-threshold" class="gain-slider"
+                   min="-70" max="-20" step="1" value="-50">
+            <span class="gain-val" id="val-talk-threshold">-50</span>
+            <span class="gain-db" id="lbl-talk-threshold">dBFS</span>
+          </div>
+        </div>
+        <p class="field-hint">Se aplica al toque, sin reiniciar. Hacia la izquierda (más negativo) = más sensible, detecta voz más baja. Hacia la derecha = menos sensible, hace falta hablar más fuerte. Se guarda en .env con "Guardar y reiniciar" para que quede como default.</p>
+      </div>
+
       <div class="setup-actions">
         <button id="btn-setup-save" class="btn-connect">Guardar y reiniciar</button>
         <span id="setup-status" class="setup-status"></span>
@@ -477,7 +490,7 @@
 </div><!-- #setup-section -->
 
 <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-<script src="app.js?v=24"></script>
+<script src="app.js?v=25"></script>
 <script src="terminal.js?v=15"></script>
 </body>
 </html>
