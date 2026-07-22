@@ -63,6 +63,14 @@
         <input type="text" id="inp-speaker-gain" placeholder="3.0" />
       </div>
     </div>
+    <div class="field-edit">
+      <label for="inp-talk-threshold">Sensibilidad de la voz (umbral, dBFS) — corta el LED y el log al hablar</label>
+      <div class="field-edit-row" style="align-items:center">
+        <input type="range" id="inp-talk-threshold" min="-50" max="-15" step="1" value="-25" style="flex:1" />
+        <span id="val-talk-threshold" style="min-width:52px;text-align:right;font-family:monospace">-25 dBFS</span>
+      </div>
+      <div class="section-empty" style="margin-top:4px">Se aplica al toque, sin reiniciar. Más a la izquierda (negativo) = más sensible — por debajo de -30 puede dispararse con ruido ambiente.</div>
+    </div>
     <button class="btn-test" id="btn-save-creds" onclick="saveCreds()" style="margin-top:10px">💾 Guardar credenciales</button>
     <div id="creds-save-result"></div>
   </div>
@@ -135,6 +143,8 @@
       document.getElementById('inp-device-name').value = cfg.deviceName   || '';
       document.getElementById('inp-mic-gain').value     = cfg.micGain      || '';
       document.getElementById('inp-speaker-gain').value = cfg.speakerGain  || '';
+      document.getElementById('inp-talk-threshold').value = cfg.talkThreshold || '-25';
+      document.getElementById('val-talk-threshold').textContent = `${cfg.talkThreshold || '-25'} dBFS`;
 
       const auth = status.ragAuth || {};
       document.getElementById('kv-auth').innerHTML = auth.error
@@ -174,6 +184,7 @@
           deviceName: document.getElementById('inp-device-name').value.trim(),
           micGain:     document.getElementById('inp-mic-gain').value.trim(),
           speakerGain: document.getElementById('inp-speaker-gain').value.trim(),
+          talkThreshold: document.getElementById('inp-talk-threshold').value.trim(),
         }),
       });
       const data = await res.json();
@@ -186,6 +197,23 @@
       btn.textContent = '💾 Guardar credenciales';
     }
   }
+
+  // Slider de sensibilidad — label en vivo + push al servidor con debounce
+  // (no requiere "Guardar credenciales", aplica al toque).
+  let _threshTimer = null;
+  document.getElementById('inp-talk-threshold').addEventListener('input', (e) => {
+    document.getElementById('val-talk-threshold').textContent = `${e.target.value} dBFS`;
+    clearTimeout(_threshTimer);
+    _threshTimer = setTimeout(async () => {
+      try {
+        await fetch('/session/talk-threshold', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ threshold: parseFloat(e.target.value) }),
+        });
+      } catch {}
+    }, 400);
+  });
 
   // Sondea /configuracion/status cada 2s hasta 20s. Si vuelve, recarga la
   // pagina. Si no vuelve (tipico de nodemon, que no reinicia solo ante un

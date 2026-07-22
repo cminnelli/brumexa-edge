@@ -44,7 +44,13 @@ app.use((req, _res, next) => {
   next();
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
+// Los .html nunca se cachean (evita servir una versión vieja del panel tras
+// un deploy) — los assets versionados (app.js?v=N, etc.) sí pueden cachear.
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-store');
+  },
+}));
 
 // ─── GET / ───────────────────────────────────────────────────────────────────
 app.get('/', (_req, res) => {
