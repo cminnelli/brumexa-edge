@@ -22,13 +22,6 @@ const leds                                             = require('./lib/leds');
 const ragAuth                                          = require('./lib/rag-auth');
 const { requestRoomToken }                             = require('./lib/rag-token');
 
-// Arranca el indicador de LEDs lo antes posible (blanco pulsando = "estoy
-// iniciando") — antes incluso de levantar el servidor HTTP, para que haya
-// señal visual apenas se corre "npm run brumexa", sin esperar a que termine
-// todo el resto del arranque (wifi, etc). leds.idle() la reemplaza por la
-// respiración normal cuando el server está listo (ver httpServer.listen).
-leds.init();
-
 const {
   PORT = 3000,
 } = process.env;
@@ -703,6 +696,11 @@ httpServer.listen(PORT, () => {
 
   if (DEVICE_CONFIGURED) ragAuth.initAuth();
 
+  // leds.init() prende el indicador de "iniciando" (blanco pulsando) apenas
+  // el puerto queda arriba — leds.idle() más abajo lo reemplaza por la
+  // respiración normal cuando termina el resto del arranque.
+  leds.init();
+
   if (process.platform === 'linux') startMicMonitor();
 
   // En Linux: maximizar el gain de captura ALSA (Capture/Mic/ADC → 100% cap)
@@ -714,8 +712,8 @@ httpServer.listen(PORT, () => {
 
   // Si estamos en Linux y no hay WiFi configurado → activar AP + LEDs rojo.
   // En cualquier caso, acá termina la secuencia de arranque: leds.idle()
-  // reemplaza el blanco de "iniciando" (prendido en leds.init(), arriba del
-  // archivo) por la respiración normal — indigo, o naranja/rojo según la red.
+  // reemplaza el blanco de "iniciando" por la respiración normal — indigo,
+  // o naranja/rojo según la red.
   if (process.platform === 'linux') {
     autoStartAP().then(() => {
       const { getStatus } = require('./lib/wifi');
