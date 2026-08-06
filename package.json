@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "brumexa": "bash scripts/free-port.sh; nodemon server.js"
+    "brumexa": "nodemon server.js",
+    "voz": "nodemon server2.js"
   },
   "dependencies": {
     "@livekit/rtc-node": "^0.13.25",

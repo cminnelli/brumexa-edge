@@ -909,6 +909,33 @@ function startLkSenderStats(pub, label) {
   return { stop() { clearInterval(interval); } };
 }
 
+// Si la sesión ya está corriendo cuando se carga la página (por ejemplo la
+// arrancó la wake word "Hey Brumexa" y nadie tocó el botón todavía), esto
+// sincroniza el botón/UI a "Desconectar" en vez de dejarlo trabado en
+// "Conectar" — mismo estado al que ya se sincroniza el catch de 409 del
+// click handler (ver más abajo), solo que acá se chequea proactivamente
+// al cargar en vez de esperar a que el usuario clickee y choque con un 409.
+async function syncActiveSessionIfAny() {
+  try {
+    const s = await fetch('/session/status').then((r) => r.json());
+    if (!s.isConnected) return;
+
+    state.active = true;
+    updateMicButton(true);
+    resetSteps();
+    setStep('token',   'ok', 'Ya estaba conectado');
+    activateConnector(1);
+    setStep('connect', 'ok', `Sala "${s.roomName}"`);
+    activateConnector(2);
+    setStep('publish', 'ok', 'Mic publicado');
+    setChannelStatus('connected', `sala: ${s.roomName}`);
+    setMicStatus('active', `gain ${s.micGain}x`);
+    startSessionTimer();
+    PiNativeModule._startPolling();
+    log('[pi-native] Sesión ya activa al cargar la página — sincronizando UI', 'info');
+  } catch { /* /session/status no disponible — nada que sincronizar */ }
+}
+
 // ============================================================
 // MÓDULO PI-NATIVE LIVEKIT
 // El audio NO pasa por el browser. Mic y speaker se manejan
@@ -2912,6 +2939,10 @@ const SetupModule = {
       });
     });
   }
+
+  // ─── Sincronizar el botón si ya hay una sesión activa (ej. arrancada por
+  // wake word mientras esta página no estaba abierta) ──────────────────────
+  if (isRaspberry) await syncActiveSessionIfAny();
 
   // ─── Verificar conectividad con LiveKit + arrancar chequeo periódico ─────
   checkLiveKitHealth();

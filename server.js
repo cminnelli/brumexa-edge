@@ -22,6 +22,13 @@ const leds                                             = require('./lib/leds');
 const ragAuth                                          = require('./lib/rag-auth');
 const { requestRoomToken }                             = require('./lib/rag-token');
 
+// Arranca el indicador de LEDs lo antes posible (blanco pulsando = "estoy
+// iniciando") — antes incluso de levantar el servidor HTTP, para que haya
+// señal visual apenas se corre "npm run brumexa", sin esperar a que termine
+// todo el resto del arranque (wifi, etc). leds.idle() la reemplaza por la
+// respiración normal cuando el server está listo (ver httpServer.listen).
+leds.init();
+
 const {
   PORT = 3000,
 } = process.env;
@@ -419,7 +426,6 @@ app.get('/recordings/play-status', (_req, res) => {
 //   GET  /session/status → estado actual de la sesión
 //   POST /session/mic-gain { gain } → ajustar gain del mic en vivo
 
-// Re-emitir eventos del session a la consola para diagnóstico
 // ─── Monitor de mic standalone (cuando no hay sesión LiveKit activa) ─────────
 let _micMonitor = null;
 
@@ -448,9 +454,6 @@ function startMicMonitor() {
     }
     if (Date.now() - last > 100) {
       const level = peak / 32767;
-      // Comentado: satura el log out de PM2 (10x/seg) mientras el mic físico
-      // está roto (INMP441 en reemplazo). Reactivar cuando vuelva a andar.
-      // console.log(`[mic-monitor] level=${level.toFixed(2)}`);
       leds.speaking(level);
       _micLevel = { level, peak, updatedAt: Date.now(), source: 'idle-monitor' };
       peak = 0;
@@ -472,13 +475,37 @@ function stopMicMonitor() {
   return Promise.race([gone, new Promise(r => setTimeout(r, 800))]);
 }
 
+// ─── startSession(): la misma lógica que corría inline en POST /session/start,
+// separada para más claridad — hoy la usa solo esa ruta HTTP ────────────────
+async function startSession({ micDevice, speakerDevice }) {
+  if (lkSession.isActive()) {
+    const err = new Error('Sesión ya activa');
+    err.sessionActive = true;
+    throw err;
+  }
+
+  leds.connecting();  // respiración azul mientras se pide token y conecta a LiveKit
+
+  const { token, roomName, serverUrl: url } = await requestRoomToken();
+  lastKnownLivekitUrl = url;
+
+  await stopMicMonitor();  // esperar que ALSA quede libre antes de que lkSession tome el mic
+  await lkSession.start({ token, url, roomName, micDevice, speakerDevice });
+
+  return { status: lkSession.getStatus(), url, roomName };
+}
+
 let _sessionConnectedAt = 0;
 lkSession.on('mic-stats',     ({ peak, dbfs }) => {
   const level = peak / 32767;
   _micLevel = { level, peak, updatedAt: Date.now(), source: 'session' };
   if (Date.now() - _sessionConnectedAt > 2000) leds.speaking(level);
 });
-lkSession.on('speaker-stats', s => { /* ya se imprime dentro del módulo */ });
+lkSession.on('speaker-stats', ({ peak }) => {
+  // Respiración ámbar que sigue el nivel real del audio del agente —
+  // misma lógica que leds.speaking() pero para lo que sale del speaker.
+  leds.agentSpeaking(peak / 32767);
+});
 lkSession.on('connected',     () => { stopMicMonitor(); _sessionConnectedAt = Date.now(); leds.idle(); });
 lkSession.on('error',         e => { console.error('[lk-session-evt] error:', e.message); leds.brumexaError(4000); startMicMonitor(); });
 lkSession.on('disconnected',  d => { console.log('[lk-session-evt] disconnected:', d.reason); leds.idle(); startMicMonitor(); });
@@ -488,28 +515,20 @@ app.post('/session/start', express.json(), async (req, res) => {
   const t0 = Date.now();
   console.log(`\n[session/start:${reqId}] ▶ BEGIN`);
   try {
-    if (lkSession.isActive()) {
-      console.warn(`[session/start:${reqId}] ⚠ sesión ya activa — status=${JSON.stringify(lkSession.getStatus())}`);
-      return res.status(409).json({ ok: false, error: 'Sesión ya activa', status: lkSession.getStatus() });
-    }
-
     const micDevice     = req.body?.micDevice     || process.env.MIC_DEVICE     || 'plughw:0,0';
     const speakerDevice = req.body?.speakerDevice || process.env.SPEAKER_DEVICE || 'plughw:0,0';
     console.log(`[session/start:${reqId}]   mic=${micDevice}  speaker=${speakerDevice}`);
 
-    const { token, roomName, serverUrl: url } = await requestRoomToken();
-    lastKnownLivekitUrl = url;
-    console.log(`[session/start:${reqId}]   token OK  → connecting to ${url}  room=${roomName || '(auto)'}`);
-
-    await stopMicMonitor();  // esperar que ALSA quede libre antes de que lkSession tome el mic
-    const connT0 = Date.now();
-    await lkSession.start({ token, url, roomName, micDevice, speakerDevice });
-    console.log(`[session/start:${reqId}]   lkSession.start OK  (${Date.now()-connT0}ms)`);
+    const result = await startSession({ micDevice, speakerDevice });
 
     console.log(`[session/start:${reqId}] ✔ DONE  total=${Date.now()-t0}ms`);
-    res.json({ ok: true, status: lkSession.getStatus(), url, roomName });
+    res.json({ ok: true, ...result });
 
   } catch (err) {
+    if (err.sessionActive) {
+      console.warn(`[session/start:${reqId}] ⚠ sesión ya activa — status=${JSON.stringify(lkSession.getStatus())}`);
+      return res.status(409).json({ ok: false, error: err.message, status: lkSession.getStatus() });
+    }
     console.error(`[session/start:${reqId}] ✘ FAIL  total=${Date.now()-t0}ms  ${err.message}`);
     if (err.stack) console.error(err.stack);
     leds.brumexaError(4000);  // rojo 4s, luego vuelve al breathe
@@ -684,7 +703,6 @@ httpServer.listen(PORT, () => {
 
   if (DEVICE_CONFIGURED) ragAuth.initAuth();
 
-  leds.init();  // arranca respiracion automaticamente
   if (process.platform === 'linux') startMicMonitor();
 
   // En Linux: maximizar el gain de captura ALSA (Capture/Mic/ADC → 100% cap)
@@ -694,15 +712,21 @@ httpServer.listen(PORT, () => {
     boostCaptureGain();
   }
 
-  // Si estamos en Linux y no hay WiFi configurado → activar AP + LEDs rojo
+  // Si estamos en Linux y no hay WiFi configurado → activar AP + LEDs rojo.
+  // En cualquier caso, acá termina la secuencia de arranque: leds.idle()
+  // reemplaza el blanco de "iniciando" (prendido en leds.init(), arriba del
+  // archivo) por la respiración normal — indigo, o naranja/rojo según la red.
   if (process.platform === 'linux') {
     autoStartAP().then(() => {
       const { getStatus } = require('./lib/wifi');
       if (!getStatus().connectedSSID) leds.brumexaError();
+      else leds.idle();
     });
     // Monitor continuo — a diferencia del chequeo de arriba (una sola vez al
     // boot), esto detecta caídas de señal/conexión que pasan después.
     startHealthMonitor();
+  } else {
+    leds.idle();
   }
 });
 
