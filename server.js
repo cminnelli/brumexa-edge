@@ -477,8 +477,6 @@ async function startSession({ micDevice, speakerDevice }) {
     throw err;
   }
 
-  leds.connecting();  // respiración azul mientras se pide token y conecta a LiveKit
-
   const { token, roomName, serverUrl: url } = await requestRoomToken();
   lastKnownLivekitUrl = url;
 
@@ -494,11 +492,7 @@ lkSession.on('mic-stats',     ({ peak, dbfs }) => {
   _micLevel = { level, peak, updatedAt: Date.now(), source: 'session' };
   if (Date.now() - _sessionConnectedAt > 2000) leds.speaking(level);
 });
-lkSession.on('speaker-stats', ({ peak }) => {
-  // Respiración ámbar que sigue el nivel real del audio del agente —
-  // misma lógica que leds.speaking() pero para lo que sale del speaker.
-  leds.agentSpeaking(peak / 32767);
-});
+lkSession.on('speaker-stats', s => { /* ya se imprime dentro del módulo */ });
 lkSession.on('connected',     () => { stopMicMonitor(); _sessionConnectedAt = Date.now(); leds.idle(); });
 lkSession.on('error',         e => { console.error('[lk-session-evt] error:', e.message); leds.brumexaError(4000); startMicMonitor(); });
 lkSession.on('disconnected',  d => { console.log('[lk-session-evt] disconnected:', d.reason); leds.idle(); startMicMonitor(); });
@@ -696,10 +690,7 @@ httpServer.listen(PORT, () => {
 
   if (DEVICE_CONFIGURED) ragAuth.initAuth();
 
-  // leds.init() prende el indicador de "iniciando" (blanco pulsando) apenas
-  // el puerto queda arriba — leds.idle() más abajo lo reemplaza por la
-  // respiración normal cuando termina el resto del arranque.
-  leds.init();
+  leds.init();  // arranca respiracion automaticamente
 
   if (process.platform === 'linux') startMicMonitor();
 
@@ -710,21 +701,15 @@ httpServer.listen(PORT, () => {
     boostCaptureGain();
   }
 
-  // Si estamos en Linux y no hay WiFi configurado → activar AP + LEDs rojo.
-  // En cualquier caso, acá termina la secuencia de arranque: leds.idle()
-  // reemplaza el blanco de "iniciando" por la respiración normal — indigo,
-  // o naranja/rojo según la red.
+  // Si estamos en Linux y no hay WiFi configurado → activar AP + LEDs rojo
   if (process.platform === 'linux') {
     autoStartAP().then(() => {
       const { getStatus } = require('./lib/wifi');
       if (!getStatus().connectedSSID) leds.brumexaError();
-      else leds.idle();
     });
     // Monitor continuo — a diferencia del chequeo de arriba (una sola vez al
     // boot), esto detecta caídas de señal/conexión que pasan después.
     startHealthMonitor();
-  } else {
-    leds.idle();
   }
 });
 
