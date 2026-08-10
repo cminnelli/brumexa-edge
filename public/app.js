@@ -2404,6 +2404,11 @@ document.getElementById('btn-rec-stop').addEventListener('click', async () => {
   catch (err) { log(`Error al detener: ${err.message}`, 'error'); }
 });
 
+document.getElementById('leds-alert-retry')?.addEventListener('click', () => {
+  DebugModule._ledsLastFetch = 0; // fuerza re-fetch inmediato, salta el throttle de 3s
+  DebugModule._renderLeds();
+});
+
 document.getElementById('btn-leds-test')?.addEventListener('click', async (ev) => {
   const btn = ev.currentTarget;
   const prevText = btn.textContent;
@@ -2479,24 +2484,38 @@ const DebugModule = {
 
   _paintLeds() {
     const d = this._ledsDiag;
+    const banner     = document.getElementById('leds-alert-banner');
+    const bannerText = document.getElementById('leds-alert-text');
+    const showBanner = (text) => {
+      if (bannerText) bannerText.textContent = text;
+      if (banner) banner.style.display = 'flex';
+    };
+    const hideBanner = () => { if (banner) banner.style.display = 'none'; };
+
     if (!d) {
       this._set('dbg-leds', 'Sin respuesta', 'No se pudo consultar /diag/leds', 'error');
+      showBanner('no se pudo consultar el diagnóstico (/diag/leds) — ¿el server está corriendo?');
       return;
     }
     if (d.platform !== 'linux') {
       this._set('dbg-leds', 'No aplica', `Plataforma: ${d.platform}`, 'idle');
+      hideBanner();
       return;
     }
     if (!d.packageInstalled) {
       this._set('dbg-leds', 'Paquete no instalado', 'rpi-ws281x no está en node_modules — correr: sudo npm install rpi-ws281x', 'error');
+      showBanner('el paquete rpi-ws281x NO está instalado en node_modules. En la Pi: sudo npm install rpi-ws281x — y reiniciá el server.');
       return;
     }
     if (!d.configured) {
+      const rootHint = d.isRoot === false ? ' — probá corriendo el server con sudo' : '';
       this._set('dbg-leds', 'Instalado, pero falló', d.lastError || 'configure() falló — revisar sudo / GPIO ocupado', 'error');
+      showBanner(`paquete instalado (v${d.packageVersion || '?'}) pero falló al configurar: ${d.lastError || 'error desconocido'}${rootHint}`);
       return;
     }
     const rootWarn = d.isRoot === false ? ' · ⚠ no corre como root' : '';
     this._set('dbg-leds', `OK — v${d.packageVersion}`, `${d.numLeds} LEDs · GPIO ${d.gpioPin}${rootWarn}`, 'ok');
+    hideBanner();
   },
 
   _renderMic() {

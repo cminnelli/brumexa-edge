@@ -9,6 +9,17 @@
 <body>
 
 <!-- ═══════════════════════════════════════════════════════════
+     ALERTA LEDs — banner grande, imposible de no ver, visible en
+     TODAS las pestañas (Panel/Terminal/Configuracion) mientras
+     los LEDs tengan un problema. Oculto por defecto.
+════════════════════════════════════════════════════════════ -->
+<div id="leds-alert-banner" style="display:none; position:sticky; top:0; z-index:999; background:#c0392b; color:#fff; padding:10px 16px; font:14px/1.4 system-ui, sans-serif; align-items:center; gap:12px; flex-wrap:wrap;">
+  <strong>💡 LEDs:</strong>
+  <span id="leds-alert-text">verificando…</span>
+  <button id="leds-alert-retry" style="margin-left:auto; background:#fff; color:#c0392b; border:none; border-radius:4px; padding:4px 10px; cursor:pointer; font-weight:600;">Reintentar</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
      HEADER
 ════════════════════════════════════════════════════════════ -->
 <header class="site-header">
@@ -502,7 +513,7 @@
 </div><!-- #setup-section -->
 
 <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-<script src="app.js?v=27"></script>
+<script src="app.js?v=28"></script>
 <script src="terminal.js?v=15"></script>
 </body>
 </html>
