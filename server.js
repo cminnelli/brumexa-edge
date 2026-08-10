@@ -506,7 +506,11 @@ lkSession.on('mic-stats',     ({ peak, dbfs }) => {
   _micLevel = { level, peak, updatedAt: Date.now(), source: 'session' };
   if (Date.now() - _sessionConnectedAt > 2000) leds.speaking(level);
 });
-lkSession.on('speaker-stats', s => { /* ya se imprime dentro del módulo */ });
+lkSession.on('speaker-stats', ({ peak }) => {
+  // El log ya lo hace lib/livekit-session.js — acá solo sincronizamos el LED
+  // (verde) con el volumen real de la voz del agente, mismo patrón que 'mic-stats'.
+  leds.agentSpeaking(peak / 32767);
+});
 lkSession.on('connected',     () => { stopMicMonitor(); _sessionConnectedAt = Date.now(); leds.idle(); });
 lkSession.on('error',         e => { console.error('[lk-session-evt] error:', e.message); leds.brumexaError(4000); startMicMonitor(); });
 lkSession.on('disconnected',  d => { console.log('[lk-session-evt] disconnected:', d.reason); leds.idle(); startMicMonitor(); });
