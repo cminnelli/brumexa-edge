@@ -489,6 +489,8 @@ async function startSession({ micDevice, speakerDevice }) {
     throw err;
   }
 
+  leds.connecting();  // respiración cian mientras se pide token y conecta a LiveKit
+
   const { token, roomName, serverUrl: url } = await requestRoomToken();
   lastKnownLivekitUrl = url;
 
