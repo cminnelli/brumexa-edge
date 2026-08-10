@@ -392,6 +392,18 @@ app.get('/diag/audio', (_req, res) => {
   });
 });
 
+// GET /diag/leds — por qué no prenden los LEDs (paquete faltante, permisos, etc.)
+app.get('/diag/leds', (_req, res) => {
+  res.json(leds.getDiagnostics());
+});
+
+// POST /diag/leds/test — verde fijo unos segundos para confirmar a ojo que el
+// hardware responde; vuelve solo al estado normal al terminar.
+app.post('/diag/leds/test', (_req, res) => {
+  const ok = leds.test();
+  res.json({ ok, error: ok ? null : 'LEDs no configurados — ver /diag/leds' });
+});
+
 // POST /recordings/stop-play — mata aplay y espera que muera antes de responder
 app.post('/recordings/stop-play', async (_req, res) => {
   if (_playProc) {

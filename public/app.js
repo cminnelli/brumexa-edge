@@ -2404,11 +2404,29 @@ document.getElementById('btn-rec-stop').addEventListener('click', async () => {
   catch (err) { log(`Error al detener: ${err.message}`, 'error'); }
 });
 
+document.getElementById('btn-leds-test')?.addEventListener('click', async (ev) => {
+  const btn = ev.currentTarget;
+  const prevText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const r = await fetch('/diag/leds/test', { method: 'POST' });
+    const d = await r.json();
+    log(d.ok ? 'LEDs → test verde disparado, mirá el dispositivo' : `LEDs → no se pudo testear: ${d.error}`, d.ok ? 'info' : 'error');
+  } catch (err) {
+    log(`LEDs → error al testear: ${err.message}`, 'error');
+  } finally {
+    setTimeout(() => { btn.disabled = false; btn.textContent = prevText; }, 1000);
+  }
+});
+
 // ============================================================
 // DEBUG MODULE — panel de estado en tiempo real (actualiza cada 500ms)
 // ============================================================
 const DebugModule = {
   _interval: null,
+  _ledsDiag: null,
+  _ledsLastFetch: 0,
 
   start() {
     if (this._interval) return;
@@ -2438,6 +2456,47 @@ const DebugModule = {
     this._renderSpeaker();
     this._renderLiveKit();
     this._renderAgent();
+    this._renderLeds();
+  },
+
+  // Estado de los LEDs (paquete instalado / configurado / error) — vía
+  // GET /diag/leds. No cambia tick a tick como el resto, así que solo se
+  // vuelve a pedir al server cada 3s (el _render de 500ms sigue repintando
+  // desde el último dato conocido).
+  async _renderLeds() {
+    const now = Date.now();
+    if (now - this._ledsLastFetch > 3000) {
+      this._ledsLastFetch = now;
+      try {
+        const r = await fetch('/diag/leds');
+        this._ledsDiag = await r.json();
+      } catch {
+        this._ledsDiag = null;
+      }
+    }
+    this._paintLeds();
+  },
+
+  _paintLeds() {
+    const d = this._ledsDiag;
+    if (!d) {
+      this._set('dbg-leds', 'Sin respuesta', 'No se pudo consultar /diag/leds', 'error');
+      return;
+    }
+    if (d.platform !== 'linux') {
+      this._set('dbg-leds', 'No aplica', `Plataforma: ${d.platform}`, 'idle');
+      return;
+    }
+    if (!d.packageInstalled) {
+      this._set('dbg-leds', 'Paquete no instalado', 'rpi-ws281x no está en node_modules — correr: sudo npm install rpi-ws281x', 'error');
+      return;
+    }
+    if (!d.configured) {
+      this._set('dbg-leds', 'Instalado, pero falló', d.lastError || 'configure() falló — revisar sudo / GPIO ocupado', 'error');
+      return;
+    }
+    const rootWarn = d.isRoot === false ? ' · ⚠ no corre como root' : '';
+    this._set('dbg-leds', `OK — v${d.packageVersion}`, `${d.numLeds} LEDs · GPIO ${d.gpioPin}${rootWarn}`, 'ok');
   },
 
   _renderMic() {
