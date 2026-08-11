@@ -169,29 +169,32 @@ app.get('/setup/config', (_req, res) => {
   });
 });
 
+// Escribe/reemplaza una línea KEY=value en el contenido de un .env — usado
+// por /setup/config (todos los campos, reinicia) y /setup/config/live (solo
+// los que ya se aplican en caliente, no reinicia).
+function setEnvLine(src, key, value) {
+  const lines = src.split('\n');
+  let found = false;
+  const out = lines.map(line => {
+    if (line.startsWith(key + '=') || line.startsWith(key + ' =')) {
+      found = true;
+      return `${key}=${value}`;
+    }
+    return line;
+  });
+  if (!found) {
+    if (src && !src.endsWith('\n')) out.push('');
+    out.push(`${key}=${value}`);
+  }
+  return out.join('\n');
+}
+
 // ─── POST /setup/config — escribir .env y reiniciar proceso (PM2 restart) ────
 app.post('/setup/config', express.json(), (req, res) => {
   const envFile = path.join(__dirname, '.env');
   const { ragApiUrl, deviceId, apiKey, deviceName, micGain, speakerGain, talkThreshold } = req.body || {};
   let content = '';
   try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
-
-  function setEnvLine(src, key, value) {
-    const lines = src.split('\n');
-    let found = false;
-    const out = lines.map(line => {
-      if (line.startsWith(key + '=') || line.startsWith(key + ' =')) {
-        found = true;
-        return `${key}=${value}`;
-      }
-      return line;
-    });
-    if (!found) {
-      if (src && !src.endsWith('\n')) out.push('');
-      out.push(`${key}=${value}`);
-    }
-    return out.join('\n');
-  }
 
   if (ragApiUrl  !== undefined) content = setEnvLine(content, 'RAG_API_URL',       ragApiUrl);
   if (deviceId   !== undefined) content = setEnvLine(content, 'BRUMEXA_DEVICE_ID', deviceId);
@@ -205,6 +208,28 @@ app.post('/setup/config', express.json(), (req, res) => {
     require('fs').writeFileSync(envFile, content, 'utf8');
     res.json({ ok: true });
     setTimeout(() => process.exit(0), 600);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ─── POST /setup/config/live — persistir en .env SOLO los parámetros que ya
+// se aplican en caliente (mic gain, umbral de sensibilidad) sin reiniciar el
+// proceso. El valor ya está corriendo (lo aplicó /config/mic-gain o
+// /session/talk-threshold antes de llamar acá) — esto solo lo deja como
+// default para el próximo arranque, sin cortar la sesión actual.
+app.post('/setup/config/live', express.json(), (req, res) => {
+  const envFile = path.join(__dirname, '.env');
+  const { micGain, talkThreshold } = req.body || {};
+  let content = '';
+  try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
+
+  if (micGain       !== undefined) content = setEnvLine(content, 'MIC_GAIN', micGain);
+  if (talkThreshold !== undefined) content = setEnvLine(content, 'MIC_TALK_THRESHOLD_DBFS', talkThreshold);
+
+  try {
+    require('fs').writeFileSync(envFile, content, 'utf8');
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

@@ -488,7 +488,7 @@
         <label class="field-label" for="setup-mic-gain">Ganancia del microfono (MIC_GAIN)</label>
         <input type="number" id="setup-mic-gain" class="setup-input setup-input--short"
                min="1" max="32" step="0.5" />
-        <p class="field-hint">Multiplicador de ganancia de software. 1.0 = sin boost &nbsp;·&nbsp; 4.0 = +12 dB &nbsp;·&nbsp; 16.0 = +24 dB</p>
+        <p class="field-hint">Multiplicador de ganancia de software. 1.0 = sin boost &nbsp;·&nbsp; 4.0 = +12 dB &nbsp;·&nbsp; 16.0 = +24 dB. Se aplica al toque y queda guardado como default automáticamente — no hace falta "Guardar y reiniciar" para este campo.</p>
       </div>
 
       <div class="field">
@@ -501,7 +501,7 @@
             <span class="gain-db" id="lbl-talk-threshold">dBFS</span>
           </div>
         </div>
-        <p class="field-hint">Un solo umbral conectado a dos cosas: corta el "respirando" del LED y pasa a ámbar ("hablando"), y controla cuándo el servidor lo imprime en consola. Se aplica al toque, sin reiniciar. Hacia la izquierda (más negativo) = más sensible — pero por debajo de -30 puede empezar a dispararse con ruido ambiente. Se guarda en .env con "Guardar y reiniciar" para que quede como default.</p>
+        <p class="field-hint">Un solo umbral conectado a dos cosas: corta el "respirando" del LED y pasa a ámbar ("hablando"), y controla cuándo el servidor lo imprime en consola. Se aplica al toque, sin reiniciar, y queda guardado como default automáticamente — no hace falta "Guardar y reiniciar" para este campo. Hacia la izquierda (más negativo) = más sensible — pero por debajo de -30 puede empezar a dispararse con ruido ambiente.</p>
       </div>
 
       <div class="setup-actions">
@@ -513,7 +513,7 @@
 </div><!-- #setup-section -->
 
 <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-<script src="app.js?v=28"></script>
+<script src="app.js?v=29"></script>
 <script src="terminal.js?v=15"></script>
 </body>
 </html>

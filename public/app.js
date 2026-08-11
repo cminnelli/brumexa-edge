@@ -2719,6 +2719,19 @@ const SetupModule = {
           _threshTimer = setTimeout(() => this._pushTalkThreshold(), 400);
         });
       }
+
+      // Ganancia del mic — mismo patrón: aplica en caliente + persiste en
+      // .env, sin reiniciar (antes esto solo tomaba efecto con "Guardar y
+      // reiniciar", cortando la sesión en curso para un valor que ya existe
+      // como endpoint en caliente).
+      const gainEl = document.getElementById('setup-mic-gain');
+      if (gainEl) {
+        let _gainTimer = null;
+        gainEl.addEventListener('input', () => {
+          clearTimeout(_gainTimer);
+          _gainTimer = setTimeout(() => this._pushMicGain(), 400);
+        });
+      }
     }
 
     const status = document.getElementById('setup-status');
@@ -2750,8 +2763,38 @@ const SetupModule = {
         body:    JSON.stringify({ threshold: v }),
       });
       log(`Sensibilidad mic → ${v} dBFS`, 'info');
+      // Deja el valor como default en .env para el próximo arranque, sin
+      // cortar la sesión actual (a diferencia de "Guardar y reiniciar").
+      await fetch('/setup/config/live', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ talkThreshold: v }),
+      });
     } catch (err) {
       log(`Error actualizando sensibilidad: ${err.message}`, 'error');
+    }
+  },
+
+  async _pushMicGain() {
+    const v = parseFloat(document.getElementById('setup-mic-gain')?.value);
+    if (isNaN(v)) return;
+    try {
+      // /session/mic-gain es el gain que realmente usa la sesión de LiveKit
+      // (la conversación con el agente) — distinto de /config/mic-gain, que
+      // es el del pipeline viejo de browser/grabaciones.
+      await fetch('/session/mic-gain', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ gain: v }),
+      });
+      log(`Ganancia mic → ${v}x`, 'info');
+      await fetch('/setup/config/live', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ micGain: v }),
+      });
+    } catch (err) {
+      log(`Error actualizando ganancia: ${err.message}`, 'error');
     }
   },
 
