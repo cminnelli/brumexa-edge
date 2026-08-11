@@ -522,11 +522,16 @@ function stopMicMonitor() {
 }
 
 // ─── Calibración de ruido ambiente ───────────────────────────────────────────
-// Margen sobre el PEOR pico medido en silencio — no sobre el promedio (ver
-// lib/mic-calibration.js). Clamps para que un ambiente rarísimo (ruidoso o
-// insólitamente silencioso) no empuje el umbral fuera de un rango razonable.
-const CALIBRATION_MARGIN_DB   = 8;
-const CALIBRATION_DURATION_MS = 4000;
+// Margen sobre el tramo más silencioso medido (ver lib/mic-calibration.js).
+// Clamps para que un ambiente rarísimo (ruidoso o insólitamente silencioso)
+// no empuje el umbral fuera de un rango razonable.
+// Ventana subida de 4s a 8s: con más datos, la búsqueda del tramo contiguo
+// más silencioso (lib/mic-calibration.js) tiene más chances de encontrar un
+// tramo realmente representativo del ambiente, no solo un instante de
+// suerte. Margen subido de 8 a 10dB — un poco más de colchón contra picos
+// de ruido puntuales que la ventana de calibración no llega a capturar.
+const CALIBRATION_MARGIN_DB   = 10;
+const CALIBRATION_DURATION_MS = 8000;
 const CALIBRATION_MIN_DBFS    = -45;
 const CALIBRATION_MAX_DBFS    = -12;
 
