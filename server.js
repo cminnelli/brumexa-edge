@@ -21,6 +21,7 @@ const { session: lkSession }                           = require('./lib/livekit-
 const leds                                             = require('./lib/leds');
 const ragAuth                                          = require('./lib/rag-auth');
 const { requestRoomToken }                             = require('./lib/rag-token');
+const { measureNoiseFloor }                            = require('./lib/mic-calibration');
 
 const {
   PORT = 3000,
@@ -511,6 +512,76 @@ function stopMicMonitor() {
   return Promise.race([gone, new Promise(r => setTimeout(r, 800))]);
 }
 
+// ─── Calibración de ruido ambiente ───────────────────────────────────────────
+// Margen sobre el PEOR pico medido en silencio — no sobre el promedio (ver
+// lib/mic-calibration.js). Clamps para que un ambiente rarísimo (ruidoso o
+// insólitamente silencioso) no empuje el umbral fuera de un rango razonable.
+const CALIBRATION_MARGIN_DB   = 8;
+const CALIBRATION_DURATION_MS = 4000;
+const CALIBRATION_MIN_DBFS    = -45;
+const CALIBRATION_MAX_DBFS    = -12;
+
+// Último resultado — lo lee /configuracion/status para mostrarlo en el panel.
+let _lastCalibration = null;
+function getLastCalibration() { return _lastCalibration; }
+
+// triggeredBy: 'boot' (automático al arrancar) | 'manual' (botón en /configuracion)
+async function runCalibration(triggeredBy = 'manual') {
+  if (process.platform !== 'linux') throw new Error('Calibración solo disponible en Linux');
+  if (lkSession.isActive()) throw new Error('Hay una sesión activa — no se puede calibrar ahora');
+
+  await stopMicMonitor();
+  leds.calibrating();  // 3 blinks + respiración blanca sostenida
+  await new Promise(r => setTimeout(r, leds.CALIBRATION_COUNTDOWN_MS));
+
+  const device = process.env.MIC_DEVICE || 'plughw:0,0';
+  let result;
+  try {
+    result = await measureNoiseFloor({
+      device,
+      durationMs: CALIBRATION_DURATION_MS,
+      gain: lkSession.getMicGain(),
+    });
+  } catch (err) {
+    leds.calibrationDone(false);
+    startMicMonitor();
+    throw err;
+  }
+
+  const rawThreshold = result.noiseFloorDbfs + CALIBRATION_MARGIN_DB;
+  const threshold = Math.min(CALIBRATION_MAX_DBFS, Math.max(CALIBRATION_MIN_DBFS, rawThreshold));
+
+  lkSession.setTalkThreshold(threshold);
+  leds.setSpeakThresholdDbfs(threshold);
+
+  // Persistir para el próximo arranque — mismo patrón que /setup/config/live.
+  try {
+    const envFile = path.join(__dirname, '.env');
+    let content = '';
+    try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
+    content = setEnvLine(content, 'MIC_TALK_THRESHOLD_DBFS', threshold.toFixed(1));
+    require('fs').writeFileSync(envFile, content, 'utf8');
+  } catch (err) {
+    console.warn('[calibration] no se pudo persistir en .env:', err.message);
+  }
+
+  _lastCalibration = {
+    noiseFloorDbfs: Math.round(result.noiseFloorDbfs * 10) / 10,
+    threshold:      Math.round(threshold * 10) / 10,
+    marginDb:       CALIBRATION_MARGIN_DB,
+    durationMs:     CALIBRATION_DURATION_MS,
+    sampleCount:    result.ticks.length,
+    measuredAt:     Date.now(),
+    triggeredBy,
+  };
+
+  console.log(`[calibration] piso=${result.noiseFloorDbfs.toFixed(1)}dBFS → umbral=${threshold.toFixed(1)}dBFS (margen ${CALIBRATION_MARGIN_DB}dB, ${triggeredBy})`);
+
+  leds.calibrationDone(true);
+  startMicMonitor();
+  return _lastCalibration;
+}
+
 // ─── startSession(): la misma lógica que corría inline en POST /session/start,
 // separada para más claridad — hoy la usa solo esa ruta HTTP ────────────────
 async function startSession({ micDevice, speakerDevice }) {
@@ -713,7 +784,7 @@ setupLocalDebug(app, {
     livekitUrl:      lastKnownLivekitUrl,
   }),
 });
-setupConfiguracion(app, { lkSession, ragAuth, requestRoomToken });
+setupConfiguracion(app, { lkSession, ragAuth, requestRoomToken, runCalibration, getLastCalibration });
 
 // Antes esto dependía de "fuser -k", un binario externo (paquete psmisc)
 // que puede no estar instalado en la Pi -- si fallaba, reintentaba en
@@ -792,13 +863,20 @@ httpServer.listen(PORT, () => {
 
   leds.init();  // arranca respiracion automaticamente
 
-  if (process.platform === 'linux') startMicMonitor();
-
   // En Linux: maximizar el gain de captura ALSA (Capture/Mic/ADC → 100% cap)
   // Así el mic anda aunque no se haya abierto nunca la UI de grabación.
+  // Va ANTES de calibrar — la calibración tiene que medir con el mismo gain
+  // de ALSA que se va a usar después, si no el piso medido no vale.
   if (process.platform === 'linux') {
     console.log('[boot] Maximizando gain de captura ALSA…');
     boostCaptureGain();
+
+    // Calibra el umbral de voz contra el ruido ambiente real de este boot
+    // (blinks blancos + 4s de silencio asumido) y recién después arranca el
+    // monitor de mic idle — runCalibration() se encarga de eso al final,
+    // con o sin error. No se espera (fire-and-forget) porque no bloquea nada
+    // más del arranque: el server ya está escuchando en este punto.
+    runCalibration('boot').catch(err => console.warn('[calibration] boot falló:', err.message));
   }
 
   // Si estamos en Linux y no hay WiFi configurado → activar AP + LEDs rojo

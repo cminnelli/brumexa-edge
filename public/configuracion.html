@@ -101,6 +101,16 @@
     <div id="speaker-test-result"></div>
   </div>
 
+  <div class="card" id="card-calibration">
+    <div class="card-title"><span class="ic">🎚️</span>Calibración de ruido ambiente</div>
+    <div class="section-empty" style="margin-bottom:8px">
+      Corre sola al arrancar (blinks blancos + 4s de silencio asumido) y fija el umbral de voz según el ruido real de este ambiente. Volvé a correrla si el arranque agarró un mal momento.
+    </div>
+    <div class="kv" id="kv-calibration"></div>
+    <button class="btn-test" id="btn-recalibrate" onclick="runRecalibration()">🎚️ Recalibrar ahora (4s de silencio)</button>
+    <div id="calibration-result"></div>
+  </div>
+
   <div class="refresh-note"><a href="/local" style="color:var(--accent)">← Ver diagnóstico de solo lectura en /local</a></div>
 
 </main>
@@ -158,6 +168,8 @@
 
       micEnabledState = status.micEnabled !== false;
       updateMicButton();
+
+      renderCalibration(status.calibration);
 
       chip.className = 'status-chip ok';
       txt.textContent = `Actualizado ${new Date().toLocaleTimeString()}`;
@@ -320,6 +332,43 @@
     } finally {
       btn.disabled = false;
       btn.textContent = '🔊 Probar parlante (tono 1kHz)';
+    }
+  }
+
+  function renderCalibration(cal) {
+    const kv = document.getElementById('kv-calibration');
+    if (!cal) {
+      kv.innerHTML = '<div class="section-empty">Todavía no corrió en este arranque.</div>';
+      return;
+    }
+    kv.innerHTML = kvRows([
+      ['Piso de ruido medido', `${cal.noiseFloorDbfs} dBFS`],
+      ['Umbral aplicado',      `${cal.threshold} dBFS  (piso + ${cal.marginDb}dB)`],
+      ['Ventana de medición',  `${(cal.durationMs / 1000).toFixed(1)}s  (${cal.sampleCount} muestras)`],
+      ['Origen',               cal.triggeredBy === 'boot' ? '🔌 automática al arrancar' : '🎚️ manual'],
+      ['Cuándo',               `${new Date(cal.measuredAt).toLocaleTimeString()} (${ageLabel(cal.measuredAt)})`],
+    ]);
+  }
+
+  async function runRecalibration() {
+    const btn    = document.getElementById('btn-recalibrate');
+    const result = document.getElementById('calibration-result');
+    btn.disabled = true;
+    btn.textContent = '🎚️ Calibrando… quedate en silencio';
+    result.innerHTML = '';
+    try {
+      const res  = await fetch('/configuracion/recalibrate', { method: 'POST' });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'error desconocido');
+      renderCalibration(data.calibration);
+      result.innerHTML = '<div class="flow-note ok">✔ Calibración actualizada</div>';
+      document.getElementById('inp-talk-threshold').value = data.calibration.threshold;
+      document.getElementById('val-talk-threshold').textContent = `${data.calibration.threshold} dBFS`;
+    } catch (e) {
+      result.innerHTML = `<div class="flow-note bad">✘ ${esc(e.message)}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🎚️ Recalibrar ahora (4s de silencio)';
     }
   }
 
