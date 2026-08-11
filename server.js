@@ -480,8 +480,12 @@ function startMicMonitor() {
   let last = Date.now();
 
   proc.stdout.on('data', chunk => {
+    // Mismo gain que usa la sesión real de LiveKit (_publishMic en
+    // lib/livekit-session.js) — sin esto, el nivel en reposo quedaba fijo a
+    // la señal cruda del mic, sin importar qué gain configures.
+    const gain = lkSession.getMicGain();
     for (let i = 0; i < chunk.length - 1; i += 2) {
-      const s = Math.abs(chunk.readInt16LE(i));
+      const s = Math.abs(chunk.readInt16LE(i)) * gain;
       if (s > peak) peak = s;
     }
     if (Date.now() - last > 100) {
