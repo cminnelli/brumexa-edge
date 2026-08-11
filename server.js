@@ -229,8 +229,10 @@ app.post('/setup/config/live', express.json(), (req, res) => {
 
   try {
     require('fs').writeFileSync(envFile, content, 'utf8');
+    console.log(`[setup] .env actualizado sin reiniciar → ${JSON.stringify({ micGain, talkThreshold })}`);
     res.json({ ok: true });
   } catch (err) {
+    console.error('[setup] ✘ no se pudo escribir .env:', err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
