@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "brumexa": "nodemon server.js",
-    "voz": "nodemon server2.js"
+    "voz": "nodemon server2.js",
+    "pm2:start": "pm2 start server.js --name brumexa"
   },
   "dependencies": {
     "@livekit/rtc-node": "^0.13.25",
