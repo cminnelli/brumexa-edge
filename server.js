@@ -582,6 +582,9 @@ async function runCalibration(triggeredBy = 'manual') {
     sampleCount:    result.ticks.length,
     measuredAt:     Date.now(),
     triggeredBy,
+    // Serie completa (no solo el resumen) — para el sparkline en /configuracion.
+    // Solo se guarda la última corrida, se pisa en la próxima (igual que el resto de este objeto).
+    ticksDbfs: result.ticksDbfs.map(v => Math.round(v * 10) / 10),
   };
 
   console.log(`[calibration] piso=${result.noiseFloorDbfs.toFixed(1)}dBFS → umbral=${threshold.toFixed(1)}dBFS (margen ${CALIBRATION_MARGIN_DB}dB, ${triggeredBy})`);

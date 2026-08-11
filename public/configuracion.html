@@ -335,6 +335,27 @@
     }
   }
 
+  // Sparkline SVG a mano (sin librerías) — muestra cómo evolucionó el nivel
+  // medido tick a tick, con una línea punteada en el threshold aplicado para
+  // ver de un vistazo si el margen quedó holgado o pegado a lo medido.
+  function calibrationSparklineSvg(ticksDbfs, thresholdDbfs) {
+    if (!ticksDbfs || !ticksDbfs.length) return '';
+    const W = 280, H = 56, PAD = 4;
+    const lo = Math.min(...ticksDbfs, thresholdDbfs) - 3;
+    const hi = 0;
+    const x = i => PAD + (i / (ticksDbfs.length - 1 || 1)) * (W - PAD * 2);
+    const y = v => H - PAD - ((v - lo) / (hi - lo || 1)) * (H - PAD * 2);
+    const points = ticksDbfs.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    const ty = y(thresholdDbfs).toFixed(1);
+    return `
+      <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;margin-top:8px;background:rgba(255,255,255,0.03);border-radius:6px">
+        <line x1="0" y1="${ty}" x2="${W}" y2="${ty}" stroke="var(--warn)" stroke-width="1" stroke-dasharray="4,3" />
+        <polyline points="${points}" fill="none" stroke="var(--accent)" stroke-width="1.5" />
+      </svg>
+      <div class="section-empty" style="margin-top:2px">línea punteada = umbral aplicado (${thresholdDbfs} dBFS) — ${ticksDbfs.length} muestras a lo largo de la ventana</div>
+    `;
+  }
+
   function renderCalibration(cal) {
     const kv = document.getElementById('kv-calibration');
     if (!cal) {
@@ -347,7 +368,7 @@
       ['Ventana de medición',  `${(cal.durationMs / 1000).toFixed(1)}s  (${cal.sampleCount} muestras)`],
       ['Origen',               cal.triggeredBy === 'boot' ? '🔌 automática al arrancar' : '🎚️ manual'],
       ['Cuándo',               `${new Date(cal.measuredAt).toLocaleTimeString()} (${ageLabel(cal.measuredAt)})`],
-    ]);
+    ]) + calibrationSparklineSvg(cal.ticksDbfs, cal.threshold);
   }
 
   async function runRecalibration() {
