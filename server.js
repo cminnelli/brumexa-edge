@@ -520,12 +520,17 @@ async function startSession({ micDevice, speakerDevice }) {
     throw err;
   }
 
-  leds.connecting();  // respiración cian mientras se pide token y conecta a LiveKit
+  // Frenar el monitor de mic ambiente ANTES de mostrar el cometa: si sigue
+  // vivo durante el pedido de token (red, puede tardar), cualquier ruido
+  // ambiente dispara leds.speaking() y pisa la animación de "conectando" con
+  // ámbar. Frenarlo acá además le da más margen a ALSA para quedar libre
+  // antes de que lkSession tome el mic más abajo.
+  await stopMicMonitor();
+  leds.connecting();  // cometa cian mientras se pide token y conecta a LiveKit
 
   const { token, roomName, serverUrl: url } = await requestRoomToken();
   lastKnownLivekitUrl = url;
 
-  await stopMicMonitor();  // esperar que ALSA quede libre antes de que lkSession tome el mic
   await lkSession.start({ token, url, roomName, micDevice, speakerDevice });
 
   return { status: lkSession.getStatus(), url, roomName };
