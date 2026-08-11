@@ -21,7 +21,7 @@ const { session: lkSession }                           = require('./lib/livekit-
 const leds                                             = require('./lib/leds');
 const ragAuth                                          = require('./lib/rag-auth');
 const { requestRoomToken }                             = require('./lib/rag-token');
-const { measureNoiseFloor }                            = require('./lib/mic-calibration');
+const { measureNoiseFloor, WARMUP_MS: MIC_MONITOR_WARMUP_MS } = require('./lib/mic-calibration');
 
 const {
   PORT = 3000,
@@ -477,16 +477,25 @@ function startMicMonitor() {
   if (_micMonitor || process.platform !== 'linux') return;
   const MIC = process.env.MIC_DEVICE || 'plughw:0,0';
   const proc = spawn('arecord', ['-D', MIC, '-f', 'S16_LE', '-r', '16000', '-c', '1', '-t', 'raw', '-q']);
+  const startedAt = Date.now();
   let peak = 0;
   let last = Date.now();
 
   proc.stdout.on('data', chunk => {
+    // arecord suele meter un pop/click de inicialización en los primeros
+    // milisegundos de un device recién abierto (artefacto de ALSA, no ruido
+    // real) — mismo MIC_MONITOR_WARMUP_MS que usa lib/mic-calibration.js,
+    // sin esto un simple restart del monitor podía mostrar "vos hablando"
+    // en pleno silencio.
+    if (Date.now() - startedAt < MIC_MONITOR_WARMUP_MS) return;
+
     // Mismo gain que usa la sesión real de LiveKit (_publishMic en
     // lib/livekit-session.js) — sin esto, el nivel en reposo quedaba fijo a
     // la señal cruda del mic, sin importar qué gain configures.
     const gain = lkSession.getMicGain();
     for (let i = 0; i < chunk.length - 1; i += 2) {
-      const s = Math.abs(chunk.readInt16LE(i)) * gain;
+      let s = Math.abs(chunk.readInt16LE(i)) * gain;
+      if (s > 32767) s = 32767;
       if (s > peak) peak = s;
     }
     if (Date.now() - last > 100) {
