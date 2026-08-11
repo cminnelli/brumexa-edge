@@ -21,7 +21,7 @@ const { session: lkSession }                           = require('./lib/livekit-
 const leds                                             = require('./lib/leds');
 const ragAuth                                          = require('./lib/rag-auth');
 const { requestRoomToken }                             = require('./lib/rag-token');
-const { measureNoiseFloor, WARMUP_MS: MIC_MONITOR_WARMUP_MS } = require('./lib/mic-calibration');
+const { measureNoiseFloor, POP_SETTLE_MS: MIC_MONITOR_WARMUP_MS } = require('./lib/mic-calibration');
 
 const {
   PORT = 3000,
