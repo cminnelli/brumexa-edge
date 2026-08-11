@@ -526,6 +526,7 @@ async function startSession({ micDevice, speakerDevice }) {
   // ámbar. Frenarlo acá además le da más margen a ALSA para quedar libre
   // antes de que lkSession tome el mic más abajo.
   await stopMicMonitor();
+  _agentConfirmed = false;
   leds.connecting();  // cometa cian mientras se pide token y conecta a LiveKit
 
   const { token, roomName, serverUrl: url } = await requestRoomToken();
@@ -537,10 +538,21 @@ async function startSession({ micDevice, speakerDevice }) {
 }
 
 let _sessionConnectedAt = 0;
+
+// El mic de la sesión arranca a publicar apenas conecta la SALA (ver
+// _publishMic en lib/livekit-session.js), bastante antes de saber si el
+// agente va a aparecer. Sin este freno, ruido ambiente cruzando el umbral
+// disparaba leds.speaking() (ámbar) y pisaba el cometa durante toda la
+// espera al agente — incluido cada reintento de auto-reconnect, donde
+// _sessionConnectedAt se resetea de nuevo y el gate de 2s expira rápido.
+// Solo se habilita una vez que 'agent-audio' confirma que el agente
+// realmente está — se apaga otra vez al arrancar una sesión nueva o al
+// entrar a un ciclo de reintento.
+let _agentConfirmed = false;
 lkSession.on('mic-stats',     ({ peak, dbfs }) => {
   const level = peak / 32767;
   _micLevel = { level, peak, updatedAt: Date.now(), source: 'session' };
-  if (Date.now() - _sessionConnectedAt > 2000) leds.speaking(level);
+  if (_agentConfirmed && Date.now() - _sessionConnectedAt > 2000) leds.speaking(level);
 });
 lkSession.on('speaker-stats', ({ peak }) => {
   // El log ya lo hace lib/livekit-session.js — acá solo sincronizamos el LED
@@ -557,8 +569,15 @@ lkSession.on('connected',     () => { stopMicMonitor(); _sessionConnectedAt = Da
 // ahora (TrackSubscribed) o porque ya estaba en la sala al conectar. Este es
 // el momento real de "conectado" para el usuario, así que el LED pasa a
 // idle acá, no en el 'connected' de arriba.
-lkSession.on('agent-audio',   () => leds.idle());
+lkSession.on('agent-audio',   () => { _agentConfirmed = true; leds.idle(); });
 lkSession.on('error',         e => { console.error('[lk-session-evt] error:', e.message); leds.brumexaError(4000); startMicMonitor(); });
+// _isReconnecting en lkSession vuelve a false apenas la SALA reconecta
+// (room.connect() de start() resuelto), no cuando el agente confirma — así
+// que este evento es la única señal de "arrancó un nuevo intento" que llega
+// ANTES de esa ventana ciega. Sin resetear _agentConfirmed acá, el mic-stats
+// del reintento podía volver a mostrar ámbar por ruido ambiente incluso con
+// el agente todavía sin responder.
+lkSession.on('reconnecting',  () => { _agentConfirmed = false; });
 // Si esto es parte de un ciclo de auto-reconexión (agente no respondió →
 // lkSession.stop()+start() por su cuenta, ver _triggerReconnect en
 // lib/livekit-session.js), NO es un disconnect real — el cometa tiene que
