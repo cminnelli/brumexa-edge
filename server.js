@@ -547,9 +547,36 @@ lkSession.on('speaker-stats', ({ peak }) => {
   // (verde) con el volumen real de la voz del agente, mismo patrón que 'mic-stats'.
   leds.agentSpeaking(peak / 32767);
 });
-lkSession.on('connected',     () => { stopMicMonitor(); _sessionConnectedAt = Date.now(); leds.idle(); });
+// 'connected' es solo la SALA (room.connect() resuelto) — el agente puede
+// tardar hasta AGENT_DETECT_TIMEOUT_MS más en aparecer (o ni aparecer, y
+// disparar un reintento). El cometa tiene que seguir hasta la conexión
+// FINAL con el agente, así que acá no se toca el LED — solo se libera el
+// monitor de mic idle para que lkSession pueda tomar el mic.
+lkSession.on('connected',     () => { stopMicMonitor(); _sessionConnectedAt = Date.now(); });
+// Recién acá el agente confirmó que está — ya sea porque se suscribió justo
+// ahora (TrackSubscribed) o porque ya estaba en la sala al conectar. Este es
+// el momento real de "conectado" para el usuario, así que el LED pasa a
+// idle acá, no en el 'connected' de arriba.
+lkSession.on('agent-audio',   () => leds.idle());
 lkSession.on('error',         e => { console.error('[lk-session-evt] error:', e.message); leds.brumexaError(4000); startMicMonitor(); });
-lkSession.on('disconnected',  d => { console.log('[lk-session-evt] disconnected:', d.reason); leds.idle(); startMicMonitor(); });
+// Si esto es parte de un ciclo de auto-reconexión (agente no respondió →
+// lkSession.stop()+start() por su cuenta, ver _triggerReconnect en
+// lib/livekit-session.js), NO es un disconnect real — el cometa tiene que
+// seguir (no volver a idle) y el monitor de mic idle NO debe reanudarse
+// (si lo hace, vuelve el falso "vos → hablando" por ruido ambiente que ya
+// arreglamos, pisando el cometa).
+lkSession.on('disconnected',  d => {
+  console.log('[lk-session-evt] disconnected:', d.reason);
+  if (lkSession.getStatus().isReconnecting) {
+    leds.connecting();
+    return;
+  }
+  leds.idle();
+  startMicMonitor();
+});
+// Se agotaron los reintentos (agente inalcanzable) — señal clara de error
+// en vez de caer en idle como si todo estuviera bien.
+lkSession.on('agent-dead',    () => { leds.brumexaError(4000); startMicMonitor(); });
 
 app.post('/session/start', express.json(), async (req, res) => {
   const reqId = Math.random().toString(36).slice(2, 7);
