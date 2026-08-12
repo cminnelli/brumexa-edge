@@ -578,7 +578,10 @@ async function runCalibration(triggeredBy = 'manual') {
   }
 
   const rawThreshold = result.noiseFloorDbfs + CALIBRATION_MARGIN_DB;
-  const threshold = Math.min(CALIBRATION_MAX_DBFS, Math.max(CALIBRATION_MIN_DBFS, rawThreshold));
+  // Redondeado a 1 decimal ACÁ, antes de aplicarlo — si no, el float con
+  // toda su precisión (ej. -27.053576989202497) se cuela a los logs de
+  // lk-session/leds, que loguean lo que reciben tal cual.
+  const threshold = Math.round(Math.min(CALIBRATION_MAX_DBFS, Math.max(CALIBRATION_MIN_DBFS, rawThreshold)) * 10) / 10;
 
   lkSession.setTalkThreshold(threshold);
   leds.setSpeakThresholdDbfs(threshold);
