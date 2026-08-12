@@ -479,7 +479,9 @@ function startMicMonitor() {
   const proc = spawn('arecord', ['-D', MIC, '-f', 'S16_LE', '-r', '16000', '-c', '1', '-t', 'raw', '-q']);
   const startedAt = Date.now();
   let peak = 0;
+  let rawPeak = 0;
   let last = Date.now();
+  let lastAmbientLog = Date.now();
 
   proc.stdout.on('data', chunk => {
     // arecord suele meter un pop/click de inicialización en los primeros
@@ -494,15 +496,28 @@ function startMicMonitor() {
     // la señal cruda del mic, sin importar qué gain configures.
     const gain = lkSession.getMicGain();
     for (let i = 0; i < chunk.length - 1; i += 2) {
-      let s = Math.abs(chunk.readInt16LE(i)) * gain;
+      const raw = Math.abs(chunk.readInt16LE(i));
+      if (raw > rawPeak) rawPeak = raw;
+      let s = raw * gain;
       if (s > 32767) s = 32767;
       if (s > peak) peak = s;
     }
     if (Date.now() - last > 100) {
       const level = peak / 32767;
+      const dbfs    = level > 0 ? 20 * Math.log10(level) : -120;
+      const rawDbfs = rawPeak > 0 ? 20 * Math.log10(rawPeak / 32767) : -120;
+      // Traza continua (máximo 1 línea/seg) — mismo espíritu que la de
+      // lib/livekit-session.js: acá SÍ hace falta, este monitor idle es
+      // donde se vieron falsos "hablando" con niveles bien por encima del
+      // piso que había medido la calibración recién antes.
+      if (Date.now() - lastAmbientLog > 1000) {
+        console.log(`[mic-monitor-debug] ambient: ${dbfs.toFixed(1)}dBFS  (raw=${rawDbfs.toFixed(1)}dBFS  gain=${gain}x)`);
+        lastAmbientLog = Date.now();
+      }
       leds.speaking(level);
       _micLevel = { level, peak, updatedAt: Date.now(), source: 'idle-monitor' };
       peak = 0;
+      rawPeak = 0;
       last = Date.now();
     }
   });
