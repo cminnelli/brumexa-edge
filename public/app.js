@@ -2733,12 +2733,25 @@ const SetupModule = {
         });
       }
 
-      // Volumen de la voz del agente — mismo patrón que el mic: aplica en
-      // caliente + persiste en .env, sin reiniciar ni cortar la sesión.
-      const speakerGainEl = document.getElementById('setup-speaker-gain');
+      // Volumen de la voz del agente — slider: label + dB se actualizan al
+      // instante en cada tick, el push al servidor va con debounce (mismo
+      // patrón que el mic). Aplica en caliente + persiste en .env, sin
+      // reiniciar ni cortar la sesión.
+      const speakerGainEl    = document.getElementById('setup-speaker-gain');
+      const speakerGainVal   = document.getElementById('val-speaker-gain');
+      const speakerGainDb    = document.getElementById('lbl-speaker-gain');
+      const updateSpeakerGainLabels = () => {
+        if (!speakerGainEl) return;
+        const v  = parseFloat(speakerGainEl.value);
+        const db = (20 * Math.log10(v)).toFixed(1);
+        if (speakerGainVal) speakerGainVal.textContent = `${v.toFixed(1)}x`;
+        if (speakerGainDb)  speakerGainDb.textContent  = `${db >= 0 ? '+' : ''}${db} dB`;
+      };
       if (speakerGainEl) {
         let _speakerGainTimer = null;
+        updateSpeakerGainLabels();
         speakerGainEl.addEventListener('input', () => {
+          updateSpeakerGainLabels();
           clearTimeout(_speakerGainTimer);
           _speakerGainTimer = setTimeout(() => this._pushSpeakerGain(), 400);
         });
@@ -2759,6 +2772,18 @@ const SetupModule = {
       get('setup-talk-threshold', cfg.talkThreshold);
       const valEl = document.getElementById('val-talk-threshold');
       if (valEl) valEl.textContent = document.getElementById('setup-talk-threshold')?.value || cfg.talkThreshold || '-25';
+      // Solo refresca los labels (x / dB) con el valor recién cargado — sin
+      // pasar por 'input' para no disparar un push innecesario de vuelta al
+      // servidor con el mismo valor que ya está corriendo.
+      const speakerGainElLoaded = document.getElementById('setup-speaker-gain');
+      if (speakerGainElLoaded) {
+        const v  = parseFloat(speakerGainElLoaded.value);
+        const db = (20 * Math.log10(v)).toFixed(1);
+        const vEl = document.getElementById('val-speaker-gain');
+        const dEl = document.getElementById('lbl-speaker-gain');
+        if (vEl) vEl.textContent = `${v.toFixed(1)}x`;
+        if (dEl) dEl.textContent = `${db >= 0 ? '+' : ''}${db} dB`;
+      }
       if (status) status.textContent = '';
     } catch (err) {
       if (status) { status.textContent = `Error: ${err.message}`; status.className = 'setup-status error'; }
