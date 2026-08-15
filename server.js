@@ -215,22 +215,23 @@ app.post('/setup/config', express.json(), (req, res) => {
 });
 
 // ─── POST /setup/config/live — persistir en .env SOLO los parámetros que ya
-// se aplican en caliente (mic gain, umbral de sensibilidad) sin reiniciar el
-// proceso. El valor ya está corriendo (lo aplicó /config/mic-gain o
-// /session/talk-threshold antes de llamar acá) — esto solo lo deja como
-// default para el próximo arranque, sin cortar la sesión actual.
+// se aplican en caliente (mic gain, speaker gain, umbral de sensibilidad) sin
+// reiniciar el proceso. El valor ya está corriendo (lo aplicó /session/mic-gain,
+// /session/speaker-gain o /session/talk-threshold antes de llamar acá) — esto
+// solo lo deja como default para el próximo arranque, sin cortar la sesión actual.
 app.post('/setup/config/live', express.json(), (req, res) => {
   const envFile = path.join(__dirname, '.env');
-  const { micGain, talkThreshold } = req.body || {};
+  const { micGain, speakerGain, talkThreshold } = req.body || {};
   let content = '';
   try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
 
   if (micGain       !== undefined) content = setEnvLine(content, 'MIC_GAIN', micGain);
+  if (speakerGain   !== undefined) content = setEnvLine(content, 'SPEAKER_GAIN', speakerGain);
   if (talkThreshold !== undefined) content = setEnvLine(content, 'MIC_TALK_THRESHOLD_DBFS', talkThreshold);
 
   try {
     require('fs').writeFileSync(envFile, content, 'utf8');
-    console.log(`[setup] .env actualizado sin reiniciar → ${JSON.stringify({ micGain, talkThreshold })}`);
+    console.log(`[setup] .env actualizado sin reiniciar → ${JSON.stringify({ micGain, speakerGain, talkThreshold })}`);
     res.json({ ok: true });
   } catch (err) {
     console.error('[setup] ✘ no se pudo escribir .env:', err.message);
@@ -750,6 +751,14 @@ app.post('/session/mic-gain', express.json(), (req, res) => {
   if (isNaN(g)) return res.status(400).json({ ok: false, error: 'gain inválido' });
   const ok = lkSession.setMicGain(g);
   res.json({ ok, gain: lkSession.getMicGain() });
+});
+
+// ─── POST /session/speaker-gain — volumen de la voz del agente, en vivo ──────
+app.post('/session/speaker-gain', express.json(), (req, res) => {
+  const g = parseFloat(req.body?.gain);
+  if (isNaN(g)) return res.status(400).json({ ok: false, error: 'gain inválido' });
+  const ok = lkSession.setSpeakerGain(g);
+  res.json({ ok, gain: lkSession.getSpeakerGain() });
 });
 
 // ─── POST /session/talk-threshold — umbral (dBFS) de voz, conectado a AMBOS: ─

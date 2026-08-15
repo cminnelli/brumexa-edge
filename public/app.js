@@ -2732,6 +2732,17 @@ const SetupModule = {
           _gainTimer = setTimeout(() => this._pushMicGain(), 400);
         });
       }
+
+      // Volumen de la voz del agente — mismo patrón que el mic: aplica en
+      // caliente + persiste en .env, sin reiniciar ni cortar la sesión.
+      const speakerGainEl = document.getElementById('setup-speaker-gain');
+      if (speakerGainEl) {
+        let _speakerGainTimer = null;
+        speakerGainEl.addEventListener('input', () => {
+          clearTimeout(_speakerGainTimer);
+          _speakerGainTimer = setTimeout(() => this._pushSpeakerGain(), 400);
+        });
+      }
     }
 
     const status = document.getElementById('setup-status');
@@ -2744,6 +2755,7 @@ const SetupModule = {
       get('setup-api-key',     cfg.apiKey);
       get('setup-device-name', cfg.deviceName);
       get('setup-mic-gain',    cfg.micGain);
+      get('setup-speaker-gain', cfg.speakerGain);
       get('setup-talk-threshold', cfg.talkThreshold);
       const valEl = document.getElementById('val-talk-threshold');
       if (valEl) valEl.textContent = document.getElementById('setup-talk-threshold')?.value || cfg.talkThreshold || '-25';
@@ -2798,6 +2810,28 @@ const SetupModule = {
     }
   },
 
+  async _pushSpeakerGain() {
+    const v = parseFloat(document.getElementById('setup-speaker-gain')?.value);
+    if (isNaN(v)) return;
+    try {
+      // /session/speaker-gain ajusta el volumen de la voz del agente en la
+      // sesión de LiveKit en curso, sin reiniciar ni cortar la llamada.
+      await fetch('/session/speaker-gain', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ gain: v }),
+      });
+      log(`Volumen del agente → ${v}x`, 'info');
+      await fetch('/setup/config/live', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ speakerGain: v }),
+      });
+    } catch (err) {
+      log(`Error actualizando volumen del agente: ${err.message}`, 'error');
+    }
+  },
+
   async save() {
     const btn    = document.getElementById('btn-setup-save');
     const status = document.getElementById('setup-status');
@@ -2807,6 +2841,7 @@ const SetupModule = {
       apiKey:     (document.getElementById('setup-api-key')?.value    || '').trim(),
       deviceName: (document.getElementById('setup-device-name')?.value || '').trim(),
       micGain:     document.getElementById('setup-mic-gain')?.value    || '4.0',
+      speakerGain: document.getElementById('setup-speaker-gain')?.value || '3.0',
       talkThreshold: document.getElementById('setup-talk-threshold')?.value || '-25',
     };
 

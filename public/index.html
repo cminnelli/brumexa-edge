@@ -492,6 +492,13 @@
       </div>
 
       <div class="field">
+        <label class="field-label" for="setup-speaker-gain">Volumen de la voz del agente (SPEAKER_GAIN)</label>
+        <input type="number" id="setup-speaker-gain" class="setup-input setup-input--short"
+               min="0" max="32" step="0.5" />
+        <p class="field-hint">Multiplicador de ganancia de software sobre el audio que llega del agente por LiveKit. 1.0 = sin boost &nbsp;·&nbsp; 3.0 = +9.5 dB. Se aplica al toque y queda guardado como default automáticamente — no hace falta "Guardar y reiniciar" para este campo.</p>
+      </div>
+
+      <div class="field">
         <label class="field-label" for="setup-talk-threshold">Sensibilidad de la voz (umbral)</label>
         <div class="gain-controls">
           <div class="gain-row">
