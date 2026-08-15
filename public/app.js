@@ -2767,6 +2767,7 @@ const SetupModule = {
       get('setup-device-id',   cfg.deviceId);
       get('setup-api-key',     cfg.apiKey);
       get('setup-device-name', cfg.deviceName);
+      get('setup-brumexa-color', cfg.brumexaColor || 'purpura');
       get('setup-mic-gain',    cfg.micGain);
       get('setup-speaker-gain', cfg.speakerGain);
       get('setup-talk-threshold', cfg.talkThreshold);
@@ -2865,6 +2866,7 @@ const SetupModule = {
       deviceId:   (document.getElementById('setup-device-id')?.value  || '').trim(),
       apiKey:     (document.getElementById('setup-api-key')?.value    || '').trim(),
       deviceName: (document.getElementById('setup-device-name')?.value || '').trim(),
+      brumexaColor: document.getElementById('setup-brumexa-color')?.value || 'purpura',
       micGain:     document.getElementById('setup-mic-gain')?.value    || '4.0',
       speakerGain: document.getElementById('setup-speaker-gain')?.value || '3.0',
       talkThreshold: document.getElementById('setup-talk-threshold')?.value || '-25',

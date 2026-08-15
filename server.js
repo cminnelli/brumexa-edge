@@ -167,6 +167,7 @@ app.get('/setup/config', (_req, res) => {
     micGain:      getVal('MIC_GAIN')      || '4.0',
     speakerGain:  getVal('SPEAKER_GAIN')  || '3.0',
     talkThreshold: getVal('MIC_TALK_THRESHOLD_DBFS') || '-25',
+    brumexaColor: getVal('BRUMEXA_COLOR') || 'purpura',
   });
 });
 
@@ -193,7 +194,7 @@ function setEnvLine(src, key, value) {
 // ─── POST /setup/config — escribir .env y reiniciar proceso (PM2 restart) ────
 app.post('/setup/config', express.json(), (req, res) => {
   const envFile = path.join(__dirname, '.env');
-  const { ragApiUrl, deviceId, apiKey, deviceName, micGain, speakerGain, talkThreshold } = req.body || {};
+  const { ragApiUrl, deviceId, apiKey, deviceName, micGain, speakerGain, talkThreshold, brumexaColor } = req.body || {};
   let content = '';
   try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
 
@@ -204,6 +205,7 @@ app.post('/setup/config', express.json(), (req, res) => {
   if (micGain     !== undefined) content = setEnvLine(content, 'MIC_GAIN',      micGain);
   if (speakerGain !== undefined) content = setEnvLine(content, 'SPEAKER_GAIN',  speakerGain);
   if (talkThreshold !== undefined) content = setEnvLine(content, 'MIC_TALK_THRESHOLD_DBFS', talkThreshold);
+  if (brumexaColor  !== undefined) content = setEnvLine(content, 'BRUMEXA_COLOR', brumexaColor);
 
   try {
     require('fs').writeFileSync(envFile, content, 'utf8');

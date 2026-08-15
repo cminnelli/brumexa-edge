@@ -52,6 +52,18 @@
       </div>
     </div>
     <div class="field-edit">
+      <label for="inp-brumexa-color">BRUMEXA_COLOR (color de la carcasa)</label>
+      <div class="field-edit-row">
+        <select id="inp-brumexa-color">
+          <option value="purpura">Púrpura</option>
+          <option value="verde">Verde</option>
+          <option value="negro">Negro</option>
+          <option value="blanco">Blanco</option>
+        </select>
+      </div>
+      <div class="section-empty" style="margin-top:4px">Hoy las 4 opciones usan la misma combinación de luces — queda guardado para asignarle una paleta propia a cada color más adelante.</div>
+    </div>
+    <div class="field-edit">
       <label for="inp-mic-gain">MIC_GAIN</label>
       <div class="field-edit-row">
         <input type="text" id="inp-mic-gain" placeholder="4.0" />
@@ -151,6 +163,7 @@
       document.getElementById('inp-device-id').value   = cfg.deviceId     || '';
       document.getElementById('inp-api-key').value      = cfg.apiKey       || '';
       document.getElementById('inp-device-name').value = cfg.deviceName   || '';
+      document.getElementById('inp-brumexa-color').value = cfg.brumexaColor || 'purpura';
       document.getElementById('inp-mic-gain').value     = cfg.micGain      || '';
       document.getElementById('inp-speaker-gain').value = cfg.speakerGain  || '';
       document.getElementById('inp-talk-threshold').value = cfg.talkThreshold || '-25';
@@ -194,6 +207,7 @@
           deviceId:   document.getElementById('inp-device-id').value.trim(),
           apiKey:     document.getElementById('inp-api-key').value.trim(),
           deviceName: document.getElementById('inp-device-name').value.trim(),
+          brumexaColor: document.getElementById('inp-brumexa-color').value,
           micGain:     document.getElementById('inp-mic-gain').value.trim(),
           speakerGain: document.getElementById('inp-speaker-gain').value.trim(),
           talkThreshold: document.getElementById('inp-talk-threshold').value.trim(),
