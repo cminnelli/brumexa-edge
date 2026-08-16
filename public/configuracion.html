@@ -52,16 +52,11 @@
       </div>
     </div>
     <div class="field-edit">
-      <label for="inp-brumexa-color">BRUMEXA_COLOR (color de la carcasa)</label>
-      <div class="field-edit-row">
-        <select id="inp-brumexa-color">
-          <option value="purpura">Púrpura</option>
-          <option value="verde">Verde</option>
-          <option value="negro">Negro</option>
-          <option value="blanco">Blanco</option>
-        </select>
-      </div>
-      <div class="section-empty" style="margin-top:4px">Hoy las 4 opciones usan la misma combinación de luces — queda guardado para asignarle una paleta propia a cada color más adelante.</div>
+      <label>BRUMEXA_COLOR (color de la carcasa)</label>
+      <input type="hidden" id="inp-brumexa-color" value="negro" />
+      <div class="color-grid" id="color-grid"></div>
+      <div class="color-detail" id="color-detail"></div>
+      <div class="section-empty" style="margin-top:4px">Cada color tiene su propia combinación de luces (respiración, tu voz, voz del agente, calibración). Elegí uno para ver el detalle y aplicarlo.</div>
     </div>
     <div class="field-edit">
       <label for="inp-mic-gain">MIC_GAIN</label>
@@ -148,6 +143,62 @@
 
   let micEnabledState = true;
 
+  // Color de carcasa (BRUMEXA_COLOR) — grilla de tarjetas + detalle de la
+  // combinación de LEDs asignada, con los datos de lib/color-schemes.json
+  // (misma fuente que usa el server para renderizar).
+  let _colorSchemes = null;
+  async function loadColorSchemes() {
+    if (_colorSchemes) return _colorSchemes;
+    _colorSchemes = await fetch('/setup/color-schemes').then(r => r.json());
+    return _colorSchemes;
+  }
+  function renderColorGrid(selected) {
+    const wrap = document.getElementById('color-grid');
+    if (!wrap || !_colorSchemes) return;
+    wrap.innerHTML = '';
+    for (const [key, def] of Object.entries(_colorSchemes.colors)) {
+      const dots = _colorSchemes.roles
+        .map(role => `<span class="color-card-dot" style="background:${def.leds[role.key]?.swatch || '#000'}"></span>`)
+        .join('');
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'color-card' + (key === selected ? ' selected' : '');
+      card.dataset.color = key;
+      card.innerHTML = `
+        <span class="color-card-swatch" style="background:${def.swatch}"></span>
+        <span class="color-card-name">${esc(def.label)}</span>
+        <span class="color-card-dots">${dots}</span>
+      `;
+      card.addEventListener('click', () => {
+        document.getElementById('inp-brumexa-color').value = key;
+        wrap.querySelectorAll('.color-card').forEach(el => el.classList.toggle('selected', el.dataset.color === key));
+        renderColorDetail(key);
+      });
+      wrap.appendChild(card);
+    }
+  }
+  function renderColorDetail(colorKey) {
+    const wrap = document.getElementById('color-detail');
+    if (!wrap || !_colorSchemes) return;
+    const scheme = _colorSchemes.colors[colorKey];
+    if (!scheme) { wrap.innerHTML = ''; return; }
+    wrap.innerHTML = _colorSchemes.roles.map(role => {
+      const led = scheme.leds[role.key];
+      if (!led) return '';
+      return `<div class="color-detail-row">
+        <span class="color-detail-dot" style="background:${led.swatch}"></span>
+        <span class="color-detail-role">${esc(role.label)}</span>
+        <span class="color-detail-name">${esc(led.name)}</span>
+      </div>`;
+    }).join('');
+  }
+  async function initColorPicker(selected) {
+    await loadColorSchemes();
+    document.getElementById('inp-brumexa-color').value = selected;
+    renderColorGrid(selected);
+    renderColorDetail(selected);
+  }
+
   async function loadAll() {
     const chip = document.getElementById('chip-refresh');
     const txt  = document.getElementById('txt-refresh');
@@ -163,7 +214,7 @@
       document.getElementById('inp-device-id').value   = cfg.deviceId     || '';
       document.getElementById('inp-api-key').value      = cfg.apiKey       || '';
       document.getElementById('inp-device-name').value = cfg.deviceName   || '';
-      document.getElementById('inp-brumexa-color').value = cfg.brumexaColor || 'purpura';
+      await initColorPicker(cfg.brumexaColor || 'negro');
       document.getElementById('inp-mic-gain').value     = cfg.micGain      || '';
       document.getElementById('inp-speaker-gain').value = cfg.speakerGain  || '';
       document.getElementById('inp-talk-threshold').value = cfg.talkThreshold || '-25';

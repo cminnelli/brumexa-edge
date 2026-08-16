@@ -1,0 +1,51 @@
+{
+  "roles": [
+    { "key": "respiracion", "label": "Respiración (en espera)" },
+    { "key": "voz",         "label": "Tu voz" },
+    { "key": "agente",      "label": "Voz del agente" },
+    { "key": "calibracion", "label": "Calibración" }
+  ],
+  "colors": {
+    "purpura": {
+      "label": "Púrpura",
+      "swatch": "#6d3fd1",
+      "leds": {
+        "respiracion": { "hue": 270, "sat": 1,    "swatch": "#8000ff", "name": "Violeta" },
+        "voz":         { "hue": 250, "sat": 1,    "swatch": "#d400ff", "name": "Magenta" },
+        "agente":      { "hue": 290, "sat": 1,    "swatch": "#2b00ff", "name": "Índigo" },
+        "calibracion": { "hue": null, "sat": 0,   "swatch": "#ffffff", "name": "Blanco" }
+      }
+    },
+    "verde": {
+      "label": "Verde",
+      "swatch": "#16a34a",
+      "leds": {
+        "respiracion": { "hue": 150, "sat": 1,    "swatch": "#00ff80", "name": "Esmeralda" },
+        "voz":         { "hue": 130, "sat": 1,    "swatch": "#00ffd5", "name": "Turquesa" },
+        "agente":      { "hue": 100, "sat": 1,    "swatch": "#aaff00", "name": "Lima" },
+        "calibracion": { "hue": null, "sat": 0,   "swatch": "#ffffff", "name": "Blanco" }
+      }
+    },
+    "negro": {
+      "label": "Negro",
+      "swatch": "#141414",
+      "leds": {
+        "respiracion": { "hue": 234, "sat": 1,    "swatch": "#00e5ff", "name": "Cian" },
+        "voz":         { "hue": 40,  "sat": 1,    "swatch": "#ff5500", "name": "Ámbar" },
+        "agente":      { "hue": 120, "sat": 1,    "swatch": "#00ffff", "name": "Cian" },
+        "calibracion": { "hue": null, "sat": 0,   "swatch": "#ffffff", "name": "Blanco" }
+      }
+    },
+    "blanco": {
+      "label": "Blanco",
+      "swatch": "#f2f2f2",
+      "leds": {
+        "respiracion": { "hue": 234, "sat": 0.18, "swatch": "#d1faff", "name": "Celeste pálido" },
+        "voz":         { "hue": 40,  "sat": 1,    "swatch": "#ff5500", "name": "Ámbar" },
+        "agente":      { "hue": 190, "sat": 1,    "swatch": "#002aff", "name": "Azul" },
+        "calibracion": { "hue": null, "sat": 0,   "swatch": "#ffffff", "name": "Blanco" }
+      }
+    }
+  },
+  "defaultColor": "negro"
+}

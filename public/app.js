@@ -2692,6 +2692,69 @@ const DebugModule = {
 // ============================================================
 const SetupModule = {
   _bound: false,
+  _colorSchemes: null,
+
+  // Trae lib/color-schemes.json (roles + combinación de LEDs por color de
+  // carcasa) una sola vez y lo cachea — lo usan tanto el picker como el
+  // preview, no hace falta refetchear en cada click.
+  async _loadColorSchemes() {
+    if (this._colorSchemes) return this._colorSchemes;
+    this._colorSchemes = await fetch('/setup/color-schemes').then(r => r.json());
+    return this._colorSchemes;
+  },
+
+  // Grilla de tarjetas — una por color de carcasa, cada una con su swatch,
+  // nombre y una fila de puntitos compactos (mismo orden de roles en las 4)
+  // para poder comparar las combinaciones de un vistazo sin clickear una
+  // por una. Tocar una tarjeta la selecciona y expande el detalle abajo.
+  _renderColorGrid(selected) {
+    const wrap = document.getElementById('setup-color-grid');
+    if (!wrap || !this._colorSchemes) return;
+    wrap.innerHTML = '';
+    for (const [key, def] of Object.entries(this._colorSchemes.colors)) {
+      const dots = this._colorSchemes.roles
+        .map(role => `<span class="color-card-dot" style="background:${def.leds[role.key]?.swatch || '#000'}"></span>`)
+        .join('');
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'color-card' + (key === selected ? ' selected' : '');
+      card.dataset.color = key;
+      card.innerHTML = `
+        <span class="color-card-swatch" style="background:${def.swatch}"></span>
+        <span class="color-card-name">${def.label}</span>
+        <span class="color-card-dots">${dots}</span>
+      `;
+      card.addEventListener('click', () => {
+        document.getElementById('setup-brumexa-color').value = key;
+        wrap.querySelectorAll('.color-card').forEach(el => el.classList.toggle('selected', el.dataset.color === key));
+        this._renderColorDetail(key);
+      });
+      wrap.appendChild(card);
+    }
+  },
+
+  _renderColorDetail(colorKey) {
+    const wrap = document.getElementById('setup-color-detail');
+    if (!wrap || !this._colorSchemes) return;
+    const scheme = this._colorSchemes.colors[colorKey];
+    if (!scheme) { wrap.innerHTML = ''; return; }
+    wrap.innerHTML = this._colorSchemes.roles.map(role => {
+      const led = scheme.leds[role.key];
+      if (!led) return '';
+      return `<div class="color-detail-row">
+        <span class="color-detail-dot" style="background:${led.swatch}"></span>
+        <span class="color-detail-role">${role.label}</span>
+        <span class="color-detail-name">${led.name}</span>
+      </div>`;
+    }).join('');
+  },
+
+  async _initColorPicker(selected) {
+    await this._loadColorSchemes();
+    document.getElementById('setup-brumexa-color').value = selected;
+    this._renderColorGrid(selected);
+    this._renderColorDetail(selected);
+  },
 
   async load() {
     if (!this._bound) {
@@ -2767,7 +2830,7 @@ const SetupModule = {
       get('setup-device-id',   cfg.deviceId);
       get('setup-api-key',     cfg.apiKey);
       get('setup-device-name', cfg.deviceName);
-      get('setup-brumexa-color', cfg.brumexaColor || 'purpura');
+      await this._initColorPicker(cfg.brumexaColor || 'negro');
       get('setup-mic-gain',    cfg.micGain);
       get('setup-speaker-gain', cfg.speakerGain);
       get('setup-talk-threshold', cfg.talkThreshold);
@@ -2866,7 +2929,7 @@ const SetupModule = {
       deviceId:   (document.getElementById('setup-device-id')?.value  || '').trim(),
       apiKey:     (document.getElementById('setup-api-key')?.value    || '').trim(),
       deviceName: (document.getElementById('setup-device-name')?.value || '').trim(),
-      brumexaColor: document.getElementById('setup-brumexa-color')?.value || 'purpura',
+      brumexaColor: document.getElementById('setup-brumexa-color')?.value || 'negro',
       micGain:     document.getElementById('setup-mic-gain')?.value    || '4.0',
       speakerGain: document.getElementById('setup-speaker-gain')?.value || '3.0',
       talkThreshold: document.getElementById('setup-talk-threshold')?.value || '-25',

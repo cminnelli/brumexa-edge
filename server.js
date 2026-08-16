@@ -167,8 +167,15 @@ app.get('/setup/config', (_req, res) => {
     micGain:      getVal('MIC_GAIN')      || '4.0',
     speakerGain:  getVal('SPEAKER_GAIN')  || '3.0',
     talkThreshold: getVal('MIC_TALK_THRESHOLD_DBFS') || '-25',
-    brumexaColor: getVal('BRUMEXA_COLOR') || 'purpura',
+    brumexaColor: getVal('BRUMEXA_COLOR') || 'negro',
   });
+});
+
+// ─── GET /setup/color-schemes — roles + combinación de LEDs por color de
+// carcasa (lib/color-schemes.json), para pintar el picker + preview en vivo
+// del panel de setup sin duplicar los datos ahí adentro.
+app.get('/setup/color-schemes', (_req, res) => {
+  res.json(leds.getColorSchemes());
 });
 
 // Escribe/reemplaza una línea KEY=value en el contenido de un .env — usado

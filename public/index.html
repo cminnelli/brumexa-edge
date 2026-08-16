@@ -485,14 +485,11 @@
       </div>
 
       <div class="field">
-        <label class="field-label" for="setup-brumexa-color">Color del Brumexa</label>
-        <select id="setup-brumexa-color" class="setup-input">
-          <option value="purpura">Púrpura</option>
-          <option value="verde">Verde</option>
-          <option value="negro">Negro</option>
-          <option value="blanco">Blanco</option>
-        </select>
-        <p class="field-hint">Color de la carcasa de este equipo (BRUMEXA_COLOR). Hoy las 4 opciones usan la misma combinación de luces — queda guardado para poder asignarle una paleta propia a cada color más adelante sin tocar nada más. Requiere "Guardar y reiniciar".</p>
+        <label class="field-label">Color del Brumexa</label>
+        <input type="hidden" id="setup-brumexa-color" value="negro" />
+        <div class="color-grid" id="setup-color-grid"></div>
+        <div class="color-detail" id="setup-color-detail"></div>
+        <p class="field-hint">Color de la carcasa de este equipo (BRUMEXA_COLOR) — cada uno tiene su propia combinación de luces (respiración, tu voz, voz del agente, calibración). Elegí uno para ver el detalle y aplicarlo. Requiere "Guardar y reiniciar".</p>
       </div>
 
       <div class="field">
