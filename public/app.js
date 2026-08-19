@@ -28,15 +28,11 @@ const state = {
 // ============================================================
 const ui = {
   btnMic:        document.getElementById('btn-mic'),
+  btnMicTest:    document.getElementById('btn-mictest'),
   btnReconectar: document.getElementById('btn-reconectar'),
-  modeBtns:      document.querySelectorAll('.mode-btn'),
-  badgeMode:     document.getElementById('badge-mode'),
   log:           document.getElementById('log'),
 
   // Status mini
-  smDeviceIcon: document.getElementById('sm-device-icon'),
-  smDeviceVal:  document.getElementById('sm-device-val'),
-  smDeviceSub:  document.getElementById('sm-device-sub'),
   smDeviceDot:  document.getElementById('sm-device-dot'),
   smLkVal:      document.getElementById('sm-lk-val'),
   smLkSub:      document.getElementById('sm-lk-sub'),
@@ -160,7 +156,7 @@ function setLiveKitStatus(status, sub = '') {
   };
   ui.smLkVal.textContent = labels[status] || status;
   if (sub) ui.smLkSub.textContent = sub;
-  ui.smLkDot.className   = `sm-dot ${dotClass[status] || 'idle'}`;
+  ui.smLkDot.className   = `stat-chip__dot ${dotClass[status] || 'idle'}`;
 }
 
 // Estado del canal/sesión activa de audio
@@ -179,13 +175,13 @@ function setChannelStatus(status, sub = '') {
   };
   ui.smCanalVal.textContent = labels[status] || status;
   if (sub !== undefined) ui.smCanalSub.textContent = sub || (status === 'closed' ? 'sin sala' : '');
-  ui.smCanalDot.className = `sm-dot ${dotClass[status] || 'idle'}`;
+  ui.smCanalDot.className = `stat-chip__dot ${dotClass[status] || 'idle'}`;
 }
 
 async function checkLiveKitHealth() {
   if (state.active) return;
   ui.smLkVal.textContent = 'Verificando…';
-  ui.smLkDot.className   = 'sm-dot idle';
+  ui.smLkDot.className   = 'stat-chip__dot idle';
   try {
     const h = await fetch('/livekit-health').then((r) => r.json());
     if (h.online) {
@@ -305,7 +301,7 @@ function setMicStatus(status, sub = '') {
   };
   ui.smMicVal.textContent = labels[status] || status;
   ui.smMicSub.textContent = sub;
-  ui.smMicDot.className   = `sm-dot ${status === 'active' ? 'recording' : status === 'requesting' ? 'connecting' : status}`;
+  ui.smMicDot.className   = `stat-chip__dot ${status === 'active' ? 'recording' : status === 'requesting' ? 'connecting' : status}`;
 }
 
 // ============================================================
@@ -1111,11 +1107,11 @@ const LiveKitModule = {
       ui.smCanalVal.textContent = tokenData.room;
       if (n === 0) {
         ui.smCanalSub.textContent = 'sin worker';
-        ui.smCanalDot.className   = 'sm-dot connecting';
+        ui.smCanalDot.className   = 'stat-chip__dot connecting';
         ui.smCanalCard.classList.add('no-worker');
       } else {
         ui.smCanalSub.textContent = n === 1 ? '1 worker activo' : `${n} workers activos`;
-        ui.smCanalDot.className   = 'sm-dot recording';
+        ui.smCanalDot.className   = 'stat-chip__dot recording';
         ui.smCanalCard.classList.remove('no-worker');
       }
     };
@@ -1420,7 +1416,6 @@ const LiveKitModule = {
 
         log(`[mic-browser] ✔ publicado — sid: ${pub?.trackSid}`, 'success');
         micStream = mt ? new MediaStream([mt]) : null;
-        updateMicName();
       }
 
     } catch (err) {
@@ -1503,7 +1498,6 @@ const MicTestModule = {
 
     const { stream, source: src } = await getAudioTrack();
     state.stream = stream;
-    if (src === 'browser') updateMicName();
 
     let audioCtx, analyser;
 
@@ -1533,7 +1527,6 @@ const MicTestModule = {
     const label = src === 'pi' ? 'Pi ALSA' : 'Browser';
     log(`Micrófono capturado — fuente: ${label}. Hablá para ver el nivel.`, 'success');
     setMicStatus('active', label);
-    ui.vumeterCard.style.display = 'block';
 
     this._renderLoop();
   },
@@ -1597,7 +1590,6 @@ const MicTestModule = {
     ctx.clearRect(0, 0, ui.vuCanvas.width, ui.vuCanvas.height);
     ui.vuBar.style.width = '0%';
     ui.vuDb.textContent  = '— dB';
-    ui.vumeterCard.style.display = 'none';
     setMicStatus('idle');
     log('Test de micrófono detenido', 'warn');
   },
@@ -1616,27 +1608,50 @@ function updateMicButton(active) {
   }
 }
 
-ui.btnMic.addEventListener('click', async () => {
-  ui.btnMic.disabled = true;
+function updateMicTestButton(active) {
+  if (active) {
+    ui.btnMicTest.textContent = 'Detener análisis';
+    ui.btnMicTest.classList.add('recording');
+  } else {
+    ui.btnMicTest.textContent = 'Analizar micrófono';
+    ui.btnMicTest.classList.remove('recording');
+  }
+}
+
+// LiveKit y Test de micrófono son dos cards separadas con su propio botón
+// cada una — comparten esta misma función (mismo manejo de estado/errores
+// que antes tenía el selector de modo), solo que ahora el "modo" lo define
+// qué botón tocaste, no un toggle previo. No se puede correr los dos a la
+// vez (comparten el mic físico), así que uno deshabilita al otro mientras
+// está activo.
+async function handleConnectClick(mode) {
+  const btn      = mode === 'livekit' ? ui.btnMic     : ui.btnMicTest;
+  const otherBtn = mode === 'livekit' ? ui.btnMicTest : ui.btnMic;
+  const setBtn   = mode === 'livekit' ? updateMicButton : updateMicTestButton;
+
+  btn.disabled = true;
   try {
     if (!state.active) {
+      state.mode   = mode;
       state.active = true;
-      updateMicButton(true);
-      if (state.mode === 'livekit') {
+      setBtn(true);
+      if (mode === 'livekit') {
         if (state.usePiNative) await PiNativeModule.start();
         else                   await LiveKitModule.start();
       } else {
         await MicTestModule.start();
       }
+      otherBtn.disabled = true;
     } else {
       state.active = false;
-      updateMicButton(false);
-      if (state.mode === 'livekit') {
+      setBtn(false);
+      if (mode === 'livekit') {
         if (state.usePiNative) await PiNativeModule.stop();
         else                   await LiveKitModule.stop();
       } else {
         MicTestModule.stop();
       }
+      otherBtn.disabled = false;
     }
   } catch (err) {
     // Si el server dice "sesión ya activa" (409), no es un error real —
@@ -1647,41 +1662,24 @@ ui.btnMic.addEventListener('click', async () => {
     // frenarla desde acá.
     if (/sesión ya activa/i.test(err.message)) {
       state.active = true;
-      updateMicButton(true);
+      setBtn(true);
       log('[pi-native] Ya había una sesión activa — sincronizando botón a "Desconectar"', 'warn');
       if (state.usePiNative) PiNativeModule._startPolling();
     } else {
       state.active = false;
-      updateMicButton(false);
+      setBtn(false);
+      otherBtn.disabled = false;
       setMicStatus('error');
       log(formatError(err), 'error');
       console.error(err);
     }
   } finally {
-    ui.btnMic.disabled = false;
+    btn.disabled = false;
   }
-});
-
-// ============================================================
-// SELECTOR DE MODO
-// ============================================================
-const modeLabels = { livekit: 'LiveKit', mictest: 'Test Mic' };
-
-function applyMode(mode) {
-  state.mode = mode;
-  ui.lkStepsCard.style.display = mode === 'livekit' ? '' : 'none';
-  ui.badgeMode.textContent = modeLabels[mode] || mode;
 }
 
-ui.modeBtns.forEach((btn) => {
-  btn.addEventListener('click', () => {
-    if (state.active) return;
-    ui.modeBtns.forEach((b) => b.classList.remove('active'));
-    btn.classList.add('active');
-    applyMode(btn.dataset.mode);
-    log(`Modo: ${modeLabels[state.mode]}`, 'info');
-  });
-});
+ui.btnMic.addEventListener('click', () => handleConnectClick('livekit'));
+ui.btnMicTest.addEventListener('click', () => handleConnectClick('mictest'));
 
 // ============================================================
 // LIMPIAR LOG
@@ -1702,22 +1700,6 @@ function log(msg, type = 'info') {
 }
 
 // ============================================================
-// NOMBRE DEL MICRÓFONO
-// Los labels solo están disponibles después de que el usuario
-// otorgó permiso (o si ya lo otorgó antes).
-// ============================================================
-async function updateMicName() {
-  try {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const mic     = devices.find((d) => d.kind === 'audioinput' && d.label);
-    const label   = mic?.label || '—';
-    ui.smDeviceSub.textContent = label;
-  } catch {
-    // sin permiso aún — no pasa nada
-  }
-}
-
-// ============================================================
 // FORMATEO DE ERRORES
 // ============================================================
 function formatError(err) {
@@ -1734,232 +1716,6 @@ function formatError(err) {
     return 'Servidor sin dispositivo configurado. Revisá BRUMEXA_DEVICE_ID/BRUMEXA_API_KEY.';
   return err.message || 'Error desconocido';
 }
-
-// ============================================================
-// MÓDULO BLUETOOTH (solo Linux / Raspberry)
-// ============================================================
-const BluetoothModule = {
-  _card:      document.getElementById('bluetooth-card'),
-  _list:      document.getElementById('bt-device-list'),
-  _scanBtn:   document.getElementById('btn-bt-scan'),
-  _refreshBtn:document.getElementById('btn-bt-refresh'),
-  _scanStatus:document.getElementById('bt-scan-status'),
-  _countdown: document.getElementById('bt-scan-countdown'),
-  _scanning:  false,
-
-  init() {
-    this._card.style.display = '';
-    this._scanBtn.addEventListener('click',    () => this.scan());
-    this._refreshBtn.addEventListener('click', () => this.loadPaired());
-    this.loadPaired();
-  },
-
-  async loadPaired() {
-    this._list.innerHTML = '<li class="bt-empty">Cargando…</li>';
-    try {
-      const { devices } = await fetch('/bluetooth/devices').then(r => r.json());
-      if (!devices || devices.length === 0) {
-        this._list.innerHTML = '<li class="bt-empty">Sin dispositivos pareados. Usá "Buscar" para encontrar speakers.</li>';
-        return;
-      }
-      this._renderList(devices);
-    } catch {
-      this._list.innerHTML = '<li class="bt-empty">Error leyendo Bluetooth.</li>';
-    }
-  },
-
-  async scan() {
-    if (this._scanning) return;
-    this._scanning = true;
-    this._scanBtn.disabled = true;
-    this._scanStatus.style.display = '';
-    this._list.innerHTML = '<li class="bt-empty">Escaneando…</li>';
-
-    const SECS = 8;
-    let remaining = SECS;
-    this._countdown.textContent = remaining;
-    const timer = setInterval(() => {
-      remaining--;
-      this._countdown.textContent = remaining;
-      if (remaining <= 0) clearInterval(timer);
-    }, 1000);
-
-    log('Bluetooth: escaneando 8 segundos…', 'info');
-    try {
-      const { devices } = await fetch('/bluetooth/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ seconds: SECS }),
-      }).then(r => r.json());
-
-      clearInterval(timer);
-      this._scanStatus.style.display = 'none';
-      this._scanning = false;
-      this._scanBtn.disabled = false;
-
-      if (!devices || devices.length === 0) {
-        this._list.innerHTML = '<li class="bt-empty">No se encontraron dispositivos con nombre. Acercá el speaker y volvé a buscar.</li>';
-        return;
-      }
-      log(`Bluetooth: ${devices.length} dispositivo(s) encontrado(s)`, 'success');
-      this._renderList(devices);
-    } catch (err) {
-      clearInterval(timer);
-      this._scanStatus.style.display = 'none';
-      this._scanning = false;
-      this._scanBtn.disabled = false;
-      this._list.innerHTML = '<li class="bt-empty">Error durante el escaneo.</li>';
-      log(`Bluetooth scan error: ${err.message}`, 'error');
-    }
-  },
-
-  _renderList(devices) {
-    this._list.innerHTML = '';
-    for (const d of devices) this._list.appendChild(this._renderItem(d));
-  },
-
-  _renderItem({ mac, name, connected, paired, audioCapable }) {
-    const li = document.createElement('li');
-    li.className = 'bt-item';
-    if (audioCapable) li.classList.add('bt-audio');
-
-    // Dot de conexión
-    const dot = document.createElement('span');
-    dot.className = `bt-item-dot${connected ? ' connected' : ''}`;
-
-    // Icono de tipo de dispositivo
-    const typeIcon = document.createElement('span');
-    typeIcon.className = 'bt-item-type';
-    if (audioCapable) {
-      typeIcon.textContent = '🔊';
-      typeIcon.title = 'Perfil A2DP detectado — apto para audio (altavoz / auriculares)';
-    } else {
-      typeIcon.textContent = '📱';
-      typeIcon.title = 'Dispositivo genérico — sin perfil de audio detectado';
-    }
-
-    const nameEl = document.createElement('span');
-    nameEl.className   = 'bt-item-name';
-    nameEl.textContent = name;
-
-    // Badge de audio — solo si es capaz
-    const badge = document.createElement('span');
-    if (audioCapable) {
-      badge.className   = 'bt-item-badge bt-item-badge--audio';
-      badge.textContent = 'A2DP';
-      badge.title       = 'Perfil Advanced Audio Distribution — listo para reproducir audio';
-    }
-
-    const macEl = document.createElement('span');
-    macEl.className   = 'bt-item-mac';
-    macEl.textContent = mac;
-
-    const btn = document.createElement('button');
-    if (connected) {
-      btn.className   = 'bt-item-btn disconnect';
-      btn.textContent = 'Desconectar';
-      btn.onclick = () => this._action('/bluetooth/disconnect', mac, name, 'Desconectando…', btn, dot, false);
-    } else if (paired) {
-      btn.className   = 'bt-item-btn';
-      btn.textContent = 'Conectar';
-      btn.onclick = () => this._action('/bluetooth/connect', mac, name, 'Conectando…', btn, dot, true);
-    } else {
-      btn.className   = 'bt-item-btn';
-      btn.textContent = 'Parear';
-      btn.onclick = () => this._pair(mac, name, btn, dot);
-    }
-
-    // Fila 2: MAC + badge juntos
-    const sub = document.createElement('span');
-    sub.className = 'bt-item-sub';
-    sub.append(macEl);
-    if (audioCapable) sub.append(badge);
-
-    li.append(dot, typeIcon, nameEl, btn, sub);
-    return li;
-  },
-
-  // Pairing con botón cancelar
-  async _pair(mac, name, btn, dot) {
-    btn.disabled    = true;
-    btn.textContent = 'Pareando…';
-
-    // Agregar botón cancelar al lado
-    const cancelBtn = document.createElement('button');
-    cancelBtn.className   = 'bt-item-btn bt-cancel';
-    cancelBtn.textContent = 'Cancelar';
-    cancelBtn.onclick     = async () => {
-      cancelBtn.disabled = true;
-      await fetch('/bluetooth/cancel-pairing', { method: 'POST' });
-      log('Bluetooth: pairing cancelado', 'warn');
-      btn.disabled    = false;
-      btn.textContent = 'Parear';
-      cancelBtn.remove();
-    };
-    btn.insertAdjacentElement('afterend', cancelBtn);
-
-    log(`Bluetooth: iniciando pairing con ${name || mac} — puede pedir confirmación en el dispositivo…`, 'info');
-
-    try {
-      const res = await fetch('/bluetooth/pair-connect', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ mac }),
-      }).then(r => r.json());
-
-      cancelBtn.remove();
-
-      if (res.ok) {
-        dot.className   = 'bt-item-dot connected';
-        btn.className   = 'bt-item-btn disconnect';
-        btn.textContent = 'Desconectar';
-        btn.disabled    = false;
-        btn.onclick     = () => this._action('/bluetooth/disconnect', mac, name, 'Desconectando…', btn, dot, false);
-        log(`Bluetooth: ${res.message} — ${name || mac}`, 'success');
-      } else {
-        btn.disabled    = false;
-        btn.textContent = 'Parear';
-        log(`Bluetooth: ${res.message}`, 'error');
-      }
-    } catch (err) {
-      cancelBtn.remove();
-      btn.disabled    = false;
-      btn.textContent = 'Parear';
-      log(`Bluetooth error: ${err.message}`, 'error');
-    }
-  },
-
-  async _action(endpoint, mac, name, loadingText, btn, dot, willConnect) {
-    btn.disabled    = true;
-    btn.textContent = loadingText;
-    try {
-      const res = await fetch(endpoint, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ mac }),
-      }).then(r => r.json());
-
-      if (res.ok) {
-        dot.className   = `bt-item-dot${willConnect ? ' connected' : ''}`;
-        btn.className   = willConnect ? 'bt-item-btn disconnect' : 'bt-item-btn';
-        btn.textContent = willConnect ? 'Desconectar' : 'Conectar';
-        btn.disabled    = false;
-        btn.onclick     = willConnect
-          ? () => this._action('/bluetooth/disconnect', mac, name, 'Desconectando…', btn, dot, false)
-          : () => this._action('/bluetooth/connect',    mac, name, 'Conectando…',    btn, dot, true);
-        log(`Bluetooth: ${res.message} — ${name || mac}`, 'success');
-      } else {
-        log(`Bluetooth: ${res.message}`, 'error');
-        btn.disabled    = false;
-        btn.textContent = willConnect ? 'Conectar' : 'Desconectar';
-      }
-    } catch (err) {
-      log(`Bluetooth error: ${err.message}`, 'error');
-      btn.disabled    = false;
-      btn.textContent = willConnect ? 'Conectar' : 'Desconectar';
-    }
-  },
-};
 
 // ============================================================
 // MÓDULO PLAYBACK — reproduce grabaciones en browser o Pi speaker
@@ -2444,13 +2200,19 @@ const DebugModule = {
     this._interval = null;
   },
 
-  // Helpers DOM
+  // Helpers DOM — los cuadrados de estado son chicos a propósito (label +
+  // valor nomás); el detalle (sub) no se ve pero queda de tooltip al pasar
+  // el mouse, en vez de ocupar lugar en el cuadrado.
   _set(id, val, sub, dotClass) {
     const valEl = document.getElementById(`${id}-val`);
     const subEl = document.getElementById(`${id}-sub`);
     const dotEl = document.getElementById(`${id}-dot`);
     if (valEl && val !== undefined) valEl.textContent = val;
-    if (subEl && sub !== undefined) subEl.textContent = sub;
+    if (subEl && sub !== undefined) {
+      subEl.textContent = sub;
+      const row = subEl.closest('.dbg-row');
+      if (row) row.title = sub;
+    }
     if (dotEl && dotClass !== undefined) {
       dotEl.className = `dbg-dot ${dotClass}`;
     }
@@ -2688,284 +2450,6 @@ const DebugModule = {
 };
 
 // ============================================================
-// SETUP MODULE — editar parámetros del .env desde el browser
-// ============================================================
-const SetupModule = {
-  _bound: false,
-  _colorSchemes: null,
-
-  // Trae lib/color-schemes.json (roles + combinación de LEDs por color de
-  // carcasa) una sola vez y lo cachea — lo usan tanto el picker como el
-  // preview, no hace falta refetchear en cada click.
-  async _loadColorSchemes() {
-    if (this._colorSchemes) return this._colorSchemes;
-    this._colorSchemes = await fetch('/setup/color-schemes').then(r => r.json());
-    return this._colorSchemes;
-  },
-
-  // Grilla de tarjetas — una por color de carcasa, cada una con su swatch,
-  // nombre y una fila de puntitos compactos (mismo orden de roles en las 4)
-  // para poder comparar las combinaciones de un vistazo sin clickear una
-  // por una. Tocar una tarjeta la selecciona y expande el detalle abajo.
-  _renderColorGrid(selected) {
-    const wrap = document.getElementById('setup-color-grid');
-    if (!wrap || !this._colorSchemes) return;
-    wrap.innerHTML = '';
-    for (const [key, def] of Object.entries(this._colorSchemes.colors)) {
-      const dots = this._colorSchemes.roles
-        .map(role => `<span class="color-card-dot" style="background:${def.leds[role.key]?.swatch || '#000'}"></span>`)
-        .join('');
-      const card = document.createElement('button');
-      card.type = 'button';
-      card.className = 'color-card' + (key === selected ? ' selected' : '');
-      card.dataset.color = key;
-      card.innerHTML = `
-        <span class="color-card-swatch" style="background:${def.swatch}"></span>
-        <span class="color-card-name">${def.label}</span>
-        <span class="color-card-dots">${dots}</span>
-      `;
-      card.addEventListener('click', () => {
-        document.getElementById('setup-brumexa-color').value = key;
-        wrap.querySelectorAll('.color-card').forEach(el => el.classList.toggle('selected', el.dataset.color === key));
-        this._renderColorDetail(key);
-      });
-      wrap.appendChild(card);
-    }
-  },
-
-  _renderColorDetail(colorKey) {
-    const wrap = document.getElementById('setup-color-detail');
-    if (!wrap || !this._colorSchemes) return;
-    const scheme = this._colorSchemes.colors[colorKey];
-    if (!scheme) { wrap.innerHTML = ''; return; }
-    wrap.innerHTML = this._colorSchemes.roles.map(role => {
-      const led = scheme.leds[role.key];
-      if (!led) return '';
-      return `<div class="color-detail-row">
-        <span class="color-detail-dot" style="background:${led.swatch}"></span>
-        <span class="color-detail-role">${role.label}</span>
-        <span class="color-detail-name">${led.name}</span>
-      </div>`;
-    }).join('');
-  },
-
-  async _initColorPicker(selected) {
-    await this._loadColorSchemes();
-    document.getElementById('setup-brumexa-color').value = selected;
-    this._renderColorGrid(selected);
-    this._renderColorDetail(selected);
-  },
-
-  async load() {
-    if (!this._bound) {
-      this._bound = true;
-      const saveBtn = document.getElementById('btn-setup-save');
-      if (saveBtn) saveBtn.addEventListener('click', () => this.save());
-
-      const keyEl  = document.getElementById('setup-api-key');
-      const togBtn = document.getElementById('btn-toggle-token');
-      if (keyEl && togBtn) {
-        togBtn.addEventListener('click', () => {
-          keyEl.type = keyEl.type === 'password' ? 'text' : 'password';
-          togBtn.textContent = keyEl.type === 'password' ? 'Mostrar' : 'Ocultar';
-        });
-      }
-
-      // Umbral de sensibilidad — label en vivo + push al servidor con debounce
-      const threshEl = document.getElementById('setup-talk-threshold');
-      const valEl     = document.getElementById('val-talk-threshold');
-      if (threshEl) {
-        let _threshTimer = null;
-        threshEl.addEventListener('input', () => {
-          if (valEl) valEl.textContent = threshEl.value;
-          clearTimeout(_threshTimer);
-          _threshTimer = setTimeout(() => this._pushTalkThreshold(), 400);
-        });
-      }
-
-      // Ganancia del mic — mismo patrón: aplica en caliente + persiste en
-      // .env, sin reiniciar (antes esto solo tomaba efecto con "Guardar y
-      // reiniciar", cortando la sesión en curso para un valor que ya existe
-      // como endpoint en caliente).
-      const gainEl = document.getElementById('setup-mic-gain');
-      if (gainEl) {
-        let _gainTimer = null;
-        gainEl.addEventListener('input', () => {
-          clearTimeout(_gainTimer);
-          _gainTimer = setTimeout(() => this._pushMicGain(), 400);
-        });
-      }
-
-      // Volumen de la voz del agente — slider: label + dB se actualizan al
-      // instante en cada tick, el push al servidor va con debounce (mismo
-      // patrón que el mic). Aplica en caliente + persiste en .env, sin
-      // reiniciar ni cortar la sesión.
-      const speakerGainEl    = document.getElementById('setup-speaker-gain');
-      const speakerGainVal   = document.getElementById('val-speaker-gain');
-      const speakerGainDb    = document.getElementById('lbl-speaker-gain');
-      const updateSpeakerGainLabels = () => {
-        if (!speakerGainEl) return;
-        const v  = parseFloat(speakerGainEl.value);
-        const db = (20 * Math.log10(v)).toFixed(1);
-        if (speakerGainVal) speakerGainVal.textContent = `${v.toFixed(1)}x`;
-        if (speakerGainDb)  speakerGainDb.textContent  = `${db >= 0 ? '+' : ''}${db} dB`;
-      };
-      if (speakerGainEl) {
-        let _speakerGainTimer = null;
-        updateSpeakerGainLabels();
-        speakerGainEl.addEventListener('input', () => {
-          updateSpeakerGainLabels();
-          clearTimeout(_speakerGainTimer);
-          _speakerGainTimer = setTimeout(() => this._pushSpeakerGain(), 400);
-        });
-      }
-    }
-
-    const status = document.getElementById('setup-status');
-    if (status) { status.textContent = 'Cargando…'; status.className = 'setup-status'; }
-    try {
-      const cfg = await fetch('/setup/config').then(r => r.json());
-      const get = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
-      get('setup-rag-url',     cfg.ragApiUrl);
-      get('setup-device-id',   cfg.deviceId);
-      get('setup-api-key',     cfg.apiKey);
-      get('setup-device-name', cfg.deviceName);
-      await this._initColorPicker(cfg.brumexaColor || 'negro');
-      get('setup-mic-gain',    cfg.micGain);
-      get('setup-speaker-gain', cfg.speakerGain);
-      get('setup-talk-threshold', cfg.talkThreshold);
-      const valEl = document.getElementById('val-talk-threshold');
-      if (valEl) valEl.textContent = document.getElementById('setup-talk-threshold')?.value || cfg.talkThreshold || '-25';
-      // Solo refresca los labels (x / dB) con el valor recién cargado — sin
-      // pasar por 'input' para no disparar un push innecesario de vuelta al
-      // servidor con el mismo valor que ya está corriendo.
-      const speakerGainElLoaded = document.getElementById('setup-speaker-gain');
-      if (speakerGainElLoaded) {
-        const v  = parseFloat(speakerGainElLoaded.value);
-        const db = (20 * Math.log10(v)).toFixed(1);
-        const vEl = document.getElementById('val-speaker-gain');
-        const dEl = document.getElementById('lbl-speaker-gain');
-        if (vEl) vEl.textContent = `${v.toFixed(1)}x`;
-        if (dEl) dEl.textContent = `${db >= 0 ? '+' : ''}${db} dB`;
-      }
-      if (status) status.textContent = '';
-    } catch (err) {
-      if (status) { status.textContent = `Error: ${err.message}`; status.className = 'setup-status error'; }
-    }
-  },
-
-  async _pushTalkThreshold() {
-    const v = parseFloat(document.getElementById('setup-talk-threshold')?.value);
-    if (isNaN(v)) return;
-    try {
-      await fetch('/session/talk-threshold', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ threshold: v }),
-      });
-      log(`Sensibilidad mic → ${v} dBFS`, 'info');
-      // Deja el valor como default en .env para el próximo arranque, sin
-      // cortar la sesión actual (a diferencia de "Guardar y reiniciar").
-      await fetch('/setup/config/live', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ talkThreshold: v }),
-      });
-    } catch (err) {
-      log(`Error actualizando sensibilidad: ${err.message}`, 'error');
-    }
-  },
-
-  async _pushMicGain() {
-    const v = parseFloat(document.getElementById('setup-mic-gain')?.value);
-    if (isNaN(v)) return;
-    try {
-      // /session/mic-gain es el gain que realmente usa la sesión de LiveKit
-      // (la conversación con el agente) — distinto de /config/mic-gain, que
-      // es el del pipeline viejo de browser/grabaciones.
-      await fetch('/session/mic-gain', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ gain: v }),
-      });
-      log(`Ganancia mic → ${v}x`, 'info');
-      await fetch('/setup/config/live', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ micGain: v }),
-      });
-    } catch (err) {
-      log(`Error actualizando ganancia: ${err.message}`, 'error');
-    }
-  },
-
-  async _pushSpeakerGain() {
-    const v = parseFloat(document.getElementById('setup-speaker-gain')?.value);
-    if (isNaN(v)) return;
-    try {
-      // /session/speaker-gain ajusta el volumen de la voz del agente en la
-      // sesión de LiveKit en curso, sin reiniciar ni cortar la llamada.
-      await fetch('/session/speaker-gain', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ gain: v }),
-      });
-      log(`Volumen del agente → ${v}x`, 'info');
-      await fetch('/setup/config/live', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ speakerGain: v }),
-      });
-    } catch (err) {
-      log(`Error actualizando volumen del agente: ${err.message}`, 'error');
-    }
-  },
-
-  async save() {
-    const btn    = document.getElementById('btn-setup-save');
-    const status = document.getElementById('setup-status');
-    const body   = {
-      ragApiUrl:  (document.getElementById('setup-rag-url')?.value    || '').trim(),
-      deviceId:   (document.getElementById('setup-device-id')?.value  || '').trim(),
-      apiKey:     (document.getElementById('setup-api-key')?.value    || '').trim(),
-      deviceName: (document.getElementById('setup-device-name')?.value || '').trim(),
-      brumexaColor: document.getElementById('setup-brumexa-color')?.value || 'negro',
-      micGain:     document.getElementById('setup-mic-gain')?.value    || '4.0',
-      speakerGain: document.getElementById('setup-speaker-gain')?.value || '3.0',
-      talkThreshold: document.getElementById('setup-talk-threshold')?.value || '-25',
-    };
-
-    if (!body.ragApiUrl) { if (status) { status.textContent = 'RAG API URL es requerido'; status.className = 'setup-status error'; } return; }
-    if (!body.deviceId)  { if (status) { status.textContent = 'Device ID es requerido'; status.className = 'setup-status error'; } return; }
-    if (!body.apiKey)    { if (status) { status.textContent = 'API Key es requerido'; status.className = 'setup-status error'; } return; }
-
-    if (btn) btn.disabled = true;
-    if (status) { status.textContent = 'Guardando…'; status.className = 'setup-status'; }
-
-    try {
-      const res = await fetch('/setup/config', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(body),
-      }).then(r => r.json());
-
-      if (!res.ok) throw new Error(res.error || 'Error desconocido');
-
-      if (status) { status.textContent = 'Guardado. Reiniciando en 3s…'; status.className = 'setup-status success'; }
-      let c = 3;
-      const tick = setInterval(() => {
-        c--;
-        if (c <= 0) { clearInterval(tick); location.reload(); }
-        else if (status) status.textContent = `Guardado. Reiniciando en ${c}s…`;
-      }, 1000);
-    } catch (err) {
-      if (status) { status.textContent = `Error: ${err.message}`; status.className = 'setup-status error'; }
-      if (btn) btn.disabled = false;
-    }
-  },
-};
-
-// ============================================================
 // INIT
 // ============================================================
 (async function init() {
@@ -2991,9 +2475,7 @@ const SetupModule = {
 
     if (cfg.server) {
       const dev = deviceLabel(cfg.server.platform, cfg.server.arch);
-      ui.smDeviceIcon.textContent = dev.icon;
-      ui.smDeviceVal.textContent  = dev.name;
-      ui.smDeviceDot.className    = 'sm-dot connected';
+      ui.smDeviceDot.className = 'brand-dot connected';
       log(`Dispositivo: ${dev.name} (${cfg.server.hostname} · ${cfg.server.arch})`, 'info');
 
       isLinux     = cfg.server.platform === 'linux';
@@ -3014,8 +2496,7 @@ const SetupModule = {
 
   } catch {
     log('No se pudo contactar al servidor Express en /config', 'warn');
-    ui.smDeviceVal.textContent = 'Sin respuesta';
-    ui.smDeviceDot.className   = 'sm-dot error';
+    ui.smDeviceDot.className = 'brand-dot error';
   }
 
   // Solo deshabilitar el botón si de verdad hace falta getUserMedia (modo
@@ -3025,9 +2506,6 @@ const SetupModule = {
     ui.btnMic.disabled = true;
     log('Botón de mic deshabilitado — sin HTTPS/localhost no hay acceso al mic del navegador.', 'warn');
   }
-
-  // ─── Nombre del micrófono (si ya hay permiso previo) ─────────────────────
-  updateMicName();
 
   // ─── En Raspberry: usar el cliente nativo @livekit/rtc-node ──────────────
   // Mic y speaker los maneja la Pi directo (arecord ↔ AudioSource ↔ aplay).
@@ -3110,32 +2588,17 @@ const SetupModule = {
       updateSpeakerState();
     }
 
-    // Actualizar tarjeta Dispositivo según la fuente seleccionada
-    const updateDeviceCard = () => {
-      const isPi = getSelectedSource() === 'pi';
-      if (isPi) {
-        const deviceName = ui.alsaDeviceSelect.options[ui.alsaDeviceSelect.selectedIndex]?.text || 'ALSA';
-        ui.smDeviceSub.textContent = deviceName;
-      } else {
-        updateMicName();   // lee el mic del browser con enumerateDevices
-      }
-    };
-
     // Mostrar/ocultar dropdown ALSA — grabación disponible en ambas fuentes
     const updateSourceState = () => {
       const isPi = getSelectedSource() === 'pi';
       ui.alsaDeviceWrap.style.display = isPi ? '' : 'none';
       ui.btnRecStart.disabled         = false;
       ui.btnRecStart.title            = '';
-      updateDeviceCard();
     };
 
     ui.audioSourceRadios.forEach((radio) => {
       radio.addEventListener('change', updateSourceState);
     });
-
-    // También actualizar si cambia el dispositivo ALSA seleccionado
-    ui.alsaDeviceSelect.addEventListener('change', updateDeviceCard);
 
     updateSourceState(); // estado inicial
 
@@ -3173,31 +2636,12 @@ const SetupModule = {
   await RecorderModule.show();
   GainControls.init(state.micGain || 4);
 
-  // ─── Bluetooth (solo Linux) ───────────────────────────────────────────────
-  if (isLinux) BluetoothModule.init();
-
-  // ─── Tab nav — siempre visible; Terminal solo en Linux ───────────────────
-  const tabNav = document.getElementById('tab-nav');
-  if (tabNav) {
-    tabNav.style.display = 'flex';
-    if (!isLinux) {
-      const termBtn = tabNav.querySelector('[data-tab="terminal"]');
-      if (termBtn) termBtn.style.display = 'none';
-    }
-    tabNav.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const tab = btn.dataset.tab;
-        // "Terminal Pi" y "Configuracion" ahora son páginas propias
-        // (/terminal, /configuracion) en vez de tabs internos — navegar
-        // en vez de cambiar de sección en esta misma página.
-        if (tab === 'terminal') { window.location.href = '/terminal'; return; }
-        if (tab === 'setup')    { window.location.href = '/configuracion'; return; }
-
-        tabNav.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        document.getElementById('panel-section').style.display    = tab === 'panel' ? '' : 'none';
-      });
-    });
+  // ─── Nav — "Terminal Pi" y "Configuracion" son links normales a sus
+  // propias páginas (/terminal, /configuracion); Terminal solo tiene sentido
+  // en Linux (corre comandos de la Pi), así que se oculta en el resto.
+  if (!isLinux) {
+    const termLink = document.getElementById('nav-terminal');
+    if (termLink) termLink.style.display = 'none';
   }
 
   // ─── Sincronizar el botón si ya hay una sesión activa (ej. arrancada por

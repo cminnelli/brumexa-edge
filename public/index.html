@@ -3,8 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Brumexa-Edge 2</title>
-  <link rel="stylesheet" href="style.css?v=16" />
+  <title>Brumexa — Panel</title>
+  <script>
+    // Aplica el tema guardado ANTES de pintar — evita el flash del tema
+    // equivocado al cargar. El resto del toggle vive en theme.js.
+    (function () {
+      var t = localStorage.getItem('brumexa-theme');
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css?v=18" />
 </head>
 <body>
 
@@ -13,10 +24,10 @@
      TODAS las pestañas (Panel/Terminal/Configuracion) mientras
      los LEDs tengan un problema. Oculto por defecto.
 ════════════════════════════════════════════════════════════ -->
-<div id="leds-alert-banner" style="display:none; position:sticky; top:0; z-index:999; background:#c0392b; color:#fff; padding:10px 16px; font:14px/1.4 system-ui, sans-serif; align-items:center; gap:12px; flex-wrap:wrap;">
+<div id="leds-alert-banner" style="display:none; position:sticky; top:0; z-index:999; background:#ef4444; color:#fff; padding:10px 16px; font:14px/1.4 'Inter', system-ui, sans-serif; align-items:center; gap:12px; flex-wrap:wrap;">
   <strong>💡 LEDs:</strong>
   <span id="leds-alert-text">verificando…</span>
-  <button id="leds-alert-retry" style="margin-left:auto; background:#fff; color:#c0392b; border:none; border-radius:4px; padding:4px 10px; cursor:pointer; font-weight:600;">Reintentar</button>
+  <button id="leds-alert-retry" style="margin-left:auto; background:#fff; color:#ef4444; border:none; border-radius:6px; padding:4px 10px; cursor:pointer; font-weight:600;">Reintentar</button>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════
@@ -25,20 +36,15 @@
 <header class="site-header">
   <div class="site-header__inner">
     <div class="site-header__brand">
-      <div class="brand-dot" id="sm-device-dot"></div>
+      <span class="brand-dot" id="sm-device-dot"></span>
       <span class="brand-name">Brumexa</span>
-      <span class="brand-tag" id="sm-device-val">Edge V2</span>
-      <span class="badge-mode" id="badge-mode">LiveKit</span>
     </div>
-    <div class="site-header__device">
-      <span class="device-icon" id="sm-device-icon">🖥</span>
-      <span class="device-sub" id="sm-device-sub">—</span>
-    </div>
-    <nav id="tab-nav" class="tab-nav" style="display:none">
-      <button class="tab-btn active" data-tab="panel">Panel</button>
-      <button class="tab-btn" data-tab="terminal">Terminal Pi</button>
-      <button class="tab-btn" data-tab="setup">Configuracion</button>
+    <nav class="tab-nav">
+      <a class="tab-btn active" href="/">Panel</a>
+      <a class="tab-btn" id="nav-terminal" href="/terminal">Terminal Pi</a>
+      <a class="tab-btn" href="/configuracion">Configuracion</a>
     </nav>
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambiar tema" title="Cambiar tema"></button>
   </div>
 </header>
 
@@ -47,9 +53,11 @@
 ════════════════════════════════════════════════════════════ -->
 <main id="panel-section" class="page-wrap">
 
-  <!-- ── Barra de estado ──────────────────────────────────────────────── -->
-  <div class="status-bar">
-
+  <!-- Estados compartidos (setLiveKitStatus/setChannelStatus/setMicStatus) —
+       ya no se muestran como franja aparte (quedaba repetido con el estado
+       que ahora vive adentro de cada card), pero los elementos se dejan acá,
+       ocultos, para que esas funciones sigan teniendo dónde escribir. -->
+  <div class="status-bar" style="display:none" aria-hidden="true">
     <div class="stat-chip">
       <span class="stat-chip__dot" id="sm-lk-dot"></span>
       <div class="stat-chip__body">
@@ -58,7 +66,6 @@
         <span class="stat-chip__sub" id="sm-lk-sub">cloud de voz IA</span>
       </div>
     </div>
-
     <div class="stat-chip" id="sm-canal-card">
       <span class="stat-chip__dot" id="sm-canal-dot"></span>
       <div class="stat-chip__body">
@@ -67,7 +74,6 @@
         <span class="stat-chip__sub" id="sm-canal-sub">sala y agente IA</span>
       </div>
     </div>
-
     <div class="stat-chip">
       <span class="stat-chip__dot" id="sm-mic-dot"></span>
       <div class="stat-chip__body">
@@ -76,39 +82,24 @@
         <span class="stat-chip__sub" id="sm-mic-sub">fuente de audio</span>
       </div>
     </div>
+  </div>
 
-  </div><!-- /status-bar -->
-
-  <!-- ── Layout principal: izquierda (voz) + derecha (herramientas) ──── -->
+  <!-- ── Layout principal — una sola columna, centrada, más minimalista ── -->
   <div class="panel-layout">
-
-    <!-- ══════════════════════════════════════════════
-         COLUMNA IZQUIERDA — Sesión de voz
-    ══════════════════════════════════════════════ -->
     <div class="panel-main">
 
-      <!-- § Conexión a LiveKit -->
+      <!-- § Conexión a LiveKit — todo lo de esta sesión vive acá adentro -->
       <div class="card">
         <div class="card-section-hdr">
-          <span class="card-section-icon">📡</span>
+          <span class="card-section-icon">🤖</span>
           <div>
-            <div class="card-section-title">Conexión de voz</div>
+            <div class="card-section-title">LiveKit — Agente IA</div>
             <div class="card-section-desc">Conectate al servidor LiveKit para hablar con el agente de IA</div>
           </div>
           <div class="session-uptime" id="session-uptime" style="display:none">
             <span class="uptime-dot"></span>
             <span id="uptime-display">00:00:00</span>
           </div>
-        </div>
-
-        <!-- Modo de operación -->
-        <div class="field">
-          <label class="field-label">Modo</label>
-          <div class="mode-selector">
-            <button class="mode-btn active" data-mode="livekit">🤖 LiveKit — Agente IA</button>
-            <button class="mode-btn"        data-mode="mictest">🎙 Test de micrófono</button>
-          </div>
-          <p class="field-hint" id="mode-hint">Conecta el micrófono al agente de IA vía LiveKit para hablar en lenguaje natural.</p>
         </div>
 
         <!-- Fuente de audio — solo Pi/Linux -->
@@ -220,6 +211,48 @@
           </div>
         </div>
 
+        <!-- Estado en vivo de la sala — sala, agente, speaker, LEDs -->
+        <div class="divider"></div>
+        <div class="dbg-rows">
+          <div class="dbg-row">
+            <span class="dbg-icon">📡</span>
+            <div class="dbg-body">
+              <div class="dbg-label">LiveKit</div>
+              <div class="dbg-val" id="dbg-lk-val">Sin conectar</div>
+              <div class="dbg-sub" id="dbg-lk-sub">—</div>
+            </div>
+            <span class="dbg-dot idle" id="dbg-lk-dot"></span>
+          </div>
+          <div class="dbg-row">
+            <span class="dbg-icon">🤖</span>
+            <div class="dbg-body">
+              <div class="dbg-label">Agente IA</div>
+              <div class="dbg-val" id="dbg-agent-val">Sin sala</div>
+              <div class="dbg-sub" id="dbg-agent-sub">—</div>
+            </div>
+            <span class="dbg-dot idle" id="dbg-agent-dot"></span>
+          </div>
+          <div class="dbg-row">
+            <span class="dbg-icon">🔈</span>
+            <div class="dbg-body">
+              <div class="dbg-label">Speaker</div>
+              <div class="dbg-val" id="dbg-spk-val">Inactivo</div>
+              <div class="dbg-sub" id="dbg-spk-sub">—</div>
+            </div>
+            <span class="dbg-dot idle" id="dbg-spk-dot"></span>
+          </div>
+          <div class="dbg-row">
+            <span class="dbg-icon">💡</span>
+            <div class="dbg-body">
+              <div class="dbg-label">LEDs</div>
+              <div class="dbg-val" id="dbg-leds-val">Verificando…</div>
+              <div class="dbg-sub" id="dbg-leds-sub">—</div>
+            </div>
+            <button class="dbg-tile-link" id="btn-leds-test">Probar</button>
+            <span class="dbg-dot idle" id="dbg-leds-dot"></span>
+          </div>
+        </div>
+
         <!-- Botón principal -->
         <div class="connect-row">
           <button id="btn-mic" class="btn-connect">Conectar</button>
@@ -228,13 +261,13 @@
 
       </div><!-- /card conexión -->
 
-      <!-- § VU Meter (modo Test Mic) -->
-      <div class="card" id="vumeter-card" style="display:none">
+      <!-- § Test de micrófono — card propia e independiente de LiveKit -->
+      <div class="card" id="vumeter-card">
         <div class="card-section-hdr">
-          <span class="card-section-icon">📊</span>
+          <span class="card-section-icon">🎙</span>
           <div>
             <div class="card-section-title">Test de micrófono</div>
-            <div class="card-section-desc">Nivel de señal del micrófono en tiempo real</div>
+            <div class="card-section-desc">Nivel de señal del micrófono en tiempo real, sin pasar por LiveKit</div>
           </div>
         </div>
         <canvas id="vu-canvas" width="600" height="60"></canvas>
@@ -243,6 +276,22 @@
           <span id="vu-db" class="vu-db">— dB</span>
         </div>
         <p class="field-hint">Hablá para ver el nivel de señal del micrófono.</p>
+
+        <div class="dbg-rows" style="margin-top:10px">
+          <div class="dbg-row">
+            <span class="dbg-icon">🎤</span>
+            <div class="dbg-body">
+              <div class="dbg-label">Micrófono</div>
+              <div class="dbg-val" id="dbg-mic-val">Inactivo</div>
+              <div class="dbg-sub" id="dbg-mic-sub">—</div>
+            </div>
+            <span class="dbg-dot idle" id="dbg-mic-dot"></span>
+          </div>
+        </div>
+
+        <div class="connect-row">
+          <button id="btn-mictest" class="btn-connect">Analizar micrófono</button>
+        </div>
       </div>
 
       <!-- § Log de eventos -->
@@ -258,100 +307,6 @@
           <button class="btn-ghost" id="btn-clear-log">Limpiar</button>
         </div>
         <ul id="log" class="event-log"></ul>
-      </div>
-
-    </div><!-- /panel-main -->
-
-    <!-- ══════════════════════════════════════════════
-         COLUMNA DERECHA — Herramientas
-    ══════════════════════════════════════════════ -->
-    <aside class="panel-aside">
-
-      <!-- § Panel de diagnóstico — siempre visible -->
-      <div class="card" id="debug-card">
-        <div class="dbg-rows">
-
-          <!-- Mic -->
-          <div class="dbg-row">
-            <span class="dbg-icon">🎤</span>
-            <div class="dbg-body">
-              <div class="dbg-label">Micrófono</div>
-              <div class="dbg-val" id="dbg-mic-val">Inactivo</div>
-              <div class="dbg-sub" id="dbg-mic-sub">—</div>
-            </div>
-            <span class="dbg-dot idle" id="dbg-mic-dot"></span>
-          </div>
-
-          <!-- Speaker -->
-          <div class="dbg-row">
-            <span class="dbg-icon">🔈</span>
-            <div class="dbg-body">
-              <div class="dbg-label">Speaker</div>
-              <div class="dbg-val" id="dbg-spk-val">Inactivo</div>
-              <div class="dbg-sub" id="dbg-spk-sub">—</div>
-            </div>
-            <span class="dbg-dot idle" id="dbg-spk-dot"></span>
-          </div>
-
-          <!-- LiveKit -->
-          <div class="dbg-row">
-            <span class="dbg-icon">📡</span>
-            <div class="dbg-body">
-              <div class="dbg-label">LiveKit</div>
-              <div class="dbg-val" id="dbg-lk-val">Sin conectar</div>
-              <div class="dbg-sub" id="dbg-lk-sub">—</div>
-            </div>
-            <span class="dbg-dot idle" id="dbg-lk-dot"></span>
-          </div>
-
-          <!-- Agente -->
-          <div class="dbg-row">
-            <span class="dbg-icon">🤖</span>
-            <div class="dbg-body">
-              <div class="dbg-label">Agente IA</div>
-              <div class="dbg-val" id="dbg-agent-val">Sin sala</div>
-              <div class="dbg-sub" id="dbg-agent-sub">—</div>
-            </div>
-            <span class="dbg-dot idle" id="dbg-agent-dot"></span>
-          </div>
-
-          <!-- LEDs -->
-          <div class="dbg-row">
-            <span class="dbg-icon">💡</span>
-            <div class="dbg-body">
-              <div class="dbg-label">LEDs</div>
-              <div class="dbg-val" id="dbg-leds-val">Verificando…</div>
-              <div class="dbg-sub" id="dbg-leds-sub">—</div>
-            </div>
-            <button class="btn-ghost" id="btn-leds-test" style="margin-right:6px">Probar</button>
-            <span class="dbg-dot idle" id="dbg-leds-dot"></span>
-          </div>
-
-        </div>
-      </div>
-
-      <!-- § Bluetooth — solo Linux -->
-      <div class="card" id="bluetooth-card" style="display:none">
-        <div class="card-hdr-row">
-          <div class="card-section-hdr" style="margin-bottom:0">
-            <span class="card-section-icon">🔵</span>
-            <div>
-              <div class="card-section-title">Bluetooth</div>
-              <div class="card-section-desc">Altavoz o auriculares para escuchar al agente</div>
-            </div>
-          </div>
-          <div class="btn-group">
-            <button class="btn-ghost" id="btn-bt-refresh">Pareados</button>
-            <button class="btn-ghost btn-ghost--accent" id="btn-bt-scan">📡 Buscar</button>
-          </div>
-        </div>
-        <div id="bt-scan-status" class="scan-status" style="display:none">
-          <span class="scan-pulse"></span>
-          Escaneando… <span id="bt-scan-countdown">8</span>s
-        </div>
-        <ul id="bt-device-list" class="device-list">
-          <li class="list-empty">Presioná "Buscar" para escanear o "Pareados" para ver los ya vinculados.</li>
-        </ul>
       </div>
 
       <!-- § Grabaciones — solo Linux -->
@@ -393,148 +348,14 @@
         </ul>
       </div>
 
-    </aside><!-- /panel-aside -->
+    </div><!-- /panel-main -->
 
   </div><!-- /panel-layout -->
 
 </main><!-- #panel-section -->
 
-<!-- ═══════════════════════════════════════════════════════════
-     TERMINAL PI — diagnóstico del sistema
-════════════════════════════════════════════════════════════ -->
-<div id="terminal-section" class="terminal-wrap" style="display:none">
-
-  <!-- Sidebar: categorías y comandos -->
-  <aside class="term-sidebar">
-    <div class="term-sidebar__header">
-      <span>Comandos</span>
-      <span class="term-sidebar__hint">Clic para ejecutar</span>
-    </div>
-    <!-- Buscador -->
-    <div class="term-search-wrap">
-      <span class="term-search-icon">🔍</span>
-      <input id="term-search" class="term-search" type="search"
-             placeholder="Buscar comando…" autocomplete="off" />
-    </div>
-    <div id="term-groups" class="term-groups"></div>
-    <div class="term-custom">
-      <div class="term-custom__label">Comando libre</div>
-      <div class="term-input-row">
-        <span class="term-prompt">$</span>
-        <input id="term-input" class="term-input" type="text"
-               placeholder="bash comando…" autocomplete="off" spellcheck="false" />
-      </div>
-      <button id="btn-term-run" class="btn-term-run">Ejecutar ↵</button>
-    </div>
-  </aside>
-
-  <!-- Output -->
-  <div class="term-main">
-    <div class="term-main__header">
-      <span class="term-main__title">Output</span>
-      <button class="btn-ghost" id="btn-term-clear">Limpiar</button>
-    </div>
-    <div id="term-output" class="term-output"></div>
-  </div>
-
-</div><!-- #terminal-section -->
-
-<!-- ═══════════════════════════════════════════════════════════
-     SETUP — editar parámetros del .env desde el browser
-════════════════════════════════════════════════════════════ -->
-<div id="setup-section" class="page-wrap" style="display:none">
-  <div class="setup-wrap">
-    <div class="card">
-      <div class="card-section-hdr">
-        <span class="card-section-icon">&#9881;</span>
-        <div>
-          <div class="card-section-title">Configuracion del dispositivo</div>
-          <div class="card-section-desc">Parametros del .env — los cambios se aplican al reiniciar</div>
-        </div>
-      </div>
-
-      <div class="field">
-        <label class="field-label" for="setup-rag-url">RAG API URL</label>
-        <input type="text" id="setup-rag-url" class="setup-input"
-               placeholder="http://192.168.1.50:4000" autocomplete="off" spellcheck="false" />
-        <p class="field-hint">URL del servidor central brumexa-rag-api-v2 (el que emite los tokens de LiveKit)</p>
-      </div>
-
-      <div class="field">
-        <label class="field-label" for="setup-device-id">Device ID</label>
-        <input type="text" id="setup-device-id" class="setup-input"
-               placeholder="brume-1" autocomplete="off" spellcheck="false" />
-        <p class="field-hint">Identificador del dispositivo, dado de alta en brumexa-admin-v2</p>
-      </div>
-
-      <div class="field">
-        <label class="field-label" for="setup-api-key">API Key</label>
-        <div class="setup-token-row">
-          <input type="password" id="setup-api-key" class="setup-input"
-                 placeholder="brx_..." autocomplete="off" spellcheck="false" />
-          <button class="btn-ghost" id="btn-toggle-token">Mostrar</button>
-        </div>
-        <p class="field-hint" id="setup-token-info">Se genera/rota en brumexa-admin-v2 → Devices</p>
-      </div>
-
-      <div class="field">
-        <label class="field-label" for="setup-device-name">Nombre del dispositivo</label>
-        <input type="text" id="setup-device-name" class="setup-input"
-               placeholder="brumexa-edge" autocomplete="off" />
-        <p class="field-hint">Identificador del dispositivo (DEVICE_NAME). Visible en LiveKit como nombre del participante.</p>
-      </div>
-
-      <div class="field">
-        <label class="field-label">Color del Brumexa</label>
-        <input type="hidden" id="setup-brumexa-color" value="negro" />
-        <div class="color-grid" id="setup-color-grid"></div>
-        <div class="color-detail" id="setup-color-detail"></div>
-        <p class="field-hint">Color de la carcasa de este equipo (BRUMEXA_COLOR) — cada uno tiene su propia combinación de luces (respiración, tu voz, voz del agente, calibración). Elegí uno para ver el detalle y aplicarlo. Requiere "Guardar y reiniciar".</p>
-      </div>
-
-      <div class="field">
-        <label class="field-label" for="setup-mic-gain">Ganancia del microfono (MIC_GAIN)</label>
-        <input type="number" id="setup-mic-gain" class="setup-input setup-input--short"
-               min="1" max="32" step="0.5" />
-        <p class="field-hint">Multiplicador de ganancia de software. 1.0 = sin boost &nbsp;·&nbsp; 4.0 = +12 dB &nbsp;·&nbsp; 16.0 = +24 dB. Se aplica al toque y queda guardado como default automáticamente — no hace falta "Guardar y reiniciar" para este campo.</p>
-      </div>
-
-      <div class="field">
-        <label class="field-label" for="setup-speaker-gain">Volumen de la voz del agente (SPEAKER_GAIN)</label>
-        <div class="gain-controls">
-          <div class="gain-row">
-            <input type="range" id="setup-speaker-gain" class="gain-slider"
-                   min="0.5" max="10" step="0.1" value="3">
-            <span class="gain-val" id="val-speaker-gain">3.0x</span>
-            <span class="gain-db" id="lbl-speaker-gain">dB</span>
-          </div>
-        </div>
-        <p class="field-hint">Multiplicador de ganancia de software sobre el audio que llega del agente por LiveKit. 1.0 = sin boost &nbsp;·&nbsp; 3.0 = +9.5 dB. Se aplica en tiempo real mientras arrastrás el slider (con una sesión activa, lo escuchás al toque) y queda guardado como default automáticamente — no hace falta "Guardar y reiniciar" para este campo.</p>
-      </div>
-
-      <div class="field">
-        <label class="field-label" for="setup-talk-threshold">Sensibilidad de la voz (umbral)</label>
-        <div class="gain-controls">
-          <div class="gain-row">
-            <input type="range" id="setup-talk-threshold" class="gain-slider"
-                   min="-50" max="-15" step="1" value="-25">
-            <span class="gain-val" id="val-talk-threshold">-25</span>
-            <span class="gain-db" id="lbl-talk-threshold">dBFS</span>
-          </div>
-        </div>
-        <p class="field-hint">Un solo umbral conectado a dos cosas: corta el "respirando" del LED y pasa a ámbar ("hablando"), y controla cuándo el servidor lo imprime en consola. Se aplica al toque, sin reiniciar, y queda guardado como default automáticamente — no hace falta "Guardar y reiniciar" para este campo. Hacia la izquierda (más negativo) = más sensible — pero por debajo de -30 puede empezar a dispararse con ruido ambiente.</p>
-      </div>
-
-      <div class="setup-actions">
-        <button id="btn-setup-save" class="btn-connect">Guardar y reiniciar</button>
-        <span id="setup-status" class="setup-status"></span>
-      </div>
-    </div>
-  </div>
-</div><!-- #setup-section -->
-
 <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-<script src="app.js?v=29"></script>
-<script src="terminal.js?v=15"></script>
+<script src="theme.js?v=1"></script>
+<script src="app.js?v=30"></script>
 </body>
 </html>

@@ -2,34 +2,80 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 /* ─── Tokens ── */
+/* Paleta calcada de brumexa-admin-v2 (src/styles.css: violeta como acento,
+   mismo radio de esquina, mismo criterio de bordes translúcidos). Claro es
+   la base (admin también arranca en claro); oscuro se activa por preferencia
+   del sistema o a mano con el toggle del header (persiste en localStorage,
+   ver theme.js). */
 :root {
-  --bg:        #090b12;
-  --surface:   #0f1221;
-  --surface2:  #161929;
-  --border:    #1e2338;
-  --border2:   #252c45;
-  --accent:    #5b6af0;
-  --accent-h:  #7381f5;
-  --danger:    #e05555;
-  --success:   #3dba76;
-  --warn:      #e0a032;
-  --info:      #5b9af0;
-  --text:      #dde1f0;
-  --text2:     #9aa0be;
-  --muted:     #5a5f7a;
-  --r:         8px;
-  --r-sm:      5px;
+  --bg:        #f7f7fa;
+  --surface:   #ffffff;
+  --surface2:  #f1f0f4;
+  --border:    #e5e7eb;
+  --border2:   #d8dae0;
+  --accent:    #6d28d9;
+  --accent-h:  #5b21b6;
+  --danger:    #dc2626;
+  --success:   #16a34a;
+  --warn:      #d97706;
+  --info:      #2563eb;
+  --text:      #111827;
+  --text2:     #6b7280;
+  --muted:     #9ca3af;
+  --r:         0.5rem;
+  --r-sm:      0.375rem;
   --tr:        0.15s ease;
+
+  --font-sans:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Manrope', var(--font-sans);
+}
+
+/* Oscuro por preferencia del sistema, salvo que se haya elegido "light" a mano */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:       #0f1117;
+    --surface:  #1a1d27;
+    --surface2: #232733;
+    --border:   rgba(255, 255, 255, 0.08);
+    --border2:  rgba(255, 255, 255, 0.14);
+    --accent:   #7c3aed;
+    --accent-h: #8b5cf6;
+    --danger:   #ef4444;
+    --success:  #3dba76;
+    --warn:     #e0a032;
+    --info:     #5b9af0;
+    --text:     #e2e8f0;
+    --text2:    #94a3b8;
+    --muted:    #6b7280;
+  }
+}
+/* Oscuro elegido a mano (gana siempre, sin importar el sistema) */
+:root[data-theme="dark"] {
+  --bg:       #0f1117;
+  --surface:  #1a1d27;
+  --surface2: #232733;
+  --border:   rgba(255, 255, 255, 0.08);
+  --border2:  rgba(255, 255, 255, 0.14);
+  --accent:   #7c3aed;
+  --accent-h: #8b5cf6;
+  --danger:   #ef4444;
+  --success:  #3dba76;
+  --warn:     #e0a032;
+  --info:     #5b9af0;
+  --text:     #e2e8f0;
+  --text2:    #94a3b8;
+  --muted:    #6b7280;
 }
 
 /* ─── Base ── */
 body {
-  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans);
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
   font-size: 14px;
   line-height: 1.5;
+  transition: background var(--tr), color var(--tr);
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -70,9 +116,11 @@ body {
 .brand-dot.error      { background: var(--danger); }
 .brand-dot.connecting { background: var(--warn); animation: blink .8s infinite; }
 .brand-name {
+  font-family: var(--font-display);
   font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.3px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--text);
 }
 .brand-tag {
@@ -81,52 +129,54 @@ body {
   color: var(--muted);
   letter-spacing: 0.05em;
 }
-.badge-mode {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  padding: 2px 8px;
-  border-radius: 20px;
-  background: var(--accent);
-  color: #fff;
-}
 
-/* Device info */
-.site-header__device {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
+/* Theme toggle */
+.theme-toggle {
+  width: 30px; height: 30px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: transparent;
   color: var(--text2);
-  font-size: 12px;
+  cursor: pointer;
+  transition: background var(--tr), border-color var(--tr), color var(--tr);
+  flex-shrink: 0;
 }
-.device-icon { font-size: 14px; }
-.device-sub  { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+.theme-toggle:hover { background: var(--surface2); border-color: var(--border2); color: var(--accent); }
+.theme-toggle svg { display: block; }
 
-/* Tab nav */
+/* Tab nav — pill segmentado; la pestaña activa usa texto en acento sobre
+   fondo claro (no relleno sólido) para no competir con los botones de
+   acción, que son los únicos elementos en violeta sólido de la página. */
 .tab-nav {
   display: flex;
   gap: 2px;
   margin-left: auto;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
+  border-radius: 999px;
   padding: 3px;
 }
 .tab-btn {
-  padding: 5px 16px;
+  padding: 6px 18px;
   border: none;
-  border-radius: 3px;
+  border-radius: 999px;
   background: transparent;
-  color: var(--muted);
+  color: var(--text2);
   font-size: 12px;
   font-weight: 600;
+  letter-spacing: 0.01em;
   cursor: pointer;
-  transition: background var(--tr), color var(--tr);
+  transition: background var(--tr), color var(--tr), box-shadow var(--tr);
   white-space: nowrap;
 }
 .tab-btn:hover:not(.active) { color: var(--text); background: var(--surface2); }
-.tab-btn.active { background: var(--accent); color: #fff; }
+.tab-btn.active {
+  background: var(--surface);
+  color: var(--accent);
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
 
 /* ═══════════════════════════════════════════════════════════
    PAGE WRAPPER
@@ -141,29 +191,30 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   STATUS BAR
+   STATUS BAR — una sola franja unificada (antes eran 3 tarjetas
+   sueltas, se sentía repetido con el panel de diagnóstico de al lado)
 ══════════════════════════════════════════════════════════ */
 .status-bar {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.625rem;
-}
-
-.stat-chip {
+  display: flex;
+  align-items: stretch;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r);
+  overflow: hidden;
+}
+
+.stat-chip {
+  flex: 1;
+  min-width: 0;
   padding: 10px 14px;
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: 0;
-  transition: border-color var(--tr);
+  border-right: 1px solid var(--border);
+  transition: background var(--tr);
 }
-.stat-chip.no-worker {
-  border-color: rgba(224,160,50,.4);
-  background: rgba(224,160,50,.04);
-}
+.stat-chip:last-child { border-right: none; }
+.stat-chip.no-worker { background: rgba(224,160,50,.06); }
 .stat-chip__dot {
   width: 8px; height: 8px;
   border-radius: 50%;
@@ -201,16 +252,14 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   PANEL LAYOUT
+   PANEL LAYOUT — una sola columna centrada (antes era grid de 2
+   columnas; sin el panel de diagnóstico aparte no hacía falta)
 ══════════════════════════════════════════════════════════ */
 .panel-layout {
-  display: grid;
-  grid-template-columns: 1fr 340px;
-  gap: 0.875rem;
-  align-items: start;
+  max-width: 640px;
+  margin: 0 auto;
 }
-.panel-main  { display: flex; flex-direction: column; gap: 0.875rem; }
-.panel-aside { display: flex; flex-direction: column; gap: 0.875rem; }
+.panel-main { display: flex; flex-direction: column; gap: 1rem; }
 
 /* ═══════════════════════════════════════════════════════════
    CARDS
@@ -235,7 +284,8 @@ body {
   margin-top: 1px;
 }
 .card-section-title {
-  font-size: 13px;
+  font-family: var(--font-display);
+  font-size: 14px;
   font-weight: 700;
   color: var(--text);
   line-height: 1.3;
@@ -279,33 +329,6 @@ body {
   background: var(--border);
   margin: 1rem 0;
 }
-
-/* ═══════════════════════════════════════════════════════════
-   MODE SELECTOR
-══════════════════════════════════════════════════════════ */
-.mode-selector {
-  display: flex;
-  gap: 4px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 3px;
-  width: fit-content;
-}
-.mode-btn {
-  padding: 6px 14px;
-  border: none;
-  border-radius: 3px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background var(--tr), color var(--tr);
-  white-space: nowrap;
-}
-.mode-btn:hover:not(.active) { color: var(--text); }
-.mode-btn.active { background: var(--accent); color: #fff; font-weight: 700; }
 
 /* ═══════════════════════════════════════════════════════════
    AUDIO SOURCE SELECTOR
@@ -625,138 +648,8 @@ body {
 
 .btn-group { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
 
-/* ═══════════════════════════════════════════════════════════
-   BLUETOOTH
-══════════════════════════════════════════════════════════ */
-.scan-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--accent);
-  padding: 6px 0 4px;
-}
-.scan-pulse {
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: blink 1s infinite;
-  flex-shrink: 0;
-}
-
-.device-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  max-height: 220px;
-  overflow-y: auto;
-}
-.device-list::-webkit-scrollbar       { width: 3px; }
-.device-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
-
 .list-empty,
 .rec-empty  { font-size: 12px; color: var(--muted); text-align: center; padding: 12px 0; }
-
-.bt-item {
-  display: grid;
-  grid-template-columns: auto auto 1fr auto;
-  grid-template-rows: auto auto;
-  column-gap: 8px;
-  row-gap: 2px;
-  align-items: center;
-  padding: 9px 10px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  font-size: 12px;
-}
-.bt-item.bt-audio { border-color: rgba(61,186,118,.25); background: rgba(61,186,118,.02); }
-
-/* Fila 1: dot | type-icon | name | btn */
-.bt-item-dot {
-  grid-column: 1; grid-row: 1;
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  background: var(--muted);
-  flex-shrink: 0;
-  transition: background var(--tr);
-  align-self: center;
-}
-.bt-item-dot.connected { background: var(--success); box-shadow: 0 0 5px var(--success); }
-
-.bt-item-type {
-  grid-column: 2; grid-row: 1 / 3;
-  font-size: 18px;
-  line-height: 1;
-  cursor: default;
-  align-self: center;
-}
-
-.bt-item-name {
-  grid-column: 3; grid-row: 1;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.bt-item-btn {
-  grid-column: 4; grid-row: 1 / 3;
-  align-self: center;
-  padding: 4px 12px;
-  border: 1px solid var(--border2);
-  border-radius: 4px;
-  background: transparent;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background var(--tr), color var(--tr), border-color var(--tr);
-  color: var(--text2);
-  white-space: nowrap;
-}
-.bt-item-btn:hover            { background: var(--accent); color: #fff; border-color: var(--accent); }
-.bt-item-btn.disconnect       { border-color: var(--success); color: var(--success); }
-.bt-item-btn.disconnect:hover { background: var(--success); color: #fff; }
-.bt-item-btn.bt-cancel        { border-color: var(--warn); color: var(--warn); }
-.bt-item-btn.bt-cancel:hover  { background: var(--warn); color: #fff; }
-.bt-item-btn:disabled         { opacity: .4; cursor: default; }
-
-/* Fila 2: — | — | mac + badge | — */
-.bt-item-sub {
-  grid-column: 3; grid-row: 2;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
-.bt-item-mac {
-  font-size: 10px;
-  color: var(--muted);
-  font-family: 'Consolas', monospace;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.bt-item-badge {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: .04em;
-  flex-shrink: 0;
-  padding: 1px 5px;
-  border-radius: 3px;
-  text-transform: uppercase;
-}
-.bt-item-badge--audio {
-  background: rgba(61,186,118,.15);
-  color: var(--success);
-  border: 1px solid rgba(61,186,118,.3);
-}
 
 /* ═══════════════════════════════════════════════════════════
    GRABACIONES
@@ -868,6 +761,7 @@ body {
 }
 .gain-slider {
   -webkit-appearance: none; appearance: none;
+  width: 100%; min-width: 0;
   height: 3px; border-radius: 2px;
   background: var(--border2);
   outline: none; cursor: pointer;
@@ -880,7 +774,7 @@ body {
 }
 .gain-slider:hover::-webkit-slider-thumb { background: var(--accent-h); }
 .gain-val {
-  font-size: 11px; font-weight: 700; color: var(--fg);
+  font-size: 11px; font-weight: 700; color: var(--text);
   text-align: right;
 }
 .gain-db {
@@ -888,29 +782,52 @@ body {
   text-align: right;
 }
 
-/* ─── Debug panel ────────────────────────────────────────────────────────── */
-.dbg-rows { display: flex; flex-direction: column; gap: 2px; }
+/* ─── Estado en vivo — cuadrados chicos, sin relleno, más elegante que las
+   filas anteriores (fondo + texto largo). El label/valor alcanza; el detalle
+   (dbg-sub) queda como title (tooltip) en vez de ocupar lugar visible. ── */
+.dbg-rows {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: 8px;
+}
 
 .dbg-row {
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 7px 8px;
+  justify-content: center;
+  gap: 3px;
+  padding: 12px 6px;
   border-radius: var(--r-sm);
-  background: var(--bg);
   border: 1px solid var(--border);
+  text-align: center;
+  transition: border-color var(--tr);
 }
-.dbg-icon  { font-size: 16px; flex-shrink: 0; width: 22px; text-align: center; }
-.dbg-body  { flex: 1; min-width: 0; }
-.dbg-label { font-size: 10px; font-weight: 700; text-transform: uppercase;
-             letter-spacing: .06em; color: var(--muted); margin-bottom: 1px; }
-.dbg-val   { font-size: 12px; font-weight: 600; color: var(--text);
-             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dbg-sub   { font-size: 10px; color: var(--muted); font-family: 'Consolas', monospace;
-             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dbg-row:hover { border-color: var(--border2); }
+.dbg-icon  { font-size: 15px; line-height: 1; }
+.dbg-body  { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 0; max-width: 100%; }
+.dbg-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.dbg-val   { font-size: 11px; font-weight: 600; color: var(--text);
+             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.dbg-sub   { display: none; }
+.dbg-tile-link {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: none;
+  padding: 0;
+  margin-top: 1px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.dbg-tile-link:hover { color: var(--accent-h); }
 
 .dbg-dot {
-  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  position: absolute; top: 7px; right: 7px;
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
   transition: background .3s, box-shadow .3s;
 }
 .dbg-dot.idle    { background: var(--border2); }
@@ -1239,21 +1156,11 @@ body {
 /* ═══════════════════════════════════════════════════════════
    RESPONSIVE
 ══════════════════════════════════════════════════════════ */
-@media (max-width: 960px) {
-  .panel-layout { grid-template-columns: 1fr; }
-  .panel-aside  { display: grid; grid-template-columns: 1fr 1fr; }
-}
 @media (max-width: 720px) {
-  .status-bar { grid-template-columns: 1fr 1fr; }
-  .panel-aside { grid-template-columns: 1fr; }
   .source-selector { grid-template-columns: 1fr; }
   .terminal-wrap { grid-template-columns: 1fr; height: auto; }
   .term-sidebar  { height: 350px; }
   .term-main     { min-height: 400px; }
-}
-@media (max-width: 480px) {
-  .status-bar { grid-template-columns: 1fr; }
-  .site-header__device { display: none; }
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1301,6 +1208,41 @@ body {
 }
 .setup-status.success { color: var(--success); }
 .setup-status.error   { color: var(--danger); }
+
+/* ═══════════════════════════════════════════════════════════
+   KV ROWS + PILLS + FLOW NOTES — usados en /configuracion para
+   mostrar resultados de acciones (auth, token, parlante, calibración)
+══════════════════════════════════════════════════════════ */
+.kv { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.kv-row {
+  display: flex; justify-content: space-between; gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+}
+.kv-row:last-child { border-bottom: none; }
+.kv-row .k { color: var(--text2); }
+.kv-row .v { color: var(--text); font-weight: 600; text-align: right; }
+
+.pill {
+  display: inline-block;
+  font-size: 12px; font-weight: 600;
+  padding: 5px 10px;
+  border-radius: var(--r-sm);
+}
+.pill.ok   { background: rgba(61,186,118,.14); color: var(--success); }
+.pill.bad  { background: rgba(239,68,68,.14);  color: var(--danger); }
+.pill.warn { background: rgba(224,160,50,.14); color: var(--warn); }
+
+.flow-note {
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text2);
+}
+.flow-note.ok  { color: var(--success); border-color: rgba(61,186,118,.3); }
+.flow-note.bad { color: var(--danger);  border-color: rgba(239,68,68,.3); }
 
 /* ─── Picker de color de carcasa (BRUMEXA_COLOR) ──
    Grilla de tarjetas (una por color de carcasa) — cada una con su swatch,

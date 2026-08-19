@@ -4,124 +4,195 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Brumexa — Configuración</title>
-  <link rel="stylesheet" href="local.css" />
+  <script>
+    (function () {
+      var t = localStorage.getItem('brumexa-theme');
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css?v=18" />
 </head>
 <body>
 
-<header class="header">
-  <span class="header-icon">⚙️</span>
-  <div>
-    <div class="header-title">Brumexa — Configuración</div>
-    <div class="header-sub">Credenciales, mic, parlante y pruebas de conexión</div>
+<header class="site-header">
+  <div class="site-header__inner">
+    <div class="site-header__brand">
+      <span class="brand-name">Brumexa</span>
+    </div>
+    <nav class="tab-nav">
+      <a class="tab-btn" href="/">Panel</a>
+      <a class="tab-btn" id="nav-terminal" href="/terminal">Terminal Pi</a>
+      <a class="tab-btn active" href="/configuracion">Configuracion</a>
+    </nav>
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambiar tema" title="Cambiar tema"></button>
   </div>
 </header>
 
-<main class="page">
+<main class="page-wrap" style="max-width:760px">
 
-  <div class="card span-2" id="card-refresh">
-    <div class="status-chip ok" id="chip-refresh">
-      <span class="status-dot pulse"></span>
+  <!-- § Estado de carga -->
+  <div class="card" id="card-refresh" style="padding:0.75rem 1.25rem">
+    <div class="pill ok" id="chip-refresh" style="display:inline-flex; align-items:center; gap:8px">
       <span id="txt-refresh">Cargando…</span>
     </div>
   </div>
 
-  <div class="card span-2" id="card-creds">
-    <div class="card-title"><span class="ic">🔑</span>Credenciales (.env)</div>
-    <div class="field-edit">
-      <label for="inp-rag-url">RAG_API_URL</label>
-      <div class="field-edit-row">
-        <input type="text" id="inp-rag-url" placeholder="http://192.168.0.x:4000" />
+  <!-- § Actualizar Brumexa -->
+  <div class="card" id="card-update">
+    <div class="card-section-hdr">
+      <span class="card-section-icon">⬇️</span>
+      <div>
+        <div class="card-section-title">Actualizar Brumexa</div>
+        <div class="card-section-desc">Trae los últimos cambios del código (equivalente a "git pull") y reinicia el servidor solo si hubo novedades</div>
       </div>
     </div>
-    <div class="field-edit">
-      <label for="inp-device-id">BRUMEXA_DEVICE_ID</label>
-      <div class="field-edit-row">
-        <input type="text" id="inp-device-id" placeholder="mi-dispositivo-01" />
-      </div>
-    </div>
-    <div class="field-edit">
-      <label for="inp-api-key">BRUMEXA_API_KEY</label>
-      <div class="field-edit-row">
-        <input type="text" id="inp-api-key" placeholder="brx_..." />
-      </div>
-    </div>
-    <div class="field-edit">
-      <label for="inp-device-name">DEVICE_NAME</label>
-      <div class="field-edit-row">
-        <input type="text" id="inp-device-name" placeholder="brumexa-01" />
-      </div>
-    </div>
-    <div class="field-edit">
-      <label>BRUMEXA_COLOR (color de la carcasa)</label>
-      <input type="hidden" id="inp-brumexa-color" value="negro" />
-      <div class="color-grid" id="color-grid"></div>
-      <div class="color-detail" id="color-detail"></div>
-      <div class="section-empty" style="margin-top:4px">Cada color tiene su propia combinación de luces (respiración, tu voz, voz del agente, calibración). Elegí uno para ver el detalle y aplicarlo.</div>
-    </div>
-    <div class="field-edit">
-      <label for="inp-mic-gain">MIC_GAIN</label>
-      <div class="field-edit-row">
-        <input type="text" id="inp-mic-gain" placeholder="4.0" />
-      </div>
-    </div>
-    <div class="field-edit">
-      <label for="inp-speaker-gain">SPEAKER_GAIN (volumen de la voz del agente)</label>
-      <div class="field-edit-row">
-        <input type="text" id="inp-speaker-gain" placeholder="3.0" />
-      </div>
-    </div>
-    <div class="field-edit">
-      <label for="inp-talk-threshold">Sensibilidad de la voz (umbral, dBFS) — corta el LED y el log al hablar</label>
-      <div class="field-edit-row" style="align-items:center">
-        <input type="range" id="inp-talk-threshold" min="-50" max="-15" step="1" value="-25" style="flex:1" />
-        <span id="val-talk-threshold" style="min-width:52px;text-align:right;font-family:monospace">-25 dBFS</span>
-      </div>
-      <div class="section-empty" style="margin-top:4px">Se aplica al toque, sin reiniciar. Más a la izquierda (negativo) = más sensible — por debajo de -30 puede dispararse con ruido ambiente.</div>
-    </div>
-    <button class="btn-test" id="btn-save-creds" onclick="saveCreds()" style="margin-top:10px">💾 Guardar credenciales</button>
-    <div id="creds-save-result"></div>
+    <div class="kv" id="kv-version" style="margin-bottom:10px"></div>
+    <button class="btn-connect" id="btn-update" style="width:auto; padding:9px 20px">⬇️ Buscar actualizaciones</button>
+    <div id="update-result" style="margin-top:10px"></div>
   </div>
 
-  <div class="card" id="card-auth">
-    <div class="card-title"><span class="ic">🔐</span>Autenticación RAG API</div>
-    <div class="kv" id="kv-auth"></div>
-    <button class="btn-test" id="btn-force-auth" onclick="forceAuth()">🔐 Forzar autenticación</button>
-    <div id="auth-result"></div>
-  </div>
-
-  <div class="card" id="card-token">
-    <div class="card-title"><span class="ic">🎫</span>Token de LiveKit</div>
-    <div id="token-status" class="section-empty">sin probar todavía en esta sesión</div>
-    <button class="btn-test" id="btn-force-token" onclick="forceToken()">🎫 Forzar token</button>
-    <div id="token-result"></div>
-  </div>
-
-  <div class="card" id="card-mic">
-    <div class="card-title"><span class="ic">🎤</span>Micrófono</div>
-    <div class="section-empty" style="margin-bottom:8px">Aplica en la próxima sesión que arranques, no afecta una ya conectada. No se guarda en .env — vuelve a "activado" si reiniciás el server.</div>
-    <button class="btn-test" id="btn-mic-toggle" onclick="toggleMic()">Cargando…</button>
-  </div>
-
-  <div class="card" id="card-speaker">
-    <div class="card-title"><span class="ic">🔊</span>Parlante</div>
-    <button class="btn-test" id="btn-speaker-test" onclick="runSpeakerTest()">🔊 Probar parlante (tono 1kHz)</button>
-    <div id="speaker-test-result"></div>
-  </div>
-
-  <div class="card" id="card-calibration">
-    <div class="card-title"><span class="ic">🎚️</span>Calibración de ruido ambiente</div>
-    <div class="section-empty" style="margin-bottom:8px">
-      Corre sola al arrancar (blinks blancos + 4s de silencio asumido) y fija el umbral de voz según el ruido real de este ambiente. Volvé a correrla si el arranque agarró un mal momento.
+  <!-- § Credenciales — identidad del dispositivo contra la RAG API -->
+  <div class="card" id="card-creds">
+    <div class="card-section-hdr">
+      <span class="card-section-icon">🔑</span>
+      <div>
+        <div class="card-section-title">Credenciales</div>
+        <div class="card-section-desc">Se aplican al toque, sin reiniciar el servidor — solo se guardan en el .env para el próximo arranque</div>
+      </div>
     </div>
-    <div class="kv" id="kv-calibration"></div>
-    <button class="btn-test" id="btn-recalibrate" onclick="runRecalibration()">🎚️ Recalibrar ahora (4s de silencio)</button>
-    <div id="calibration-result"></div>
+
+    <div class="field">
+      <label class="field-label" for="inp-rag-url">RAG_API_URL</label>
+      <input type="text" id="inp-rag-url" class="setup-input" placeholder="http://192.168.0.x:4000" autocomplete="off" spellcheck="false" />
+    </div>
+    <div class="field">
+      <label class="field-label" for="inp-device-id">BRUMEXA_DEVICE_ID</label>
+      <input type="text" id="inp-device-id" class="setup-input" placeholder="mi-dispositivo-01" autocomplete="off" spellcheck="false" />
+    </div>
+    <div class="field">
+      <label class="field-label" for="inp-api-key">BRUMEXA_API_KEY</label>
+      <div class="setup-token-row">
+        <input type="password" id="inp-api-key" class="setup-input" placeholder="brx_..." autocomplete="off" spellcheck="false" />
+        <button class="btn-ghost" id="btn-toggle-key" type="button" title="Mostrar/ocultar">👁</button>
+        <button class="btn-ghost" id="btn-copy-key" type="button" title="Copiar">⧉</button>
+      </div>
+    </div>
+    <div class="field">
+      <label class="field-label" for="inp-device-name">DEVICE_NAME</label>
+      <input type="text" id="inp-device-name" class="setup-input" placeholder="brumexa-01" autocomplete="off" />
+    </div>
+
+    <div class="connect-row">
+      <button class="btn-connect" id="btn-save-creds" style="flex:none; padding:10px 24px">💾 Guardar credenciales</button>
+    </div>
+    <div id="creds-save-result" style="margin-top:10px"></div>
   </div>
 
-  <div class="refresh-note"><a href="/local" style="color:var(--accent)">← Ver diagnóstico de solo lectura en /local</a></div>
+  <!-- § Diagnóstico de conexión — un solo botón, prueba auth + token juntos -->
+  <div class="card" id="card-diag">
+    <div class="card-hdr-row">
+      <div class="card-section-hdr" style="margin-bottom:0">
+        <span class="card-section-icon">🔗</span>
+        <div>
+          <div class="card-section-title">Diagnóstico de conexión</div>
+          <div class="card-section-desc">Prueba autenticación contra la RAG API y pedido de token de LiveKit, de una</div>
+        </div>
+      </div>
+      <button class="btn-ghost" id="btn-test-connection" type="button">Probar conexión</button>
+    </div>
+    <div class="kv" id="kv-diag"></div>
+    <div id="diag-result" style="margin-top:8px"></div>
+  </div>
+
+  <!-- § Apariencia — color de la carcasa (único campo que reinicia) -->
+  <div class="card" id="card-color">
+    <div class="card-section-hdr">
+      <span class="card-section-icon">🎨</span>
+      <div>
+        <div class="card-section-title">Apariencia</div>
+        <div class="card-section-desc">Color de la carcasa — cada uno tiene su propia combinación de luces. Es el único cambio que reinicia el servidor.</div>
+      </div>
+    </div>
+    <input type="hidden" id="inp-brumexa-color" value="negro" />
+    <div class="color-grid" id="color-grid"></div>
+    <div class="color-detail" id="color-detail"></div>
+    <div class="connect-row">
+      <button class="btn-connect" id="btn-save-color" style="flex:none; padding:9px 20px">🎨 Guardar color</button>
+    </div>
+    <div id="color-save-result" style="margin-top:10px"></div>
+  </div>
+
+  <!-- § Sonido — ganancias, sensibilidad, mic/parlante, calibración -->
+  <div class="card" id="card-sound">
+    <div class="card-section-hdr">
+      <span class="card-section-icon">🔊</span>
+      <div>
+        <div class="card-section-title">Sonido</div>
+        <div class="card-section-desc">Ganancias, sensibilidad de voz, mic/parlante y calibración de ruido ambiente</div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="field-label" for="inp-mic-gain">MIC_GAIN</label>
+      <input type="text" id="inp-mic-gain" class="setup-input setup-input--short" placeholder="4.0" />
+    </div>
+    <div class="field">
+      <label class="field-label" for="inp-speaker-gain">SPEAKER_GAIN (volumen de la voz del agente)</label>
+      <input type="text" id="inp-speaker-gain" class="setup-input setup-input--short" placeholder="3.0" />
+    </div>
+    <div class="connect-row">
+      <button class="btn-connect" id="btn-save-sound" style="flex:none; padding:9px 20px">💾 Guardar ganancias</button>
+    </div>
+    <div id="sound-save-result" style="margin-top:10px"></div>
+
+    <div class="divider"></div>
+
+    <div class="field">
+      <label class="field-label" for="inp-talk-threshold">Sensibilidad de la voz (umbral, dBFS)</label>
+      <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
+        <div class="gain-row" style="grid-template-columns:1fr 60px">
+          <input type="range" id="inp-talk-threshold" class="gain-slider" min="-50" max="-15" step="1" value="-25" />
+          <span class="gain-val" id="val-talk-threshold">-25 dBFS</span>
+        </div>
+      </div>
+      <p class="field-hint">Se aplica al toque, sin reiniciar. Más a la izquierda (negativo) = más sensible — por debajo de -30 puede dispararse con ruido ambiente.</p>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="field">
+      <label class="field-label">Micrófono</label>
+      <button class="btn-ghost" id="btn-mic-toggle" type="button">Cargando…</button>
+      <p class="field-hint">Aplica en la próxima sesión — no afecta una ya conectada. No se guarda en .env.</p>
+    </div>
+
+    <div class="field">
+      <label class="field-label">Parlante</label>
+      <button class="btn-ghost" id="btn-speaker-test" type="button">🔊 Probar parlante (tono 1kHz)</button>
+      <div id="speaker-test-result" style="margin-top:8px"></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="field">
+      <label class="field-label">Calibración de ruido ambiente</label>
+      <p class="field-hint">Corre sola al arrancar (fija el umbral según el ruido real de este ambiente). Volvé a correrla si el arranque agarró un mal momento.</p>
+      <div class="kv" id="kv-calibration" style="margin-top:6px"></div>
+      <button class="btn-ghost" id="btn-recalibrate" type="button" style="margin-top:8px">🎚️ Recalibrar ahora (4s de silencio)</button>
+      <div id="calibration-result" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <p class="field-hint" style="text-align:center; padding:0.5rem 0 2rem">
+    <a href="/local" style="color:var(--accent)">← Ver diagnóstico de solo lectura en /local</a>
+  </p>
 
 </main>
 
+<script src="theme.js?v=1"></script>
 <script>
   function esc(s) {
     return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
@@ -142,6 +213,28 @@
   }
 
   let micEnabledState = true;
+
+  // ─── API key: oculta por default, ojito para mostrar, botón para copiar ──
+  document.getElementById('btn-toggle-key').addEventListener('click', () => {
+    const inp = document.getElementById('inp-api-key');
+    const btn = document.getElementById('btn-toggle-key');
+    const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    btn.textContent = show ? '🙈' : '👁';
+  });
+  document.getElementById('btn-copy-key').addEventListener('click', async () => {
+    const inp = document.getElementById('inp-api-key');
+    const btn = document.getElementById('btn-copy-key');
+    if (!inp.value) return;
+    try {
+      await navigator.clipboard.writeText(inp.value);
+      const prev = btn.textContent;
+      btn.textContent = '✔';
+      setTimeout(() => { btn.textContent = prev; }, 1200);
+    } catch {
+      alert('No se pudo copiar — copiala a mano.');
+    }
+  });
 
   // Color de carcasa (BRUMEXA_COLOR) — grilla de tarjetas + detalle de la
   // combinación de LEDs asignada, con los datos de lib/color-schemes.json
@@ -220,63 +313,202 @@
       document.getElementById('inp-talk-threshold').value = cfg.talkThreshold || '-25';
       document.getElementById('val-talk-threshold').textContent = `${cfg.talkThreshold || '-25'} dBFS`;
 
-      const auth = status.ragAuth || {};
-      document.getElementById('kv-auth').innerHTML = auth.error
-        ? `<div class="section-empty">Error: ${esc(auth.error)}</div>`
-        : kvRows([
-            ['Autenticado', auth.authenticated ? '✅ sí' : '❌ no'],
-            ['Negocio', auth.businessId],
-            ['Expira', auth.tokenExpiresAt ? new Date(auth.tokenExpiresAt).toLocaleString() : '—'],
-            ['Último error', auth.lastError ? `${esc(auth.lastError.message)} (${ageLabel(auth.lastError.at)})` : '—'],
-          ]);
-
       micEnabledState = status.micEnabled !== false;
       updateMicButton();
 
       renderCalibration(status.calibration);
 
-      chip.className = 'status-chip ok';
+      chip.className = 'pill ok';
       txt.textContent = `Actualizado ${new Date().toLocaleTimeString()}`;
     } catch (e) {
-      chip.className = 'status-chip error';
+      chip.className = 'pill bad';
       txt.textContent = `Error: ${e.message}`;
+    }
+
+    // "Actualizar Brumexa" (git pull) solo tiene sentido en la Raspberry real
+    // — en Windows/dev sería tocar el git de la compu de trabajo por error.
+    // La card queda siempre visible, pero deshabilitada fuera de Linux (el
+    // backend también lo rechaza aunque alguien fuerce el request).
+    try {
+      const cfg2 = await fetch('/config', { cache: 'no-store' }).then(r => r.json());
+      const btnUpdate = document.getElementById('btn-update');
+      if (cfg2.server?.platform === 'linux') {
+        loadVersion();
+      } else {
+        btnUpdate.disabled = true;
+        document.getElementById('kv-version').innerHTML =
+          `<div class="field-hint">No disponible — este server está corriendo en ${esc(cfg2.server?.platform || 'este equipo')}, no en la Raspberry.</div>`;
+      }
+    } catch {}
+  }
+
+  async function loadVersion() {
+    const kv = document.getElementById('kv-version');
+    kv.innerHTML = '<div class="field-hint">Consultando versión…</div>';
+    try {
+      const res  = await fetch('/configuracion/version', { cache: 'no-store' });
+      const data = await res.json();
+      if (!data.ok) { kv.innerHTML = `<div class="field-hint">${esc(data.error)}</div>`; return; }
+
+      const rows = [
+        ['Versión instalada', `${esc(data.subject)} (${data.hash})`],
+        ['Última actualización', `${new Date(data.date).toLocaleString()} (${ageLabel(new Date(data.date).getTime())})`],
+      ];
+      let banner = '';
+      if (data.behind === null) {
+        rows.push(['¿Hay más nuevas?', 'No se pudo chequear (sin red / sin remoto configurado)']);
+      } else if (data.behind === 0) {
+        banner = '<div class="pill ok" style="margin-top:8px">✔ Estás al día — no hay actualizaciones pendientes</div>';
+      } else {
+        banner = `<div class="pill warn" style="margin-top:8px">⬇️ Hay ${data.behind} actualización${data.behind === 1 ? '' : 'es'} disponible${data.behind === 1 ? '' : 's'} — tocá "Buscar actualizaciones" para traerla${data.behind === 1 ? '' : 's'}</div>`;
+      }
+      kv.innerHTML = kvRows(rows) + banner;
+    } catch (e) {
+      kv.innerHTML = `<div class="field-hint">Error consultando versión: ${esc(e.message)}</div>`;
     }
   }
 
-  async function saveCreds() {
-    const btn    = document.getElementById('btn-save-creds');
-    const result = document.getElementById('creds-save-result');
+  // Detalle técnico (output crudo de git) plegado por default — no hace
+  // falta entender git para usar esto, pero queda ahí si hay que mandárselo
+  // a un desarrollador.
+  function techDetails(output) {
+    if (!output) return '';
+    return `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:11px;color:var(--muted)">Ver detalle técnico</summary><pre style="white-space:pre-wrap;font-size:11px;color:var(--muted);margin-top:6px">${esc(output)}</pre></details>`;
+  }
+
+  async function runUpdate() {
+    const btn    = document.getElementById('btn-update');
+    const result = document.getElementById('update-result');
     btn.disabled = true;
-    btn.textContent = '💾 Guardando…';
+    btn.textContent = '⬇️ Buscando…';
+    result.innerHTML = '';
+    let data;
+    try {
+      data = await fetch('/configuracion/update', { method: 'POST' }).then(r => r.json());
+    } catch (e) {
+      result.innerHTML = `<div class="flow-note bad">✘ No se pudo conectar con el servidor: ${esc(e.message)}</div>`;
+      btn.disabled = false;
+      btn.textContent = '⬇️ Buscar actualizaciones';
+      return;
+    }
+
+    if (data.ok && data.upToDate) {
+      result.innerHTML = '<div class="flow-note ok">✔ Ya estás en la última versión — nada para traer.</div>';
+      btn.disabled = false;
+      btn.textContent = '⬇️ Buscar actualizaciones';
+      loadVersion();
+    } else if (data.ok) {
+      result.innerHTML = `<div class="flow-note ok">✔ Actualizado — reiniciando el servidor…</div>${techDetails(data.output)}`;
+      pollServerBack(result, btn, '⬇️ Buscar actualizaciones');
+    } else if (data.reason === 'local-changes') {
+      // Alguien tocó un archivo a mano en la Pi y eso choca con la
+      // actualización. Ofrecemos guardarlo aparte (git stash — no se
+      // pierde, queda recuperable) en vez de mostrar el error de git.
+      result.innerHTML = `
+        <div class="flow-note bad">⚠ ${esc(data.error)}</div>
+        <p class="field-hint" style="margin:6px 0">Podemos guardar esos cambios aparte (no se borran) y traer la actualización igual.</p>
+        <button class="btn-ghost" id="btn-stash-retry" type="button">Guardar cambios aparte y actualizar</button>
+        ${techDetails(data.output)}
+      `;
+      document.getElementById('btn-stash-retry').addEventListener('click', stashAndRetry);
+      btn.disabled = false;
+      btn.textContent = '⬇️ Buscar actualizaciones';
+    } else {
+      result.innerHTML = `<div class="flow-note bad">✘ ${esc(data.error || 'No se pudo actualizar')}</div>${techDetails(data.output)}`;
+      btn.disabled = false;
+      btn.textContent = '⬇️ Buscar actualizaciones';
+    }
+  }
+  document.getElementById('btn-update').addEventListener('click', runUpdate);
+
+  async function stashAndRetry() {
+    const btn    = document.getElementById('btn-stash-retry');
+    const result = document.getElementById('update-result');
+    btn.disabled = true;
+    btn.textContent = 'Guardando y actualizando…';
+    let data;
+    try {
+      data = await fetch('/configuracion/update/stash-and-retry', { method: 'POST' }).then(r => r.json());
+    } catch (e) {
+      result.innerHTML = `<div class="flow-note bad">✘ No se pudo conectar con el servidor: ${esc(e.message)}</div>`;
+      return;
+    }
+    if (data.ok && data.upToDate) {
+      result.innerHTML = '<div class="flow-note ok">✔ Cambios guardados aparte — ya estabas en la última versión.</div>';
+    } else if (data.ok) {
+      result.innerHTML = `<div class="flow-note ok">✔ Cambios guardados aparte y actualizado — reiniciando el servidor…</div>${techDetails(data.output)}`;
+      pollServerBack(result, document.getElementById('btn-update'), '⬇️ Buscar actualizaciones');
+    } else {
+      result.innerHTML = `<div class="flow-note bad">✘ ${esc(data.error || 'No se pudo actualizar')}</div>${techDetails(data.output)}`;
+    }
+  }
+
+  // ─── Guardado segmentado — cada card manda solo SUS campos; el backend
+  // (/setup/config) aplica en caliente lo que puede y solo reinicia si
+  // cambió el color de la carcasa (ver comentario en server.js). ──────────
+  async function saveFields(body, { btn, result, okMsg, restartLabel }) {
+    const restoreText = btn.textContent;
+    btn.disabled = true;
     result.innerHTML = '';
     try {
-      const res = await fetch('/setup/config', {
+      const res  = await fetch('/setup/config', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          ragApiUrl:  document.getElementById('inp-rag-url').value.trim(),
-          deviceId:   document.getElementById('inp-device-id').value.trim(),
-          apiKey:     document.getElementById('inp-api-key').value.trim(),
-          deviceName: document.getElementById('inp-device-name').value.trim(),
-          brumexaColor: document.getElementById('inp-brumexa-color').value,
-          micGain:     document.getElementById('inp-mic-gain').value.trim(),
-          speakerGain: document.getElementById('inp-speaker-gain').value.trim(),
-          talkThreshold: document.getElementById('inp-talk-threshold').value.trim(),
-        }),
+        body:    JSON.stringify(body),
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || 'error desconocido');
-      result.innerHTML = '<div class="flow-note ok">✔ Guardado — esperando que el servidor vuelva…</div>';
-      pollServerBack(result, btn, '💾 Guardar credenciales');
+
+      if (data.restarting) {
+        result.innerHTML = `<div class="flow-note ok">✔ Guardado — ${restartLabel || 'reiniciando el servidor'}…</div>`;
+        pollServerBack(result, btn, restoreText);
+      } else {
+        result.innerHTML = `<div class="flow-note ok">✔ ${okMsg || 'Guardado y aplicado, sin reiniciar'}</div>`;
+        btn.disabled = false;
+      }
     } catch (e) {
       result.innerHTML = `<div class="flow-note bad">✘ ${esc(e.message)}</div>`;
       btn.disabled = false;
-      btn.textContent = '💾 Guardar credenciales';
     }
   }
 
+  document.getElementById('btn-save-creds').addEventListener('click', () => {
+    saveFields({
+      ragApiUrl:  document.getElementById('inp-rag-url').value.trim(),
+      deviceId:   document.getElementById('inp-device-id').value.trim(),
+      apiKey:     document.getElementById('inp-api-key').value.trim(),
+      deviceName: document.getElementById('inp-device-name').value.trim(),
+    }, {
+      btn:    document.getElementById('btn-save-creds'),
+      result: document.getElementById('creds-save-result'),
+      okMsg:  'Guardado y aplicado — probá "Diagnóstico de conexión" para confirmar',
+    });
+  });
+
+  document.getElementById('btn-save-color').addEventListener('click', () => {
+    saveFields({
+      brumexaColor: document.getElementById('inp-brumexa-color').value,
+    }, {
+      btn:    document.getElementById('btn-save-color'),
+      result: document.getElementById('color-save-result'),
+      okMsg:  'Guardado — no cambió el color, no hizo falta reiniciar',
+      restartLabel: 'reiniciando para aplicar el color nuevo',
+    });
+  });
+
+  document.getElementById('btn-save-sound').addEventListener('click', () => {
+    saveFields({
+      micGain:     document.getElementById('inp-mic-gain').value.trim(),
+      speakerGain: document.getElementById('inp-speaker-gain').value.trim(),
+    }, {
+      btn:    document.getElementById('btn-save-sound'),
+      result: document.getElementById('sound-save-result'),
+      okMsg:  'Guardado y aplicado, sin reiniciar',
+    });
+  });
+
   // Slider de sensibilidad — label en vivo + push al servidor con debounce
-  // (no requiere "Guardar credenciales", aplica al toque).
+  // (no requiere "Guardar", aplica al toque).
   let _threshTimer = null;
   document.getElementById('inp-talk-threshold').addEventListener('input', (e) => {
     document.getElementById('val-talk-threshold').textContent = `${e.target.value} dBFS`;
@@ -292,9 +524,10 @@
     }, 400);
   });
 
-  // Sondea /configuracion/status cada 2s hasta 20s. Si vuelve, recarga la
-  // pagina. Si no vuelve (tipico de nodemon, que no reinicia solo ante un
-  // exit limpio), avisa que hay que reiniciar a mano con "rs" en la terminal.
+  // Sondea /configuracion/status cada 2s hasta 20s (solo se usa cuando SÍ
+  // hubo reinicio — cambio de color o "Actualizar Brumexa"). Si vuelve,
+  // recarga la pagina. Si no vuelve (tipico de nodemon, que no reinicia
+  // solo ante un exit limpio), avisa que hay que reiniciar a mano.
   async function pollServerBack(result, btn, restoreText) {
     for (let i = 0; i < 10; i++) {
       await new Promise(r => setTimeout(r, 2000));
@@ -305,63 +538,69 @@
     }
     result.innerHTML = `
       <div class="flow-note bad">
-        ⚠ Guardado en el .env, pero el servidor no volvió solo.
+        ⚠ Guardado, pero el servidor no volvió solo.
         Si estás corriendo con <code>nodemon</code> (npm run brumexa),
         andá a esa terminal y escribí <code>rs</code> + Enter — con PM2
-        debería haber vuelto solo, revisá <code>sudo pm2 list</code>.
+        debería haber vuelto solo, revisá <code>pm2 list</code> desde /terminal.
       </div>`;
     btn.disabled = false;
     btn.textContent = restoreText;
   }
 
-  async function forceAuth() {
-    const btn = document.getElementById('btn-force-auth');
-    const result = document.getElementById('auth-result');
-    btn.disabled = true; btn.textContent = '🔐 Autenticando…';
-    let data;
-    try {
-      const res = await fetch('/configuracion/force-auth', { method: 'POST' });
-      data = await res.json();
-    } catch (e) {
-      data = { ok: false, error: e.message };
-    }
-    result.innerHTML = data.ok
-      ? `<div class="flow-note ok">✔ Login OK — negocio=${esc(data.status?.businessId || '—')}</div>`
-      : `<div class="flow-note bad">✘ ${esc(data.error)}</div>`;
-    alert(data.ok
-      ? `✔ Autenticación OK\nNegocio: ${data.status?.businessId || '—'}\nExpira: ${data.status?.tokenExpiresAt ? new Date(data.status.tokenExpiresAt).toLocaleString() : '—'}`
-      : `✘ Falló la autenticación\n${data.error}`);
-    btn.disabled = false; btn.textContent = '🔐 Forzar autenticación';
-    loadAll();
-  }
+  // ─── Diagnóstico de conexión — un botón, prueba auth + token juntos ──────
+  document.getElementById('btn-test-connection').addEventListener('click', testConnection);
+  async function testConnection() {
+    const btn    = document.getElementById('btn-test-connection');
+    const kv     = document.getElementById('kv-diag');
+    const result = document.getElementById('diag-result');
+    btn.disabled = true;
+    btn.textContent = 'Probando…';
+    kv.innerHTML = '';
+    result.innerHTML = '';
 
-  async function forceToken() {
-    const btn = document.getElementById('btn-force-token');
-    const result = document.getElementById('token-result');
-    btn.disabled = true; btn.textContent = '🎫 Pidiendo token…';
-    let data;
+    let auth;
     try {
-      const res = await fetch('/configuracion/force-token', { method: 'POST' });
-      data = await res.json();
+      auth = await fetch('/configuracion/force-auth', { method: 'POST' }).then(r => r.json());
     } catch (e) {
-      data = { ok: false, error: e.message };
+      auth = { ok: false, error: e.message };
     }
-    document.getElementById('token-status').innerHTML = '';
-    result.innerHTML = data.ok
-      ? `<div class="flow-note ok">✔ Token OK — sala=${esc(data.roomName)}<br>server=${esc(data.serverUrl)}<br>token=${esc(data.tokenPreview)}</div>`
-      : `<div class="flow-note bad">✘ ${esc(data.error)}</div>`;
-    alert(data.ok
-      ? `✔ Token OK\nSala: ${data.roomName}\nServidor: ${data.serverUrl}\nToken: ${data.tokenPreview}`
-      : `✘ Falló pedir el token\n${data.error}`);
-    btn.disabled = false; btn.textContent = '🎫 Forzar token';
+
+    const rows = [
+      ['Autenticación', auth.ok ? '✅ OK' : `❌ ${esc(auth.error || 'falló')}`],
+      ['Negocio', auth.status?.businessId || '—'],
+    ];
+
+    let token = null;
+    if (auth.ok) {
+      try {
+        token = await fetch('/configuracion/force-token', { method: 'POST' }).then(r => r.json());
+      } catch (e) {
+        token = { ok: false, error: e.message };
+      }
+      rows.push(['Token LiveKit', token.ok ? '✅ OK' : `❌ ${esc(token.error || 'falló')}`]);
+      if (token.ok) {
+        rows.push(['Sala', token.roomName]);
+        rows.push(['Servidor', token.serverUrl]);
+      }
+    }
+
+    kv.innerHTML = kvRows(rows);
+    const allOk = auth.ok && token?.ok;
+    result.innerHTML = allOk
+      ? '<div class="flow-note ok">✔ Todo funciona — autenticación y token de LiveKit OK</div>'
+      : '<div class="flow-note bad">✘ Algo falló — revisá las credenciales arriba</div>';
+
+    btn.disabled = false;
+    btn.textContent = 'Probar conexión';
   }
 
   function updateMicButton() {
     const btn = document.getElementById('btn-mic-toggle');
-    btn.className = 'btn-test' + (micEnabledState ? '' : ' btn-test-off');
+    btn.className = 'btn-ghost' + (micEnabledState ? '' : ' btn-ghost--accent');
     btn.textContent = micEnabledState ? '🎤 Mic ACTIVADO — tocar para desactivar' : '🚫 Mic DESACTIVADO — tocar para activar';
   }
 
+  document.getElementById('btn-mic-toggle').addEventListener('click', toggleMic);
   async function toggleMic() {
     const btn = document.getElementById('btn-mic-toggle');
     btn.disabled = true;
@@ -380,6 +619,7 @@
     btn.disabled = false;
   }
 
+  document.getElementById('btn-speaker-test').addEventListener('click', runSpeakerTest);
   async function runSpeakerTest() {
     const btn    = document.getElementById('btn-speaker-test');
     const result = document.getElementById('speaker-test-result');
@@ -390,10 +630,10 @@
       const res  = await fetch('/configuracion/speaker-test', { method: 'POST' });
       const data = await res.json();
       result.innerHTML = data.ok
-        ? `<div class="pill ok" style="margin-top:6px">✅ ${esc(data.note || 'Tono reproducido')}</div>`
-        : `<div class="pill bad" style="margin-top:6px">⚠ Error: ${esc(data.error || data.output || 'desconocido')}</div>`;
+        ? `<div class="pill ok">✅ ${esc(data.note || 'Tono reproducido')}</div>`
+        : `<div class="pill bad">⚠ Error: ${esc(data.error || data.output || 'desconocido')}</div>`;
     } catch (e) {
-      result.innerHTML = `<div class="pill bad" style="margin-top:6px">⚠ Error: ${esc(e.message)}</div>`;
+      result.innerHTML = `<div class="pill bad">⚠ Error: ${esc(e.message)}</div>`;
     } finally {
       btn.disabled = false;
       btn.textContent = '🔊 Probar parlante (tono 1kHz)';
@@ -417,14 +657,14 @@
         <line x1="0" y1="${ty}" x2="${W}" y2="${ty}" stroke="var(--warn)" stroke-width="1" stroke-dasharray="4,3" />
         <polyline points="${points}" fill="none" stroke="var(--accent)" stroke-width="1.5" />
       </svg>
-      <div class="section-empty" style="margin-top:2px">línea punteada = umbral aplicado (${thresholdDbfs} dBFS) — ${ticksDbfs.length} muestras a lo largo de la ventana</div>
+      <div class="field-hint" style="margin-top:2px">línea punteada = umbral aplicado (${thresholdDbfs} dBFS) — ${ticksDbfs.length} muestras a lo largo de la ventana</div>
     `;
   }
 
   function renderCalibration(cal) {
     const kv = document.getElementById('kv-calibration');
     if (!cal) {
-      kv.innerHTML = '<div class="section-empty">Todavía no corrió en este arranque.</div>';
+      kv.innerHTML = '<div class="field-hint">Todavía no corrió en este arranque.</div>';
       return;
     }
     kv.innerHTML = kvRows([
@@ -436,6 +676,7 @@
     ]) + calibrationSparklineSvg(cal.ticksDbfs, cal.threshold);
   }
 
+  document.getElementById('btn-recalibrate').addEventListener('click', runRecalibration);
   async function runRecalibration() {
     const btn    = document.getElementById('btn-recalibrate');
     const result = document.getElementById('calibration-result');

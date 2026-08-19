@@ -13,14 +13,13 @@ const { startRecording, stopRecording, getStatus,
         listRecordings, RECORDINGS_DIR,
         reserveBrowserFilename, saveBrowserRecording,
         deleteRecording, boostCaptureGain } = require('./lib/recorder');
-const { setupBluetooth }                               = require('./lib/bluetooth');
 const { setupWifi, autoStartAP, startHealthMonitor, getStatus: getWifiStatus } = require('./lib/wifi');
 const { setupLocalDebug }                              = require('./lib/local-debug');
 const { setupConfiguracion }                           = require('./lib/configuracion');
 const { session: lkSession }                           = require('./lib/livekit-session');
 const leds                                             = require('./lib/leds');
 const ragAuth                                          = require('./lib/rag-auth');
-const { requestRoomToken }                             = require('./lib/rag-token');
+const { requestRoomToken, setCredentials: setTokenCredentials } = require('./lib/rag-token');
 const { measureNoiseFloor, POP_SETTLE_MS: MIC_MONITOR_WARMUP_MS } = require('./lib/mic-calibration');
 
 const {
@@ -198,12 +197,26 @@ function setEnvLine(src, key, value) {
   return out.join('\n');
 }
 
-// ─── POST /setup/config — escribir .env y reiniciar proceso (PM2 restart) ────
+// ─── POST /setup/config — escribir .env y aplicar en caliente ────────────────
+// La mayoría de estos campos ya tienen forma de aplicarse sin reiniciar el
+// proceso (credenciales → ragAuth/ragToken.setCredentials, ganancias/umbral →
+// lkSession, mic gain del modo browser → lib/audio). El único que sigue
+// necesitando reinicio es BRUMEXA_COLOR — las combinaciones de LEDs se leen
+// una sola vez al arrancar (ver lib/leds.js) y tocarlas en vivo implicaría
+// reescribir la lógica de las animaciones; como es "un dato que se fija una
+// vez en el setup del equipo" (no algo que se ajusta seguido como el mic),
+// no vale la pena el riesgo — así que SOLO reiniciamos si cambió el color.
 app.post('/setup/config', express.json(), (req, res) => {
   const envFile = path.join(__dirname, '.env');
   const { ragApiUrl, deviceId, apiKey, deviceName, micGain, speakerGain, talkThreshold, brumexaColor } = req.body || {};
   let content = '';
   try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
+
+  const getVal = (key) => {
+    const m = content.match(new RegExp(`^${key}=(.*)$`, 'm'));
+    return m ? m[1].trim() : '';
+  };
+  const colorChanged = brumexaColor !== undefined && brumexaColor !== (getVal('BRUMEXA_COLOR') || 'negro');
 
   if (ragApiUrl  !== undefined) content = setEnvLine(content, 'RAG_API_URL',       ragApiUrl);
   if (deviceId   !== undefined) content = setEnvLine(content, 'BRUMEXA_DEVICE_ID', deviceId);
@@ -216,8 +229,27 @@ app.post('/setup/config', express.json(), (req, res) => {
 
   try {
     require('fs').writeFileSync(envFile, content, 'utf8');
-    res.json({ ok: true });
-    setTimeout(() => process.exit(0), 600);
+
+    // Aplicar en caliente lo que no necesita reiniciar
+    if (ragApiUrl !== undefined || deviceId !== undefined || apiKey !== undefined) {
+      ragAuth.setCredentials({ ragApiUrl, deviceId, apiKey });
+      setTokenCredentials({ ragApiUrl, deviceId });
+    }
+    if (micGain !== undefined) {
+      const g = parseFloat(micGain);
+      if (!isNaN(g)) { setMicGain(g); lkSession.setMicGain(g); }
+    }
+    if (speakerGain !== undefined) {
+      const g = parseFloat(speakerGain);
+      if (!isNaN(g)) lkSession.setSpeakerGain(g);
+    }
+    if (talkThreshold !== undefined) {
+      const t = parseFloat(talkThreshold);
+      if (!isNaN(t)) { lkSession.setTalkThreshold(t); leds.setSpeakThresholdDbfs(t); }
+    }
+
+    res.json({ ok: true, restarting: colorChanged });
+    if (colorChanged) setTimeout(() => process.exit(0), 600);
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
@@ -809,7 +841,6 @@ app.post('/terminal/run', express.json(), (req, res) => {
 // Usamos http.createServer para que el WebSocket de audio comparta el mismo puerto
 const httpServer = http.createServer(app);
 setupAudio(app, httpServer);
-setupBluetooth(app, express);
 setupWifi(app);
 setupLocalDebug(app, {
   getWifiStatus: getWifiStatus,
