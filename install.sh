@@ -136,11 +136,41 @@ read -p "¿Configurar arranque automático al boot con PM2? (s/n): " AUTOSTART
 if [ "$AUTOSTART" = "s" ] || [ "$AUTOSTART" = "S" ]; then
   info "Instalando PM2..."
   sudo npm install -g pm2 --silent
-  sudo pm2 start server.js --name brumexa-edge
-  sudo pm2 startup | tail -1 | sudo bash
-  sudo pm2 save
+
+  # OJO: pm2 start/save SIN sudo a propósito — tiene que correr como el
+  # usuario actual (no root), si no PM2 guarda su estado en /root/.pm2 en vez
+  # de ~/.pm2 y "pm2 list" corrido normalmente (sin sudo) después no muestra
+  # nada, aunque el proceso esté vivo. El sudo va SOLO antes del bash que
+  # ejecuta el comando que imprime "pm2 startup" (ese sí necesita root para
+  # escribir el servicio en /etc/systemd/system/).
+  pm2 start server.js --name brumexa-edge
+  pm2 startup | tail -1 | sudo bash
+  pm2 save
   ok "PM2 configurado — el server arranca solo al boot"
 fi
+
+# ─── 12. Arranque temprano (scripts/boot.js) ─────────────────────────────────
+# Entre que prende la Pi y que PM2/Node terminan de bootear y llegan a
+# leds.init() dentro de server.js, pasan varios segundos sin ninguna luz. Este
+# servicio systemd corre ANTES que PM2 (DefaultDependencies=no + sysinit.target,
+# ver scripts/brumexa-boot.service) y ejecuta scripts/boot.js — hoy eso prende
+# el cometa cian de "cargando" (mismo leds.connecting() que al conectar a
+# LiveKit) y se apaga solo apenas detecta que server.js ya está escuchando en
+# el puerto, para no pelearse por el mismo GPIO/DMA del NeoPixel. Es un
+# service GENÉRICO a propósito — si el día de mañana hace falta correr algo
+# más temprano en el boot (no LEDs), va adentro de scripts/boot.js, sin tocar
+# este service de nuevo.
+echo ""
+info "Instalando servicio de arranque temprano..."
+REPO_DIR="$(pwd)"
+CURRENT_USER="$(whoami)"
+sed -e "s|/home/brumelab/proyectos/brumexa-edge|${REPO_DIR}|g" \
+    -e "s|^User=brumelab|User=${CURRENT_USER}|" \
+    scripts/brumexa-boot.service \
+  | sudo tee /etc/systemd/system/brumexa-boot.service > /dev/null
+sudo systemctl daemon-reload
+sudo systemctl enable brumexa-boot.service
+ok "Arranque temprano configurado — servicio: brumexa-boot"
 
 # ─── Resumen ─────────────────────────────────────────────────────────────────
 echo ""

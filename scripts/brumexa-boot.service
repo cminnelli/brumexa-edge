@@ -1,0 +1,17 @@
+[Unit]
+Description=Brumexa - arranque temprano (antes que PM2; hoy solo prende LEDs, ver scripts/boot.js)
+DefaultDependencies=no
+After=local-fs.target
+Before=sysinit.target
+
+[Service]
+Type=simple
+User=brumelab
+WorkingDirectory=/home/brumelab/proyectos/brumexa-edge
+ExecStart=/usr/bin/node /home/brumelab/proyectos/brumexa-edge/scripts/boot.js
+Restart=no
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=sysinit.target
