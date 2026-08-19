@@ -2971,10 +2971,16 @@ const SetupModule = {
 (async function init() {
 
   // ─── Detectar soporte de getUserMedia ─────────────────────────────────────
-  if (!navigator.mediaDevices?.getUserMedia) {
-    log('getUserMedia no soportado. Usá un navegador moderno (HTTPS o localhost).', 'error');
-    ui.btnMic.disabled = true;
-    return;
+  // Sin HTTPS ni origen "localhost" el navegador ni expone navigator.mediaDevices
+  // (ej. entrando por http://brumexa.local:3000 en vez del túnel SSH a
+  // localhost). Antes esto cortaba TODO init() acá abajo — dejaba la página
+  // entera sin inicializar (config, ALSA, etc.) aunque en Raspberry el mic
+  // real lo captura la Pi por ALSA y nunca pasa por getUserMedia del browser.
+  // Ahora solo deshabilitamos el botón más abajo, una vez que sabemos si es
+  // modo Pi-native (que no lo necesita).
+  const hasGetUserMedia = !!navigator.mediaDevices?.getUserMedia;
+  if (!hasGetUserMedia) {
+    log('getUserMedia no soportado (necesita HTTPS o localhost) — el mic vía navegador no va a andar.', 'warn');
   }
 
   // ─── Obtener config del servidor ──────────────────────────────────────────
@@ -3010,6 +3016,14 @@ const SetupModule = {
     log('No se pudo contactar al servidor Express en /config', 'warn');
     ui.smDeviceVal.textContent = 'Sin respuesta';
     ui.smDeviceDot.className   = 'sm-dot error';
+  }
+
+  // Solo deshabilitar el botón si de verdad hace falta getUserMedia (modo
+  // browser) y no lo tenemos — en Raspberry con modo nativo el mic es de la
+  // Pi (ALSA), no del navegador, así que igual funciona sin getUserMedia.
+  if (!hasGetUserMedia && !isRaspberry) {
+    ui.btnMic.disabled = true;
+    log('Botón de mic deshabilitado — sin HTTPS/localhost no hay acceso al mic del navegador.', 'warn');
   }
 
   // ─── Nombre del micrófono (si ya hay permiso previo) ─────────────────────

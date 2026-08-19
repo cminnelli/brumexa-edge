@@ -54,6 +54,29 @@ Abrir `http://localhost:3000`.
 - **LiveKit** — conecta a una sala nueva y publica el micrófono (mic real en Pi, `getUserMedia` en browser). Requiere la API arriba y el dispositivo autenticado.
 - **Test Mic** — VU meter local, sin servidor ni internet. Sirve para probar que el mic anda.
 
+## Acceso remoto a la web — sin SSH
+
+El server escucha en todas las interfaces (no solo `localhost`), así que en una Pi ya en la red se puede entrar directo desde el navegador de cualquier otro dispositivo de esa red, sin el túnel SSH (`ssh -L 3000:localhost:3000 ...`) que se usaba antes:
+
+- **Modo station** (la Pi ya tiene WiFi configurado): `http://brumexa.local:3000/` — el hostname `.local` lo resuelve Avahi/mDNS, instalado por default en Raspberry Pi OS y atado al `hostname` del sistema. No hace falta saber la IP ni que sea siempre la misma.
+- **Modo AP** (ver más abajo): conectate al hotspot de provisioning y entrá por la IP fija del AP (`WIFI_AP_IP` en `.env.example`, default `10.42.0.1`).
+
+Páginas útiles además de `/`:
+- `/local` — dashboard de diagnóstico de solo lectura: logs de PM2 (out/error), log de WiFi, log de sistema, audio, Bluetooth, temperatura/throttling. Pensado para debuguear sin SSH ni teclado/pantalla (ver [`lib/local-debug.js`](lib/local-debug.js)).
+- `/terminal` — terminal remota en el navegador para correr comandos en la Pi (con atajos tipo "logs de pm2", "logs del sistema").
+- `/setup` — configurar el WiFi (SSID/contraseña) cuando está en modo AP.
+
+⚠️ `/terminal` no tiene autenticación (solo bloquea por patrón algunos comandos destructivos) — cualquiera que llegue a esa IP/red puede ejecutar comandos en la Pi. Tenerlo en cuenta si el AP o la red WiFi no son de confianza.
+
+## WiFi — Access Point de fallback + reconexión automática
+
+Al arrancar, `lib/wifi.js` espera unos segundos a que NetworkManager esté listo y decide:
+
+- Si la Pi ya tiene una red WiFi guardada y logra conectar → modo **station** normal, IP asignada por DHCP del router.
+- Si no hay red configurada, o la conexión se cae y no logra reconectarse sola → levanta un **Access Point** de provisioning (SSID/IP en `WIFI_AP_SSID`/`WIFI_AP_IP` de `.env.example`), para poder entrar y cargar el WiFi real desde `/setup`.
+
+Además corre un monitor de salud cada 15s (LEDs en naranja si la señal es débil) y, si se pierde la conexión por más de `WIFI_DISCONNECT_AP_RECOVERY_MS` sin reconectar sola, reactiva el AP de provisioning. Mientras está en AP, reintenta en el fondo cada `WIFI_BACKGROUND_RECOVERY_MS` si la red de siempre volvió, sin depender de que alguien entre a mano a `/setup`. Detalle completo en [`lib/wifi.js`](lib/wifi.js).
+
 ## Variables de entorno
 
 Ver `.env.example` para la lista completa (wake word, ganancias, umbrales). Las imprescindibles:
