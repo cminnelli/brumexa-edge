@@ -1,5 +1,12 @@
 # Cambios recientes — Brumexa-raspberry
 
+## 2026-08-19
+
+Cambio trivial para probar el flujo de "Buscar actualizaciones" en
+`/configuracion` de punta a punta (git pull real desde el botón).
+
+---
+
 ## 2026-04-08
 
 ### app.js — Fix: Pi mic → LiveKit no transmitía audio
