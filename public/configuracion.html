@@ -143,6 +143,11 @@
       <label class="field-label" for="inp-speaker-gain">SPEAKER_GAIN (volumen de la voz del agente)</label>
       <input type="text" id="inp-speaker-gain" class="setup-input setup-input--short" placeholder="3.0" />
     </div>
+    <div class="field">
+      <label class="field-label" for="inp-silence-timeout">Corte automático por silencio (segundos)</label>
+      <input type="text" id="inp-silence-timeout" class="setup-input setup-input--short" placeholder="10" />
+      <p class="field-hint">Si nadie habla (ni vos ni el agente) durante estos segundos, la sesión se desconecta sola. Poné 0 para desactivarlo.</p>
+    </div>
     <div class="connect-row">
       <button class="btn-connect" id="btn-save-sound" style="flex:none; padding:9px 20px">💾 Guardar ganancias</button>
     </div>
@@ -312,6 +317,7 @@
       document.getElementById('inp-speaker-gain').value = cfg.speakerGain  || '';
       document.getElementById('inp-talk-threshold').value = cfg.talkThreshold || '-25';
       document.getElementById('val-talk-threshold').textContent = `${cfg.talkThreshold || '-25'} dBFS`;
+      document.getElementById('inp-silence-timeout').value = Math.round((parseInt(cfg.silenceTimeoutMs, 10) || 10000) / 1000);
 
       micEnabledState = status.micEnabled !== false;
       updateMicButton();
@@ -497,9 +503,11 @@
   });
 
   document.getElementById('btn-save-sound').addEventListener('click', () => {
+    const secs = parseFloat(document.getElementById('inp-silence-timeout').value.trim());
     saveFields({
-      micGain:     document.getElementById('inp-mic-gain').value.trim(),
-      speakerGain: document.getElementById('inp-speaker-gain').value.trim(),
+      micGain:          document.getElementById('inp-mic-gain').value.trim(),
+      speakerGain:      document.getElementById('inp-speaker-gain').value.trim(),
+      silenceTimeoutMs: isNaN(secs) ? undefined : Math.round(secs * 1000),
     }, {
       btn:    document.getElementById('btn-save-sound'),
       result: document.getElementById('sound-save-result'),

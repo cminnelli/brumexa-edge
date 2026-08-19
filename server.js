@@ -187,6 +187,7 @@ app.get('/setup/config', (_req, res) => {
     micGain:      getVal('MIC_GAIN')      || '4.0',
     speakerGain:  getVal('SPEAKER_GAIN')  || '3.0',
     talkThreshold: getVal('MIC_TALK_THRESHOLD_DBFS') || '-25',
+    silenceTimeoutMs: getVal('SILENCE_DISCONNECT_MS') || '10000',
     brumexaColor: getVal('BRUMEXA_COLOR') || 'negro',
   });
 });
@@ -229,7 +230,7 @@ function setEnvLine(src, key, value) {
 // no vale la pena el riesgo — así que SOLO reiniciamos si cambió el color.
 app.post('/setup/config', express.json(), (req, res) => {
   const envFile = path.join(__dirname, '.env');
-  const { ragApiUrl, deviceId, apiKey, deviceName, micGain, speakerGain, talkThreshold, brumexaColor } = req.body || {};
+  const { ragApiUrl, deviceId, apiKey, deviceName, micGain, speakerGain, talkThreshold, silenceTimeoutMs, brumexaColor } = req.body || {};
   let content = '';
   try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
 
@@ -246,6 +247,7 @@ app.post('/setup/config', express.json(), (req, res) => {
   if (micGain     !== undefined) content = setEnvLine(content, 'MIC_GAIN',      micGain);
   if (speakerGain !== undefined) content = setEnvLine(content, 'SPEAKER_GAIN',  speakerGain);
   if (talkThreshold !== undefined) content = setEnvLine(content, 'MIC_TALK_THRESHOLD_DBFS', talkThreshold);
+  if (silenceTimeoutMs !== undefined) content = setEnvLine(content, 'SILENCE_DISCONNECT_MS', silenceTimeoutMs);
   if (brumexaColor  !== undefined) content = setEnvLine(content, 'BRUMEXA_COLOR', brumexaColor);
 
   try {
@@ -267,6 +269,10 @@ app.post('/setup/config', express.json(), (req, res) => {
     if (talkThreshold !== undefined) {
       const t = parseFloat(talkThreshold);
       if (!isNaN(t)) { lkSession.setTalkThreshold(t); leds.setSpeakThresholdDbfs(t); }
+    }
+    if (silenceTimeoutMs !== undefined) {
+      const s = parseInt(silenceTimeoutMs, 10);
+      if (!isNaN(s)) lkSession.setSilenceTimeout(s);
     }
 
     res.json({ ok: true, restarting: colorChanged });
