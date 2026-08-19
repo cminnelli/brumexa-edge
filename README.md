@@ -179,3 +179,14 @@ Chequeos rápidos:
 - `curl -s localhost:3000/config` — ¿responde el server?
 - `curl -s localhost:3000/livekit-health` — ¿está autenticado contra la API?
 - Si no conecta: confirmar que `brumexa-rag-api-v2` esté arriba y que las credenciales del `.env` coincidan con las del admin panel.
+
+**Se escucha el saludo/respuesta del agente en el navegador (`meet.livekit.io` o el preview del admin) pero NO en la Pi** — con `stt`/`llm`/`tts` corriendo bien en los logs de `[agent]`, y `[lk-session] Abriendo AudioStream sid=...` en el log de la Pi pero nunca `✔ Primer frame del agente recibido`: el audio nunca cruza a nivel transporte (ICE/PeerConnection) aunque la señalización diga "conectado". Causa real encontrada una vez: el proceso de pm2 llevaba mucho tiempo corriendo con el entorno cacheado de cuando se hizo el `pm2 start` original — un `pm2 restart` normal no lo refresca. Se resuelve recreando el proceso de cero:
+
+```bash
+pm2 delete brumexa-edge
+cd ~/proyectos/brumexa-edge
+pm2 start server.js --name brumexa-edge
+pm2 save
+```
+
+Para confirmar en el momento (sin esperar a que se repita) hay un log de diagnóstico permanente en [`lib/livekit-session.js`](lib/livekit-session.js) — buscar `[lk-session-debug] connectionState` en `pm2 logs brumexa-edge`; si queda en un estado que no sea `connected` mientras la señalización dice que todo anda bien, es la misma causa.
