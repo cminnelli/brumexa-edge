@@ -15,7 +15,28 @@ const { startRecording, stopRecording, getStatus,
         deleteRecording, boostCaptureGain } = require('./lib/recorder');
 const { setupWifi, autoStartAP, startHealthMonitor, getStatus: getWifiStatus } = require('./lib/wifi');
 const { setupLocalDebug }                              = require('./lib/local-debug');
-const { setupConfiguracion }                           = require('./lib/configuracion');
+
+// lib/configuracion.js se carga con red de seguridad: si el archivo llegó
+// corrupto (pasó de verdad -- un git pull/fetch interrumpido lo dejó en
+// 0 bytes dos veces) NO tiene que tirar abajo TODO Brumexa (voz, WiFi,
+// terminal) por un módulo que no es crítico para la sesión de voz. Si
+// falla, /configuracion queda con un 503 explicando por qué, y el resto
+// del dispositivo sigue andando normal.
+let setupConfiguracion;
+try {
+  ({ setupConfiguracion } = require('./lib/configuracion'));
+  if (typeof setupConfiguracion !== 'function') {
+    throw new Error('setupConfiguracion no es una función — lib/configuracion.js corrupto o incompleto');
+  }
+} catch (e) {
+  console.error(`[server] ✘ No se pudo cargar lib/configuracion.js (${e.message}) — /configuracion no va a estar disponible, pero el resto de Brumexa sigue funcionando.`);
+  setupConfiguracion = (app) => {
+    app.all('/configuracion*', (_req, res) => {
+      res.status(503).send(`Configuración no disponible: lib/configuracion.js no se pudo cargar (${e.message}). Revisar por SSH/terminal y reiniciar.`);
+    });
+  };
+}
+
 const { session: lkSession }                           = require('./lib/livekit-session');
 const leds                                             = require('./lib/leds');
 const ragAuth                                          = require('./lib/rag-auth');
