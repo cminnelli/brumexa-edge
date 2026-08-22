@@ -2178,7 +2178,8 @@ const LedsLab = {
   satEl:    null,
   valEl:    null,
   swatchEl: null,
-  _sendTimer: null,
+  _sendTimer:   null,
+  _settleTimer: null,
 
   open() {
     this.el       = this.el       || document.getElementById('leds-lab');
@@ -2211,6 +2212,7 @@ const LedsLab = {
     this.el.style.display = 'none';
     this.el.setAttribute('aria-hidden', 'true');
     clearTimeout(this._sendTimer);
+    clearTimeout(this._settleTimer);
     fetch('/diag/leds/set/exit', { method: 'POST' }).catch(() => {});
   },
 
@@ -2234,6 +2236,8 @@ const LedsLab = {
     this.satEl.style.background = `linear-gradient(to right, ${this._toCss(this._hsvToRgb(h, 0, v))}, ${this._toCss(this._hsvToRgb(h, 1, v))})`;
     this.valEl.style.background = `linear-gradient(to right, #000, ${this._toCss(this._hsvToRgb(h, s, 1))})`;
 
+    // Mientras se mueve: color sólido fijo, para ver el tono exacto sin la
+    // curva de brillo de la respiración de por medio.
     clearTimeout(this._sendTimer);
     this._sendTimer = setTimeout(() => {
       fetch('/diag/leds/set', {
@@ -2241,6 +2245,16 @@ const LedsLab = {
         body: JSON.stringify({ h, s, v }),
       }).catch(() => {});
     }, 40);
+
+    // 2s quieto sin tocar los sliders → pasa a respirar con ese color, así
+    // se ve cómo queda de verdad en uso normal (no solo el chispazo sólido).
+    clearTimeout(this._settleTimer);
+    this._settleTimer = setTimeout(() => {
+      fetch('/diag/leds/preview-breathe', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ h, s }),
+      }).catch(() => {});
+    }, 2000);
   },
 
   _toCss([r, g, b]) { return `rgb(${r},${g},${b})`; },

@@ -515,9 +515,23 @@ app.post('/diag/leds/set', express.json(), (req, res) => {
   res.json({ ok: true, r, g, b });
 });
 
-// POST /diag/leds/set/exit — sale del laboratorio, vuelve a la animación normal
+// POST /diag/leds/preview-breathe { h, s } — 2s sin mover los sliders del
+// laboratorio → deja de ser un chispazo sólido y pasa a respirar con ese
+// color, para ver cómo se ve de verdad en uso normal.
+app.post('/diag/leds/preview-breathe', express.json(), (req, res) => {
+  const h = Number(req.body?.h), s = Number(req.body?.s);
+  if (![h, s].every(Number.isFinite)) return res.status(400).json({ ok: false, error: 'h/s inválidos' });
+  const hue = ((h % 360) + 360) % 360;
+  const sat = Math.min(1, Math.max(0, s));
+  const ok = leds.previewBreathe(hue, sat);
+  res.json({ ok, error: ok ? null : 'LEDs no configurados — ver /diag/leds' });
+});
+
+// POST /diag/leds/set/exit — sale del laboratorio; restaura el hue/sat del
+// color de carcasa REAL (setDeviceColor pisa lo que haya dejado el
+// laboratorio) y vuelve a respirar normal.
 app.post('/diag/leds/set/exit', (_req, res) => {
-  leds.idle();
+  leds.setDeviceColor(leds.getDeviceColor());
   res.json({ ok: true });
 });
 
