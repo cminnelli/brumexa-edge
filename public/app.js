@@ -2165,21 +2165,86 @@ document.getElementById('leds-alert-retry')?.addEventListener('click', () => {
   DebugModule._renderLeds();
 });
 
-document.getElementById('btn-leds-test')?.addEventListener('click', async (ev) => {
-  const btn = ev.currentTarget;
-  const prevText = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = '…';
-  try {
-    const r = await fetch('/diag/leds/test', { method: 'POST' });
-    const d = await r.json();
-    log(d.ok ? 'LEDs → test verde disparado, mirá el dispositivo' : `LEDs → no se pudo testear: ${d.error}`, d.ok ? 'info' : 'error');
-  } catch (err) {
-    log(`LEDs → error al testear: ${err.message}`, 'error');
-  } finally {
-    setTimeout(() => { btn.disabled = false; btn.textContent = prevText; }, 1000);
-  }
-});
+document.getElementById('btn-leds-test')?.addEventListener('click', () => LedsLab.open());
+
+// ============================================================
+// LEDS LAB — modal minimalista para mover hue/saturación/brillo en vivo
+// sobre el hardware real (POST /diag/leds/set). No toca color-schemes.json
+// ni .env, es solo laboratorio — al cerrar vuelve a la animación normal.
+// ============================================================
+const LedsLab = {
+  el:       null,
+  hueEl:    null,
+  satEl:    null,
+  valEl:    null,
+  swatchEl: null,
+  _sendTimer: null,
+
+  open() {
+    this.el       = this.el       || document.getElementById('leds-lab');
+    this.hueEl    = this.hueEl    || document.getElementById('leds-lab-hue');
+    this.satEl    = this.satEl    || document.getElementById('leds-lab-sat');
+    this.valEl    = this.valEl    || document.getElementById('leds-lab-val');
+    this.swatchEl = this.swatchEl || document.getElementById('leds-lab-swatch');
+    if (!this.el) return;
+
+    if (!this._wired) {
+      this._wired = true;
+      const onMove = () => this._render();
+      this.hueEl.addEventListener('input', onMove);
+      this.satEl.addEventListener('input', onMove);
+      this.valEl.addEventListener('input', onMove);
+      document.getElementById('leds-lab-close')?.addEventListener('click', () => this.close());
+      document.getElementById('leds-lab-backdrop')?.addEventListener('click', () => this.close());
+      document.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Escape' && this.el.style.display !== 'none') this.close();
+      });
+    }
+
+    this.el.style.display = 'flex';
+    this.el.setAttribute('aria-hidden', 'false');
+    this._render();
+  },
+
+  close() {
+    if (!this.el) return;
+    this.el.style.display = 'none';
+    this.el.setAttribute('aria-hidden', 'true');
+    clearTimeout(this._sendTimer);
+    fetch('/diag/leds/set/exit', { method: 'POST' }).catch(() => {});
+  },
+
+  // hsv (0-360, 0-1, 0-1) → rgb — mismo criterio "no estándar" que lib/leds.js,
+  // así el swatch de la web se ve IGUAL a como queda el LED de verdad.
+  _hsvToRgb(h, s, v) {
+    const i = Math.floor(h / 60) % 6;
+    const f = h / 60 - Math.floor(h / 60);
+    const p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+    const table = [[v,t,p,p,q,v],[q,v,v,t,p,p],[p,p,q,v,v,t]];
+    return table.map(ch => Math.round(ch[i] * 255));
+  },
+
+  _render() {
+    const h = Number(this.hueEl.value);
+    const s = Number(this.satEl.value) / 100;
+    const v = Number(this.valEl.value) / 100;
+    const [r, g, b] = this._hsvToRgb(h, s, v);
+
+    this.swatchEl.style.background = `rgb(${r},${g},${b})`;
+    this.satEl.style.background = `linear-gradient(to right, ${this._toCss(this._hsvToRgb(h, 0, v))}, ${this._toCss(this._hsvToRgb(h, 1, v))})`;
+    this.valEl.style.background = `linear-gradient(to right, #000, ${this._toCss(this._hsvToRgb(h, s, 1))})`;
+
+    clearTimeout(this._sendTimer);
+    this._sendTimer = setTimeout(() => {
+      fetch('/diag/leds/set', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ h, s, v }),
+      }).catch(() => {});
+    }, 40);
+  },
+
+  _toCss([r, g, b]) { return `rgb(${r},${g},${b})`; },
+};
 
 // ============================================================
 // DEBUG MODULE — panel de estado en tiempo real (actualiza cada 500ms)

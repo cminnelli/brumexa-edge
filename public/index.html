@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=18" />
+  <link rel="stylesheet" href="style.css?v=19" />
 </head>
 <body>
 
@@ -354,8 +354,36 @@
 
 </main><!-- #panel-section -->
 
+<!-- § Laboratorio de LEDs — probar hue/saturación/brillo en vivo sobre el
+     hardware real, sin tocar color-schemes.json ni .env. Se abre desde el
+     botón "Probar" del cuadrado de LEDs. -->
+<div id="leds-lab" class="leds-lab" style="display:none" aria-hidden="true">
+  <div class="leds-lab__backdrop" id="leds-lab-backdrop"></div>
+  <div class="leds-lab__panel" role="dialog" aria-modal="true" aria-labelledby="leds-lab-title">
+    <div class="leds-lab__hdr">
+      <span id="leds-lab-title">Laboratorio de LEDs</span>
+      <button class="leds-lab__close" id="leds-lab-close" type="button" aria-label="Cerrar">✕</button>
+    </div>
+
+    <div class="leds-lab__swatch" id="leds-lab-swatch"></div>
+
+    <div class="leds-lab__row">
+      <label for="leds-lab-hue">Tono</label>
+      <input type="range" id="leds-lab-hue" min="0" max="359" step="1" value="255" class="leds-lab__slider leds-lab__slider--hue">
+    </div>
+    <div class="leds-lab__row">
+      <label for="leds-lab-sat">Saturación</label>
+      <input type="range" id="leds-lab-sat" min="0" max="100" step="1" value="100" class="leds-lab__slider leds-lab__slider--sat">
+    </div>
+    <div class="leds-lab__row">
+      <label for="leds-lab-val">Brillo</label>
+      <input type="range" id="leds-lab-val" min="5" max="100" step="1" value="100" class="leds-lab__slider leds-lab__slider--val">
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
 <script src="theme.js?v=1"></script>
-<script src="app.js?v=30"></script>
+<script src="app.js?v=31"></script>
 </body>
 </html>

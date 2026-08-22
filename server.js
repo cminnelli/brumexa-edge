@@ -220,25 +220,14 @@ function setEnvLine(src, key, value) {
 }
 
 // ─── POST /setup/config — escribir .env y aplicar en caliente ────────────────
-// La mayoría de estos campos ya tienen forma de aplicarse sin reiniciar el
+// Todos estos campos, BRUMEXA_COLOR incluido, se aplican sin reiniciar el
 // proceso (credenciales → ragAuth/ragToken.setCredentials, ganancias/umbral →
-// lkSession, mic gain del modo browser → lib/audio). El único que sigue
-// necesitando reinicio es BRUMEXA_COLOR — las combinaciones de LEDs se leen
-// una sola vez al arrancar (ver lib/leds.js) y tocarlas en vivo implicaría
-// reescribir la lógica de las animaciones; como es "un dato que se fija una
-// vez en el setup del equipo" (no algo que se ajusta seguido como el mic),
-// no vale la pena el riesgo — así que SOLO reiniciamos si cambió el color.
+// lkSession, mic gain del modo browser → lib/audio, color → leds.setDeviceColor).
 app.post('/setup/config', express.json(), (req, res) => {
   const envFile = path.join(__dirname, '.env');
   const { ragApiUrl, deviceId, apiKey, deviceName, micGain, speakerGain, talkThreshold, silenceTimeoutMs, brumexaColor } = req.body || {};
   let content = '';
   try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
-
-  const getVal = (key) => {
-    const m = content.match(new RegExp(`^${key}=(.*)$`, 'm'));
-    return m ? m[1].trim() : '';
-  };
-  const colorChanged = brumexaColor !== undefined && brumexaColor !== (getVal('BRUMEXA_COLOR') || 'negro');
 
   if (ragApiUrl  !== undefined) content = setEnvLine(content, 'RAG_API_URL',       ragApiUrl);
   if (deviceId   !== undefined) content = setEnvLine(content, 'BRUMEXA_DEVICE_ID', deviceId);
@@ -274,9 +263,9 @@ app.post('/setup/config', express.json(), (req, res) => {
       const s = parseInt(silenceTimeoutMs, 10);
       if (!isNaN(s)) lkSession.setSilenceTimeout(s);
     }
+    if (brumexaColor !== undefined) leds.setDeviceColor(brumexaColor);
 
-    res.json({ ok: true, restarting: colorChanged });
-    if (colorChanged) setTimeout(() => process.exit(0), 600);
+    res.json({ ok: true, restarting: false });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
@@ -499,6 +488,37 @@ app.get('/diag/leds', (_req, res) => {
 app.post('/diag/leds/test', (_req, res) => {
   const ok = leds.test();
   res.json({ ok, error: ok ? null : 'LEDs no configurados — ver /diag/leds' });
+});
+
+// POST /diag/leds/preview { color } — aplica un color de carcasa en el
+// hardware YA, para ver cómo queda de verdad antes de decidir "Guardar
+// color" — NO escribe en .env, es solo probar. Si tocás "Guardar color"
+// después, sí persiste (misma función leds.setDeviceColor por dentro).
+app.post('/diag/leds/preview', express.json(), (req, res) => {
+  const { color } = req.body || {};
+  if (typeof color !== 'string') return res.status(400).json({ ok: false, error: 'color inválido' });
+  const ok = leds.setDeviceColor(color);
+  res.json({ ok, error: ok ? null : `Color desconocido: "${color}"` });
+});
+
+// POST /diag/leds/set { h, s, v } — laboratorio de LEDs: pinta un color
+// exacto (hue 0-360, sat/val 0-1) en el hardware al toque, moviendo un
+// slider. No toca .env ni color-schemes.json, es solo jugar/probar.
+app.post('/diag/leds/set', express.json(), (req, res) => {
+  const h = Number(req.body?.h), s = Number(req.body?.s), v = Number(req.body?.v);
+  if (![h, s, v].every(Number.isFinite)) return res.status(400).json({ ok: false, error: 'h/s/v inválidos' });
+  const hue = ((h % 360) + 360) % 360;
+  const sat = Math.min(1, Math.max(0, s));
+  const val = Math.min(1, Math.max(0, v));
+  const { r, g, b } = leds.hsvToRgb(hue, sat, val);
+  leds.on({ r, g, b });
+  res.json({ ok: true, r, g, b });
+});
+
+// POST /diag/leds/set/exit — sale del laboratorio, vuelve a la animación normal
+app.post('/diag/leds/set/exit', (_req, res) => {
+  leds.idle();
+  res.json({ ok: true });
 });
 
 // POST /recordings/stop-play — mata aplay y espera que muera antes de responder
