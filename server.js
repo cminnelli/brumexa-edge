@@ -510,7 +510,7 @@ app.post('/diag/leds/set', express.json(), (req, res) => {
   const hue = ((h % 360) + 360) % 360;
   const sat = Math.min(1, Math.max(0, s));
   const val = Math.min(1, Math.max(0, v));
-  const { r, g, b } = leds.hsvToRgb(hue, sat, val);
+  const { r, g, b } = leds.hsvToRgbStd(hue, sat, val);
   leds.on({ r, g, b });
   res.json({ ok: true, r, g, b });
 });

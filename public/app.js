@@ -2216,14 +2216,15 @@ const LedsLab = {
     fetch('/diag/leds/set/exit', { method: 'POST' }).catch(() => {});
   },
 
-  // hsv (0-360, 0-1, 0-1) → rgb — mismo criterio "no estándar" que lib/leds.js,
-  // así el swatch de la web se ve IGUAL a como queda el LED de verdad.
+  // hsv (0-360, 0-1, 0-1) → rgb — fórmula estándar, la misma que usa el
+  // server (leds.hsvToRgbStd) para /diag/leds/set y previewBreathe, así el
+  // swatch de la web se ve IGUAL a como queda el LED de verdad.
   _hsvToRgb(h, s, v) {
     const i = Math.floor(h / 60) % 6;
     const f = h / 60 - Math.floor(h / 60);
     const p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
-    const table = [[v,t,p,p,q,v],[q,v,v,t,p,p],[p,p,q,v,v,t]];
-    return table.map(ch => Math.round(ch[i] * 255));
+    const table = [[v,t,p],[q,v,p],[p,v,t],[p,q,v],[t,p,v],[v,p,q]][i];
+    return table.map(ch => Math.round(ch * 255));
   },
 
   _render() {
