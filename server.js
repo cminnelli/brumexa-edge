@@ -631,9 +631,17 @@ function stopMicMonitor() {
 // Ventana subida de 4s a 8s: con más datos, la búsqueda del tramo contiguo
 // más silencioso (lib/mic-calibration.js) tiene más chances de encontrar un
 // tramo realmente representativo del ambiente, no solo un instante de
-// suerte. Margen subido de 8 a 10dB — un poco más de colchón contra picos
-// de ruido puntuales que la ventana de calibración no llega a capturar.
-const CALIBRATION_MARGIN_DB   = 10;
+// suerte.
+// Margen bajado de 10 a 7dB — con 10dB, en un ambiente medido real la voz
+// quedaba apenas ~1dB por encima del umbral resultante (log real: piso
+// -42dBFS → umbral -32dBFS, voz hablando a -31dBFS), tan pegado que
+// cualquier variación normal de volumen dentro de una frase caía por debajo
+// y disparaba entradas/salidas de "hablando" en vez de una sola detección
+// sostenida. El colchón contra ruido puntual sigue estando — lo dan
+// ONSET_MIN_STREAK (~300ms sostenidos para declarar inicio) y el hangover
+// (~400ms de gracia antes de declarar fin) en lib/leds.js, no dependen solo
+// de este margen.
+const CALIBRATION_MARGIN_DB   = 7;
 const CALIBRATION_DURATION_MS = 8000;
 const CALIBRATION_MIN_DBFS    = -45;
 const CALIBRATION_MAX_DBFS    = -12;
