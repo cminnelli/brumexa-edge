@@ -51,6 +51,8 @@
     </div>
     <div class="kv" id="kv-version" style="margin-bottom:10px"></div>
     <button class="btn-connect" id="btn-update" style="width:auto; padding:9px 20px">⬇️ Buscar actualizaciones</button>
+    <button class="btn-ghost" id="btn-restart" style="width:auto; padding:9px 20px; margin-left:8px">🔄 Reiniciar Brumexa</button>
+    <p class="field-hint" style="margin-top:8px">Reiniciar no toca el código ni la configuración — solo apaga y prende el proceso. Útil si algo se traba y no hace falta actualizar nada.</p>
     <div id="update-result" style="margin-top:10px"></div>
   </div>
 
@@ -346,11 +348,13 @@
     // backend también lo rechaza aunque alguien fuerce el request).
     try {
       const cfg2 = await fetch('/config', { cache: 'no-store' }).then(r => r.json());
-      const btnUpdate = document.getElementById('btn-update');
+      const btnUpdate  = document.getElementById('btn-update');
+      const btnRestart = document.getElementById('btn-restart');
       if (cfg2.server?.platform === 'linux') {
         loadVersion();
       } else {
         btnUpdate.disabled = true;
+        btnRestart.disabled = true;
         document.getElementById('kv-version').innerHTML =
           `<div class="field-hint">No disponible — este server está corriendo en ${esc(cfg2.server?.platform || 'este equipo')}, no en la Raspberry.</div>`;
       }
@@ -444,6 +448,32 @@
     }
   }
   document.getElementById('btn-update').addEventListener('click', runUpdate);
+
+  async function runRestart() {
+    const btn    = document.getElementById('btn-restart');
+    const result = document.getElementById('update-result');
+    btn.disabled = true;
+    btn.textContent = '🔄 Reiniciando…';
+    result.innerHTML = '';
+    let data;
+    try {
+      data = await fetch('/configuracion/restart', { method: 'POST' }).then(r => r.json());
+    } catch (e) {
+      result.innerHTML = `<div class="flow-note bad">✘ No se pudo conectar con el servidor: ${esc(e.message)}</div>`;
+      btn.disabled = false;
+      btn.textContent = '🔄 Reiniciar Brumexa';
+      return;
+    }
+    if (data.ok) {
+      result.innerHTML = '<div class="flow-note ok">✔ Reiniciando el servidor…</div>';
+      pollServerBack(result, btn, '🔄 Reiniciar Brumexa');
+    } else {
+      result.innerHTML = `<div class="flow-note bad">✘ ${esc(data.error || 'No se pudo reiniciar')}</div>`;
+      btn.disabled = false;
+      btn.textContent = '🔄 Reiniciar Brumexa';
+    }
+  }
+  document.getElementById('btn-restart').addEventListener('click', runRestart);
 
   async function stashAndRetry() {
     const btn    = document.getElementById('btn-stash-retry');
