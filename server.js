@@ -597,6 +597,20 @@ let _micMonitor = null;
 // que arrancar una sesión — es la misma señal que ya alimenta los LEDs.
 let _micLevel = { level: 0, peak: 0, updatedAt: 0, source: null };
 
+// GET /diag/mic-level — SOLO esto, nada más. /local/status (que también
+// trae este dato) corre ~8 comandos de shell síncronos (arecord -l, aplay
+// -l, pgrep, vcgencmd, bluetoothctl x2, tail de logs) + un fetch de red a la
+// RAG API en CADA llamada — pensado para cargarse una vez en un dashboard
+// de diagnóstico, no para sondearlo seguido. El medidor de mic en vivo de
+// /diagnostico lo sondea cada 200ms — con /local/status eso eran ~8
+// execSync (BLOQUEANTES, cortan el event loop entero de Node — audio,
+// LEDs, wake word, todo) cinco veces por segundo, sin parar mientras la
+// página estuviera abierta. Esta ruta solo lee la variable en memoria que
+// ya se actualiza sola — sin spawnear nada.
+app.get('/diag/mic-level', (_req, res) => {
+  res.json({ ..._micLevel, monitorActive: !!_micMonitor });
+});
+
 function startMicMonitor() {
   // Respeta el toggle "Mic desactivado" de /configuracion — si el usuario
   // lo apagó a mano, nada debe volver a abrir arecord (ni el watchdog de

@@ -32,7 +32,7 @@ const Summary = {
 };
 
 // ============================================================
-// MICRÓFONO — nivel en vivo vía polling de /local/status (mismo dato que
+// MICRÓFONO — nivel en vivo vía polling de /diag/mic-level (mismo dato que
 // ya alimenta la respiración/detección de "hablando" en el server) en vez
 // de capturar audio del browser con Web Audio API. Mucho más simple, y
 // funciona igual estés en la Pi con el mic en reposo o en medio de una
@@ -48,6 +48,15 @@ const MicMeter = {
     this._timer = setInterval(() => this._tick(), 200);
   },
 
+  // GET /diag/mic-level — a propósito NO usa /local/status: ese endpoint
+  // corre ~8 comandos de shell síncronos (arecord -l, aplay -l, pgrep,
+  // vcgencmd, bluetoothctl x2, tail de logs) + un fetch de red a la RAG API
+  // en CADA llamada — pensado para cargarse una vez en un dashboard, no
+  // para sondearlo cada 200ms. Sondeado así, esos ~8 execSync BLOQUEANTES
+  // (cortan el event loop entero de Node — audio, LEDs, wake word, todo)
+  // cinco veces por segundo terminaban trabando el dispositivo entero
+  // mientras esta página estuviera abierta. /diag/mic-level solo lee una
+  // variable en memoria, no spawnea nada.
   async _tick() {
     const bar    = document.getElementById('mic-vu-bar');
     const dbEl   = document.getElementById('mic-vu-db');
@@ -55,19 +64,7 @@ const MicMeter = {
     if (!bar) return;
 
     try {
-      const data = await fetch('/local/status', { cache: 'no-store' }).then(r => r.json());
-      const mic  = data?.audio?.mic;
-
-      if (!data?.audio?.available) {
-        noteEl.textContent = 'No disponible — este server no está corriendo en la Raspberry (Linux).';
-        Summary.set('mic', 'idle', 'No aplica en este equipo');
-        return;
-      }
-      if (!mic || mic.error) {
-        noteEl.textContent = mic?.error ? `Error: ${mic.error}` : 'Sin datos del micrófono todavía.';
-        Summary.set('mic', 'error', 'Sin datos');
-        return;
-      }
+      const mic = await fetch('/diag/mic-level', { cache: 'no-store' }).then(r => r.json());
 
       const level = Math.max(0, Math.min(1, mic.level || 0));
       const db    = mic.peak > 0 ? (20 * Math.log10(mic.peak / 32767)).toFixed(1) : '-∞';
@@ -76,10 +73,10 @@ const MicMeter = {
       bar.style.background = color;
       dbEl.textContent     = `${db} dBFS`;
 
-      const ageMs  = mic.updatedAt ? Date.now() - mic.updatedAt : Infinity;
+      const ageMs   = mic.updatedAt ? Date.now() - mic.updatedAt : Infinity;
       const flowing = ageMs < 1500;
       if (!mic.monitorActive && !flowing) {
-        noteEl.textContent = 'El monitor de mic no está corriendo ahora mismo (¿mic desactivado en Configuración, o hay una sesión activa capturando el device?).';
+        noteEl.textContent = 'El monitor de mic no está corriendo ahora mismo (¿mic desactivado en Configuración, sesión activa capturando el device, o este server no está corriendo en la Raspberry?).';
         Summary.set('mic', 'warn', 'Monitor inactivo');
       } else {
         noteEl.textContent = flowing
