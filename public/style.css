@@ -306,6 +306,31 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   GRUPOS DE SECCIÓN — separador liviano entre bloques de cards
+   relacionadas (no es una card en sí, solo un título + línea para que la
+   página se lea como "3 zonas" en vez de una lista plana) ────────────────
+══════════════════════════════════════════════════════════ */
+.section-group { display: flex; flex-direction: column; gap: 0.875rem; }
+.section-group + .section-group { margin-top: 0.5rem; }
+.section-group-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0 2px;
+}
+.section-group-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ═══════════════════════════════════════════════════════════
    FIELDS
 ══════════════════════════════════════════════════════════ */
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 1rem; }

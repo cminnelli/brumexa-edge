@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=19" />
+  <link rel="stylesheet" href="style.css?v=20" />
 </head>
 <body>
 
@@ -40,156 +40,226 @@
     </div>
   </div>
 
-  <!-- § Actualizar Brumexa -->
-  <div class="card" id="card-update">
-    <div class="card-section-hdr">
-      <span class="card-section-icon">⬇️</span>
-      <div>
-        <div class="card-section-title">Actualizar Brumexa</div>
-        <div class="card-section-desc">Trae los últimos cambios del código (equivalente a "git pull") y reinicia el servidor solo si hubo novedades</div>
-      </div>
-    </div>
-    <div class="kv" id="kv-version" style="margin-bottom:10px"></div>
-    <button class="btn-connect" id="btn-update" style="width:auto; padding:9px 20px">⬇️ Buscar actualizaciones</button>
-    <button class="btn-ghost" id="btn-restart" style="width:auto; padding:9px 20px; margin-left:8px">🔄 Reiniciar Brumexa</button>
-    <p class="field-hint" style="margin-top:8px">Reiniciar no toca el código ni la configuración — solo apaga y prende el proceso. Útil si algo se traba y no hace falta actualizar nada.</p>
-    <div id="update-result" style="margin-top:10px"></div>
-  </div>
+  <!-- ═══ Grupo: Conexión ═══ -->
+  <div class="section-group">
+    <div class="section-group-label">Conexión</div>
 
-  <!-- § Credenciales — identidad del dispositivo contra la RAG API -->
-  <div class="card" id="card-creds">
-    <div class="card-section-hdr">
-      <span class="card-section-icon">🔑</span>
-      <div>
-        <div class="card-section-title">Credenciales</div>
-        <div class="card-section-desc">Se aplican al toque, sin reiniciar el servidor — solo se guardan en el .env para el próximo arranque</div>
-      </div>
-    </div>
-
-    <div class="field">
-      <label class="field-label" for="inp-rag-url">RAG_API_URL</label>
-      <input type="text" id="inp-rag-url" class="setup-input" placeholder="http://192.168.0.x:4000" autocomplete="off" spellcheck="false" />
-    </div>
-    <div class="field">
-      <label class="field-label" for="inp-device-id">BRUMEXA_DEVICE_ID</label>
-      <input type="text" id="inp-device-id" class="setup-input" placeholder="mi-dispositivo-01" autocomplete="off" spellcheck="false" />
-    </div>
-    <div class="field">
-      <label class="field-label" for="inp-api-key">BRUMEXA_API_KEY</label>
-      <div class="setup-token-row">
-        <input type="password" id="inp-api-key" class="setup-input" placeholder="brx_..." autocomplete="off" spellcheck="false" />
-        <button class="btn-ghost" id="btn-toggle-key" type="button" title="Mostrar/ocultar">👁</button>
-        <button class="btn-ghost" id="btn-copy-key" type="button" title="Copiar">⧉</button>
-      </div>
-    </div>
-    <div class="field">
-      <label class="field-label" for="inp-device-name">DEVICE_NAME</label>
-      <input type="text" id="inp-device-name" class="setup-input" placeholder="brumexa-01" autocomplete="off" />
-    </div>
-
-    <div class="connect-row">
-      <button class="btn-connect" id="btn-save-creds" style="flex:none; padding:10px 24px">💾 Guardar credenciales</button>
-    </div>
-    <div id="creds-save-result" style="margin-top:10px"></div>
-  </div>
-
-  <!-- § Diagnóstico de conexión — un solo botón, prueba auth + token juntos -->
-  <div class="card" id="card-diag">
-    <div class="card-hdr-row">
-      <div class="card-section-hdr" style="margin-bottom:0">
-        <span class="card-section-icon">🔗</span>
+    <!-- § Credenciales — identidad del dispositivo contra la RAG API -->
+    <div class="card" id="card-creds">
+      <div class="card-section-hdr">
+        <span class="card-section-icon">🔑</span>
         <div>
-          <div class="card-section-title">Diagnóstico de conexión</div>
-          <div class="card-section-desc">Prueba autenticación contra la RAG API y pedido de token de LiveKit, de una</div>
+          <div class="card-section-title">Credenciales</div>
+          <div class="card-section-desc">Se aplican al toque, sin reiniciar el servidor — solo se guardan en el .env para el próximo arranque</div>
         </div>
       </div>
-      <button class="btn-ghost" id="btn-test-connection" type="button">Probar conexión</button>
-    </div>
-    <div class="kv" id="kv-diag"></div>
-    <div id="diag-result" style="margin-top:8px"></div>
-  </div>
 
-  <!-- § Apariencia — color de la carcasa (único campo que reinicia) -->
-  <div class="card" id="card-color">
-    <div class="card-section-hdr">
-      <span class="card-section-icon">🎨</span>
-      <div>
-        <div class="card-section-title">Apariencia</div>
-        <div class="card-section-desc">Color de la carcasa — cada uno tiene su propia combinación de luces. Es el único cambio que reinicia el servidor.</div>
+      <div class="field">
+        <label class="field-label" for="inp-rag-url">RAG_API_URL</label>
+        <input type="text" id="inp-rag-url" class="setup-input" placeholder="http://192.168.0.x:4000" autocomplete="off" spellcheck="false" />
       </div>
-    </div>
-    <input type="hidden" id="inp-brumexa-color" value="negro" />
-    <div class="color-grid" id="color-grid"></div>
-    <div class="color-detail" id="color-detail"></div>
-    <div class="connect-row">
-      <button class="btn-connect" id="btn-save-color" style="flex:none; padding:9px 20px">🎨 Guardar color</button>
-    </div>
-    <div id="color-save-result" style="margin-top:10px"></div>
-  </div>
-
-  <!-- § Sonido — ganancias, sensibilidad, mic/parlante, calibración -->
-  <div class="card" id="card-sound">
-    <div class="card-section-hdr">
-      <span class="card-section-icon">🔊</span>
-      <div>
-        <div class="card-section-title">Sonido</div>
-        <div class="card-section-desc">Ganancias, sensibilidad de voz, mic/parlante y calibración de ruido ambiente</div>
+      <div class="field">
+        <label class="field-label" for="inp-device-id">BRUMEXA_DEVICE_ID</label>
+        <input type="text" id="inp-device-id" class="setup-input" placeholder="mi-dispositivo-01" autocomplete="off" spellcheck="false" />
       </div>
-    </div>
-
-    <div class="field">
-      <label class="field-label" for="inp-mic-gain">MIC_GAIN</label>
-      <input type="text" id="inp-mic-gain" class="setup-input setup-input--short" placeholder="4.0" />
-    </div>
-    <div class="field">
-      <label class="field-label" for="inp-speaker-gain">SPEAKER_GAIN (volumen de la voz del agente)</label>
-      <input type="text" id="inp-speaker-gain" class="setup-input setup-input--short" placeholder="3.0" />
-    </div>
-    <div class="field">
-      <label class="field-label" for="inp-silence-timeout">Corte automático por silencio (segundos)</label>
-      <input type="text" id="inp-silence-timeout" class="setup-input setup-input--short" placeholder="10" />
-      <p class="field-hint">Si nadie habla (ni vos ni el agente) durante estos segundos, la sesión se desconecta sola. Poné 0 para desactivarlo.</p>
-    </div>
-    <div class="connect-row">
-      <button class="btn-connect" id="btn-save-sound" style="flex:none; padding:9px 20px">💾 Guardar ganancias</button>
-    </div>
-    <div id="sound-save-result" style="margin-top:10px"></div>
-
-    <div class="divider"></div>
-
-    <div class="field">
-      <label class="field-label" for="inp-talk-threshold">Sensibilidad de la voz (umbral, dBFS)</label>
-      <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
-        <div class="gain-row" style="grid-template-columns:1fr 60px">
-          <input type="range" id="inp-talk-threshold" class="gain-slider" min="-50" max="-15" step="1" value="-25" />
-          <span class="gain-val" id="val-talk-threshold">-25 dBFS</span>
+      <div class="field">
+        <label class="field-label" for="inp-api-key">BRUMEXA_API_KEY</label>
+        <div class="setup-token-row">
+          <input type="password" id="inp-api-key" class="setup-input" placeholder="brx_..." autocomplete="off" spellcheck="false" />
+          <button class="btn-ghost" id="btn-toggle-key" type="button" title="Mostrar/ocultar">👁</button>
+          <button class="btn-ghost" id="btn-copy-key" type="button" title="Copiar">⧉</button>
         </div>
       </div>
-      <p class="field-hint">Se aplica al toque, sin reiniciar. Más a la izquierda (negativo) = más sensible — por debajo de -30 puede dispararse con ruido ambiente.</p>
+      <div class="field">
+        <label class="field-label" for="inp-device-name">DEVICE_NAME</label>
+        <input type="text" id="inp-device-name" class="setup-input" placeholder="brumexa-01" autocomplete="off" />
+      </div>
+
+      <div class="connect-row">
+        <button class="btn-connect" id="btn-save-creds" style="flex:none; padding:10px 24px">💾 Guardar credenciales</button>
+      </div>
+      <div id="creds-save-result" style="margin-top:10px"></div>
     </div>
 
-    <div class="divider"></div>
+    <!-- § Diagnóstico de conexión — un solo botón, prueba auth + token juntos -->
+    <div class="card" id="card-diag">
+      <div class="card-hdr-row">
+        <div class="card-section-hdr" style="margin-bottom:0">
+          <span class="card-section-icon">🔗</span>
+          <div>
+            <div class="card-section-title">Diagnóstico de conexión</div>
+            <div class="card-section-desc">Prueba autenticación contra la RAG API y pedido de token de LiveKit, de una</div>
+          </div>
+        </div>
+        <button class="btn-ghost" id="btn-test-connection" type="button">Probar conexión</button>
+      </div>
+      <div class="kv" id="kv-diag"></div>
+      <div id="diag-result" style="margin-top:8px"></div>
+    </div>
+  </div>
 
-    <div class="field">
-      <label class="field-label">Micrófono</label>
-      <button class="btn-ghost" id="btn-mic-toggle" type="button">Cargando…</button>
-      <p class="field-hint">Aplica en la próxima sesión — no afecta una ya conectada. No se guarda en .env.</p>
+  <!-- ═══ Grupo: Dispositivo ═══ -->
+  <div class="section-group">
+    <div class="section-group-label">Dispositivo</div>
+
+    <!-- § Apariencia — color de la carcasa (único campo que reinicia) -->
+    <div class="card" id="card-color">
+      <div class="card-section-hdr">
+        <span class="card-section-icon">🎨</span>
+        <div>
+          <div class="card-section-title">Apariencia</div>
+          <div class="card-section-desc">Color de la carcasa — cada uno tiene su propia combinación de luces. Es el único cambio que reinicia el servidor.</div>
+        </div>
+      </div>
+      <input type="hidden" id="inp-brumexa-color" value="negro" />
+      <div class="color-grid" id="color-grid"></div>
+      <div class="color-detail" id="color-detail"></div>
+      <div class="connect-row">
+        <button class="btn-connect" id="btn-save-color" style="flex:none; padding:9px 20px">🎨 Guardar color</button>
+      </div>
+      <div id="color-save-result" style="margin-top:10px"></div>
     </div>
 
-    <div class="field">
-      <label class="field-label">Parlante</label>
-      <button class="btn-ghost" id="btn-speaker-test" type="button">🔊 Probar parlante (tono 1kHz)</button>
-      <div id="speaker-test-result" style="margin-top:8px"></div>
+    <!-- § Ritmo de LEDs — velocidad de la respiración y de las olas de habla -->
+    <div class="card" id="card-led-rhythm">
+      <div class="card-section-hdr">
+        <span class="card-section-icon">💡</span>
+        <div>
+          <div class="card-section-title">Ritmo de LEDs</div>
+          <div class="card-section-desc">Se aplica al toque, sin reiniciar — arrastrá y mirá el dispositivo para sentir el cambio</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="inp-led-breathe">Ritmo de la respiración</label>
+        <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
+          <div class="gain-row" style="grid-template-columns:1fr 70px">
+            <input type="range" id="inp-led-breathe" class="gain-slider" min="600" max="8000" step="50" value="1900" />
+            <span class="gain-val" id="val-led-breathe">1900 ms</span>
+          </div>
+        </div>
+        <p class="field-hint">Cuánto dura un ciclo completo de inhalar+exhalar. Menos ms = respiración más rápida.</p>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="inp-led-hangover">Pausa antes de dejar de "hablar"</label>
+        <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
+          <div class="gain-row" style="grid-template-columns:1fr 70px">
+            <input type="range" id="inp-led-hangover" class="gain-slider" min="300" max="6000" step="100" value="2000" />
+            <span class="gain-val" id="val-led-hangover">2000 ms</span>
+          </div>
+        </div>
+        <p class="field-hint">Cuánto silencio tolera antes de asumir que dejaste de hablar — una pausa para pensar más corta que esto no corta la ola de LEDs.</p>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="inp-led-onset">Velocidad de la ola al empezar a hablar</label>
+        <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
+          <div class="gain-row" style="grid-template-columns:1fr 70px">
+            <input type="range" id="inp-led-onset" class="gain-slider" min="150" max="2000" step="20" value="536" />
+            <span class="gain-val" id="val-led-onset">536 ms</span>
+          </div>
+        </div>
+        <p class="field-hint">La "escalerita" que recorre las 8 LEDs de punta a punta cuando arrancás a hablar.</p>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="inp-led-offset">Velocidad de la ola al dejar de hablar</label>
+        <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
+          <div class="gain-row" style="grid-template-columns:1fr 70px">
+            <input type="range" id="inp-led-offset" class="gain-slider" min="150" max="3000" step="20" value="965" />
+            <span class="gain-val" id="val-led-offset">965 ms</span>
+          </div>
+        </div>
+        <p class="field-hint">La ola espejo que recorre las 8 LEDs al revés, volviendo a la respiración.</p>
+      </div>
     </div>
 
-    <div class="divider"></div>
+    <!-- § Sonido — ganancias, sensibilidad, mic/parlante, calibración -->
+    <div class="card" id="card-sound">
+      <div class="card-section-hdr">
+        <span class="card-section-icon">🔊</span>
+        <div>
+          <div class="card-section-title">Sonido</div>
+          <div class="card-section-desc">Ganancias, sensibilidad de voz, mic/parlante y calibración de ruido ambiente</div>
+        </div>
+      </div>
 
-    <div class="field">
-      <label class="field-label">Calibración de ruido ambiente</label>
-      <p class="field-hint">Corre sola al arrancar (fija el umbral según el ruido real de este ambiente). Volvé a correrla si el arranque agarró un mal momento.</p>
-      <div class="kv" id="kv-calibration" style="margin-top:6px"></div>
-      <button class="btn-ghost" id="btn-recalibrate" type="button" style="margin-top:8px">🎚️ Recalibrar ahora (4s de silencio)</button>
-      <div id="calibration-result" style="margin-top:8px"></div>
+      <div class="field">
+        <label class="field-label" for="inp-mic-gain">MIC_GAIN</label>
+        <input type="text" id="inp-mic-gain" class="setup-input setup-input--short" placeholder="4.0" />
+      </div>
+      <div class="field">
+        <label class="field-label" for="inp-speaker-gain">SPEAKER_GAIN (volumen de la voz del agente)</label>
+        <input type="text" id="inp-speaker-gain" class="setup-input setup-input--short" placeholder="3.0" />
+      </div>
+      <div class="field">
+        <label class="field-label" for="inp-silence-timeout">Corte automático por silencio (segundos)</label>
+        <input type="text" id="inp-silence-timeout" class="setup-input setup-input--short" placeholder="10" />
+        <p class="field-hint">Si nadie habla (ni vos ni el agente) durante estos segundos, la sesión se desconecta sola. Poné 0 para desactivarlo.</p>
+      </div>
+      <div class="connect-row">
+        <button class="btn-connect" id="btn-save-sound" style="flex:none; padding:9px 20px">💾 Guardar ganancias</button>
+      </div>
+      <div id="sound-save-result" style="margin-top:10px"></div>
+
+      <div class="divider"></div>
+
+      <div class="field">
+        <label class="field-label" for="inp-talk-threshold">Sensibilidad de la voz (umbral, dBFS)</label>
+        <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
+          <div class="gain-row" style="grid-template-columns:1fr 60px">
+            <input type="range" id="inp-talk-threshold" class="gain-slider" min="-50" max="-15" step="1" value="-25" />
+            <span class="gain-val" id="val-talk-threshold">-25 dBFS</span>
+          </div>
+        </div>
+        <p class="field-hint">Se aplica al toque, sin reiniciar. Más a la izquierda (negativo) = más sensible — por debajo de -30 puede dispararse con ruido ambiente.</p>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="field">
+        <label class="field-label">Micrófono</label>
+        <button class="btn-ghost" id="btn-mic-toggle" type="button">Cargando…</button>
+        <p class="field-hint">Aplica en la próxima sesión — no afecta una ya conectada. No se guarda en .env.</p>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Parlante</label>
+        <button class="btn-ghost" id="btn-speaker-test" type="button">🔊 Probar parlante (tono 1kHz)</button>
+        <div id="speaker-test-result" style="margin-top:8px"></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="field">
+        <label class="field-label">Calibración de ruido ambiente</label>
+        <p class="field-hint">Corre sola al arrancar (fija el umbral según el ruido real de este ambiente). Volvé a correrla si el arranque agarró un mal momento.</p>
+        <div class="kv" id="kv-calibration" style="margin-top:6px"></div>
+        <button class="btn-ghost" id="btn-recalibrate" type="button" style="margin-top:8px">🎚️ Recalibrar ahora (4s de silencio)</button>
+        <div id="calibration-result" style="margin-top:8px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Grupo: Mantenimiento ═══ -->
+  <div class="section-group">
+    <div class="section-group-label">Mantenimiento</div>
+
+    <!-- § Actualizar Brumexa -->
+    <div class="card" id="card-update">
+      <div class="card-section-hdr">
+        <span class="card-section-icon">⬇️</span>
+        <div>
+          <div class="card-section-title">Actualizar Brumexa</div>
+          <div class="card-section-desc">Trae los últimos cambios del código (equivalente a "git pull") y reinicia el servidor solo si hubo novedades</div>
+        </div>
+      </div>
+      <div class="kv" id="kv-version" style="margin-bottom:10px"></div>
+      <button class="btn-connect" id="btn-update" style="width:auto; padding:9px 20px">⬇️ Buscar actualizaciones</button>
+      <button class="btn-ghost" id="btn-restart" style="width:auto; padding:9px 20px; margin-left:8px">🔄 Reiniciar Brumexa</button>
+      <p class="field-hint" style="margin-top:8px">Reiniciar no toca el código ni la configuración — solo apaga y prende el proceso. Útil si algo se traba y no hace falta actualizar nada.</p>
+      <div id="update-result" style="margin-top:10px"></div>
     </div>
   </div>
 
@@ -329,6 +399,10 @@
       document.getElementById('inp-talk-threshold').value = cfg.talkThreshold || '-25';
       document.getElementById('val-talk-threshold').textContent = `${cfg.talkThreshold || '-25'} dBFS`;
       document.getElementById('inp-silence-timeout').value = Math.round((parseInt(cfg.silenceTimeoutMs, 10) || 10000) / 1000);
+      setLedRhythmField('inp-led-breathe',  'val-led-breathe',  cfg.ledBreathePeriodMs, 1900);
+      setLedRhythmField('inp-led-hangover', 'val-led-hangover', cfg.ledHangoverMs,      2000);
+      setLedRhythmField('inp-led-onset',    'val-led-onset',    cfg.ledOnsetMs,         536);
+      setLedRhythmField('inp-led-offset',   'val-led-offset',   cfg.ledOffsetMs,        965);
 
       micEnabledState = status.micEnabled !== false;
       updateMicButton();
@@ -578,6 +652,36 @@
       } catch {}
     }, 400);
   });
+
+  // ─── Ritmo de LEDs — 4 sliders, mismo criterio que arriba: label en vivo +
+  // push con debounce a /setup/config (persiste Y aplica, no hace falta
+  // tocar "Guardar" — arrastrás y el dispositivo ya responde). ─────────────
+  function setLedRhythmField(inputId, valId, cfgValue, fallback) {
+    const v = parseFloat(cfgValue);
+    const ms = isNaN(v) ? fallback : v;
+    document.getElementById(inputId).value = ms;
+    document.getElementById(valId).textContent = `${ms} ms`;
+  }
+  function wireLedRhythmSlider(inputId, valId, bodyKey) {
+    let timer = null;
+    document.getElementById(inputId).addEventListener('input', (e) => {
+      document.getElementById(valId).textContent = `${e.target.value} ms`;
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        try {
+          await fetch('/setup/config', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ [bodyKey]: e.target.value }),
+          });
+        } catch {}
+      }, 400);
+    });
+  }
+  wireLedRhythmSlider('inp-led-breathe',  'val-led-breathe',  'ledBreathePeriodMs');
+  wireLedRhythmSlider('inp-led-hangover', 'val-led-hangover', 'ledHangoverMs');
+  wireLedRhythmSlider('inp-led-onset',    'val-led-onset',    'ledOnsetMs');
+  wireLedRhythmSlider('inp-led-offset',   'val-led-offset',   'ledOffsetMs');
 
   // Sondea /configuracion/status cada 2s hasta 20s (solo se usa cuando SÍ
   // hubo reinicio — cambio de color o "Actualizar Brumexa"). Si vuelve,

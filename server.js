@@ -189,6 +189,12 @@ app.get('/setup/config', (_req, res) => {
     talkThreshold: getVal('MIC_TALK_THRESHOLD_DBFS') || '-25',
     silenceTimeoutMs: getVal('SILENCE_DISCONNECT_MS') || '10000',
     brumexaColor: getVal('BRUMEXA_COLOR') || 'negro',
+    // Ritmo de los LEDS — ver lib/leds.js (setBreathePeriodMs, setHangoverMs,
+    // setOnsetDurationMs, setOffsetDurationMs) para el porqué de cada uno.
+    ledBreathePeriodMs: getVal('LED_BREATHE_PERIOD_MS') || '1900',
+    ledHangoverMs:      getVal('LED_HANGOVER_MS')       || '2000',
+    ledOnsetMs:         getVal('LED_ONSET_MS')          || '536',
+    ledOffsetMs:        getVal('LED_OFFSET_MS')         || '965',
   });
 });
 
@@ -225,7 +231,10 @@ function setEnvLine(src, key, value) {
 // lkSession, mic gain del modo browser → lib/audio, color → leds.setDeviceColor).
 app.post('/setup/config', express.json(), (req, res) => {
   const envFile = path.join(__dirname, '.env');
-  const { ragApiUrl, deviceId, apiKey, deviceName, micGain, speakerGain, talkThreshold, silenceTimeoutMs, brumexaColor } = req.body || {};
+  const {
+    ragApiUrl, deviceId, apiKey, deviceName, micGain, speakerGain, talkThreshold, silenceTimeoutMs, brumexaColor,
+    ledBreathePeriodMs, ledHangoverMs, ledOnsetMs, ledOffsetMs,
+  } = req.body || {};
   let content = '';
   try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
 
@@ -238,6 +247,10 @@ app.post('/setup/config', express.json(), (req, res) => {
   if (talkThreshold !== undefined) content = setEnvLine(content, 'MIC_TALK_THRESHOLD_DBFS', talkThreshold);
   if (silenceTimeoutMs !== undefined) content = setEnvLine(content, 'SILENCE_DISCONNECT_MS', silenceTimeoutMs);
   if (brumexaColor  !== undefined) content = setEnvLine(content, 'BRUMEXA_COLOR', brumexaColor);
+  if (ledBreathePeriodMs !== undefined) content = setEnvLine(content, 'LED_BREATHE_PERIOD_MS', ledBreathePeriodMs);
+  if (ledHangoverMs      !== undefined) content = setEnvLine(content, 'LED_HANGOVER_MS',       ledHangoverMs);
+  if (ledOnsetMs         !== undefined) content = setEnvLine(content, 'LED_ONSET_MS',          ledOnsetMs);
+  if (ledOffsetMs        !== undefined) content = setEnvLine(content, 'LED_OFFSET_MS',         ledOffsetMs);
 
   try {
     require('fs').writeFileSync(envFile, content, 'utf8');
@@ -264,6 +277,10 @@ app.post('/setup/config', express.json(), (req, res) => {
       if (!isNaN(s)) lkSession.setSilenceTimeout(s);
     }
     if (brumexaColor !== undefined) leds.setDeviceColor(brumexaColor);
+    if (ledBreathePeriodMs !== undefined) { const v = parseFloat(ledBreathePeriodMs); if (!isNaN(v)) leds.setBreathePeriodMs(v); }
+    if (ledHangoverMs      !== undefined) { const v = parseFloat(ledHangoverMs);      if (!isNaN(v)) leds.setHangoverMs(v); }
+    if (ledOnsetMs         !== undefined) { const v = parseFloat(ledOnsetMs);         if (!isNaN(v)) leds.setOnsetDurationMs(v); }
+    if (ledOffsetMs        !== undefined) { const v = parseFloat(ledOffsetMs);        if (!isNaN(v)) leds.setOffsetDurationMs(v); }
 
     res.json({ ok: true, restarting: false });
   } catch (err) {
