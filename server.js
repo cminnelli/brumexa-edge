@@ -83,6 +83,15 @@ app.get('/terminal', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'terminal.html'));
 });
 
+// ─── GET /diagnostico — pruebas de hardware (mic/speaker/LEDs/grabaciones)
+// + diagnóstico de conexión (RAG/token), todo lo que antes vivía repartido
+// entre el Panel y Configuración. Script propio (diagnostico.js), no
+// comparte app.js con el Panel — ver el comentario grande al principio de
+// ese archivo para el porqué.
+app.get('/diagnostico', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'diagnostico.html'));
+});
+
 // ─── GET /config — info del dispositivo y configuración (sin secretos) ───────
 app.get('/config', (_req, res) => {
   res.json({

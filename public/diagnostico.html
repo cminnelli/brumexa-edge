@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brumexa — Diagnóstico</title>
+  <script>
+    (function () {
+      var t = localStorage.getItem('brumexa-theme');
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css?v=21" />
+</head>
+<body>
+
+<header class="site-header">
+  <div class="site-header__inner">
+    <div class="site-header__brand">
+      <span class="brand-name">Brumexa</span>
+    </div>
+    <nav class="tab-nav">
+      <a class="tab-btn" href="/">Panel</a>
+      <a class="tab-btn" id="nav-terminal" href="/terminal">Terminal Pi</a>
+      <a class="tab-btn" href="/configuracion">Configuracion</a>
+      <a class="tab-btn active" href="/diagnostico">Diagnóstico</a>
+    </nav>
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambiar tema" title="Cambiar tema"></button>
+  </div>
+</header>
+
+<main class="page-wrap" style="max-width:760px">
+
+  <p class="field-hint" id="diagnostico-platform-note" style="display:none; text-align:center; padding:0.5rem 0"></p>
+
+  <!-- § Resultado general — un renglón por subsistema, se va llenando a
+       medida que corrés cada prueba (LEDs y Micrófono se autochequean al
+       entrar; Parlante/Conexión/Grabaciones son manuales porque tienen
+       efecto real: suena un tono, pega contra la API, graba algo). -->
+  <div class="card">
+    <div class="card-section-hdr">
+      <span class="card-section-icon">🩺</span>
+      <div>
+        <div class="card-section-title">Resultado general</div>
+        <div class="card-section-desc">Un vistazo rápido — si algo está mal, lo dice acá</div>
+      </div>
+    </div>
+    <div class="dbg-rows">
+      <div class="dbg-row">
+        <span class="dbg-icon">🔗</span>
+        <div class="dbg-body">
+          <div class="dbg-label">Conexión</div>
+          <div class="dbg-val" id="sum-conn-val">Sin probar</div>
+        </div>
+        <span class="dbg-dot idle" id="sum-conn-dot"></span>
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-icon">🎤</span>
+        <div class="dbg-body">
+          <div class="dbg-label">Micrófono</div>
+          <div class="dbg-val" id="sum-mic-val">Verificando…</div>
+        </div>
+        <span class="dbg-dot idle" id="sum-mic-dot"></span>
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-icon">🔈</span>
+        <div class="dbg-body">
+          <div class="dbg-label">Parlante</div>
+          <div class="dbg-val" id="sum-speaker-val">Sin probar</div>
+        </div>
+        <span class="dbg-dot idle" id="sum-speaker-dot"></span>
+      </div>
+      <div class="dbg-row">
+        <span class="dbg-icon">💡</span>
+        <div class="dbg-body">
+          <div class="dbg-label">LEDs</div>
+          <div class="dbg-val" id="sum-leds-val">Verificando…</div>
+        </div>
+        <span class="dbg-dot idle" id="sum-leds-dot"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- § Diagnóstico de conexión — RAG API + token de LiveKit -->
+  <div class="card" id="card-diag">
+    <div class="card-hdr-row">
+      <div class="card-section-hdr" style="margin-bottom:0">
+        <span class="card-section-icon">🔗</span>
+        <div>
+          <div class="card-section-title">Diagnóstico de conexión</div>
+          <div class="card-section-desc">Prueba autenticación contra la RAG API y pedido de token de LiveKit, de una</div>
+        </div>
+      </div>
+      <button class="btn-ghost" id="btn-test-connection" type="button">Probar conexión</button>
+    </div>
+    <div class="kv" id="kv-diag"></div>
+    <div id="diag-result" style="margin-top:8px"></div>
+  </div>
+
+  <!-- § Micrófono — nivel en vivo -->
+  <div class="card">
+    <div class="card-section-hdr">
+      <span class="card-section-icon">🎙</span>
+      <div>
+        <div class="card-section-title">Micrófono</div>
+        <div class="card-section-desc">Nivel de señal en vivo — el mismo dato que ya usa el dispositivo para detectar tu voz</div>
+      </div>
+    </div>
+    <div class="vu-bar-wrap">
+      <div id="mic-vu-bar" class="vu-bar"></div>
+      <span id="mic-vu-db" class="vu-db">— dBFS</span>
+    </div>
+    <p class="field-hint" id="mic-vu-note">Consultando…</p>
+  </div>
+
+  <!-- § Parlante -->
+  <div class="card">
+    <div class="card-section-hdr">
+      <span class="card-section-icon">🔈</span>
+      <div>
+        <div class="card-section-title">Parlante</div>
+        <div class="card-section-desc">Reproduce un tono de prueba (1kHz) por el parlante físico</div>
+      </div>
+    </div>
+    <button class="btn-ghost" id="btn-speaker-test" type="button">🔊 Probar parlante (tono 1kHz)</button>
+    <div id="speaker-test-result" style="margin-top:8px"></div>
+  </div>
+
+  <!-- § LEDs — estado + chispazo de prueba + laboratorio de color -->
+  <div class="card">
+    <div class="card-section-hdr">
+      <span class="card-section-icon">💡</span>
+      <div>
+        <div class="card-section-title">LEDs</div>
+        <div class="card-section-desc">Estado del hardware, prueba rápida y laboratorio de color en vivo</div>
+      </div>
+    </div>
+    <div class="kv" id="kv-leds-diag"></div>
+    <div class="connect-row" style="margin-top:0.75rem">
+      <button class="btn-ghost" id="btn-leds-flash" type="button">✅ Chispazo verde (2.5s)</button>
+    </div>
+    <div id="leds-flash-result" style="margin-top:8px"></div>
+
+    <div class="divider"></div>
+
+    <div class="field-group-label">Laboratorio de color</div>
+    <div class="leds-lab__swatch" id="leds-lab-swatch" style="margin-bottom:0.75rem"></div>
+    <div class="leds-lab__row" style="margin-bottom:0.75rem">
+      <label for="leds-lab-hue">Tono</label>
+      <input type="range" id="leds-lab-hue" min="0" max="359" step="1" value="255" class="leds-lab__slider leds-lab__slider--hue">
+    </div>
+    <div class="leds-lab__row" style="margin-bottom:0.75rem">
+      <label for="leds-lab-sat">Saturación</label>
+      <input type="range" id="leds-lab-sat" min="0" max="100" step="1" value="100" class="leds-lab__slider">
+    </div>
+    <div class="leds-lab__row" style="margin-bottom:0.75rem">
+      <label for="leds-lab-val">Brillo</label>
+      <input type="range" id="leds-lab-val" min="5" max="100" step="1" value="100" class="leds-lab__slider">
+    </div>
+    <button class="btn-ghost" id="btn-leds-lab-exit" type="button">Salir del laboratorio (volver al color normal)</button>
+  </div>
+
+  <!-- § Grabaciones -->
+  <div class="card" id="recordings-card">
+    <div class="card-section-hdr">
+      <span class="card-section-icon">⏺</span>
+      <div>
+        <div class="card-section-title">Grabaciones de prueba</div>
+        <div class="card-section-desc">Grabá un tramo corto con el mic de este dispositivo y escuchalo por el parlante</div>
+      </div>
+    </div>
+    <div class="connect-row">
+      <button id="btn-rec-start" class="btn-connect" style="flex:none; padding:9px 20px">⏺ Grabar</button>
+      <button id="btn-rec-stop" class="btn-connect" style="flex:none; padding:9px 20px; display:none">⏹ Detener</button>
+      <span id="rec-timer" style="display:none; font-weight:700"><span id="rec-seconds">0</span>s</span>
+    </div>
+    <div id="rec-result" style="margin-top:8px"></div>
+    <ul id="recordings-list" class="recordings-list" style="margin-top:12px"></ul>
+  </div>
+
+</main>
+
+<script src="diagnostico.js?v=1"></script>
+<script src="theme.js?v=1"></script>
+
+</body>
+</html>

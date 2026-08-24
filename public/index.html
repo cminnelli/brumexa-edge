@@ -20,17 +20,6 @@
 <body>
 
 <!-- ═══════════════════════════════════════════════════════════
-     ALERTA LEDs — banner grande, imposible de no ver, visible en
-     TODAS las pestañas (Panel/Terminal/Configuracion) mientras
-     los LEDs tengan un problema. Oculto por defecto.
-════════════════════════════════════════════════════════════ -->
-<div id="leds-alert-banner" style="display:none; position:sticky; top:0; z-index:999; background:#ef4444; color:#fff; padding:10px 16px; font:14px/1.4 'Inter', system-ui, sans-serif; align-items:center; gap:12px; flex-wrap:wrap;">
-  <strong>💡 LEDs:</strong>
-  <span id="leds-alert-text">verificando…</span>
-  <button id="leds-alert-retry" style="margin-left:auto; background:#fff; color:#ef4444; border:none; border-radius:6px; padding:4px 10px; cursor:pointer; font-weight:600;">Reintentar</button>
-</div>
-
-<!-- ═══════════════════════════════════════════════════════════
      HEADER
 ════════════════════════════════════════════════════════════ -->
 <header class="site-header">
@@ -43,6 +32,7 @@
       <a class="tab-btn active" href="/">Panel</a>
       <a class="tab-btn" id="nav-terminal" href="/terminal">Terminal Pi</a>
       <a class="tab-btn" href="/configuracion">Configuracion</a>
+      <a class="tab-btn" href="/diagnostico">Diagnóstico</a>
     </nav>
     <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambiar tema" title="Cambiar tema"></button>
   </div>
@@ -249,16 +239,6 @@
             </div>
             <span class="dbg-dot idle" id="dbg-spk-dot"></span>
           </div>
-          <div class="dbg-row">
-            <span class="dbg-icon">💡</span>
-            <div class="dbg-body">
-              <div class="dbg-label">LEDs</div>
-              <div class="dbg-val" id="dbg-leds-val">Verificando…</div>
-              <div class="dbg-sub" id="dbg-leds-sub">—</div>
-            </div>
-            <button class="dbg-tile-link" id="btn-leds-test">Probar</button>
-            <span class="dbg-dot idle" id="dbg-leds-dot"></span>
-          </div>
         </div>
 
         <!-- Botón principal -->
@@ -268,39 +248,6 @@
         </div>
 
       </div><!-- /card conexión -->
-
-      <!-- § Test de micrófono — card propia e independiente de LiveKit -->
-      <div class="card" id="vumeter-card">
-        <div class="card-section-hdr">
-          <span class="card-section-icon">🎙</span>
-          <div>
-            <div class="card-section-title">Test de micrófono</div>
-            <div class="card-section-desc">Nivel de señal del micrófono en tiempo real, sin pasar por LiveKit</div>
-          </div>
-        </div>
-        <canvas id="vu-canvas" width="600" height="60"></canvas>
-        <div class="vu-bar-wrap">
-          <div id="vu-bar" class="vu-bar"></div>
-          <span id="vu-db" class="vu-db">— dB</span>
-        </div>
-        <p class="field-hint">Hablá para ver el nivel de señal del micrófono.</p>
-
-        <div class="dbg-rows" style="margin-top:10px">
-          <div class="dbg-row">
-            <span class="dbg-icon">🎤</span>
-            <div class="dbg-body">
-              <div class="dbg-label">Micrófono</div>
-              <div class="dbg-val" id="dbg-mic-val">Inactivo</div>
-              <div class="dbg-sub" id="dbg-mic-sub">—</div>
-            </div>
-            <span class="dbg-dot idle" id="dbg-mic-dot"></span>
-          </div>
-        </div>
-
-        <div class="connect-row">
-          <button id="btn-mictest" class="btn-connect">Analizar micrófono</button>
-        </div>
-      </div>
 
       <!-- § Log de eventos -->
       <div class="card">
@@ -317,81 +264,14 @@
         <ul id="log" class="event-log"></ul>
       </div>
 
-      <!-- § Grabaciones — solo Linux -->
-      <div class="card" id="recordings-card" style="display:none">
-        <div class="card-hdr-row">
-          <div class="card-section-hdr" style="margin-bottom:0">
-            <span class="card-section-icon">⏺</span>
-            <div>
-              <div class="card-section-title">Grabaciones de prueba</div>
-              <div class="card-section-desc">Grabá audio para verificar calidad del mic</div>
-            </div>
-          </div>
-          <div class="btn-group">
-            <span id="rec-timer" class="rec-timer" style="display:none">⏺ <span id="rec-seconds">0</span>s</span>
-            <button class="btn-rec-start" id="btn-rec-start">Grabar</button>
-            <button class="btn-rec-stop"  id="btn-rec-stop" style="display:none">Detener</button>
-          </div>
-        </div>
-        <!-- Controles de ganancia -->
-        <div class="gain-controls">
-          <div class="gain-row">
-            <label class="gain-label" for="slider-mic-gain">Mic en vivo</label>
-            <input type="range" id="slider-mic-gain" class="gain-slider"
-                   min="1" max="16" step="0.5" value="4">
-            <span class="gain-val" id="val-mic-gain">4x</span>
-            <span class="gain-db"  id="db-mic-gain">+12 dB</span>
-          </div>
-          <div class="gain-row">
-            <label class="gain-label" for="slider-norm-target">Nivel grabación</label>
-            <input type="range" id="slider-norm-target" class="gain-slider"
-                   min="30" max="100" step="5" value="85">
-            <span class="gain-val" id="val-norm-target">85%</span>
-            <span class="gain-db"  id="db-norm-target">−1 dBFS</span>
-          </div>
-        </div>
-
-        <ul id="recordings-list" class="recordings-list">
-          <li class="list-empty">Sin grabaciones aún.</li>
-        </ul>
-      </div>
-
     </div><!-- /panel-main -->
 
   </div><!-- /panel-layout -->
 
 </main><!-- #panel-section -->
 
-<!-- § Laboratorio de LEDs — probar hue/saturación/brillo en vivo sobre el
-     hardware real, sin tocar color-schemes.json ni .env. Se abre desde el
-     botón "Probar" del cuadrado de LEDs. -->
-<div id="leds-lab" class="leds-lab" style="display:none" aria-hidden="true">
-  <div class="leds-lab__backdrop" id="leds-lab-backdrop"></div>
-  <div class="leds-lab__panel" role="dialog" aria-modal="true" aria-labelledby="leds-lab-title">
-    <div class="leds-lab__hdr">
-      <span id="leds-lab-title">Laboratorio de LEDs</span>
-      <button class="leds-lab__close" id="leds-lab-close" type="button" aria-label="Cerrar">✕</button>
-    </div>
-
-    <div class="leds-lab__swatch" id="leds-lab-swatch"></div>
-
-    <div class="leds-lab__row">
-      <label for="leds-lab-hue">Tono</label>
-      <input type="range" id="leds-lab-hue" min="0" max="359" step="1" value="255" class="leds-lab__slider leds-lab__slider--hue">
-    </div>
-    <div class="leds-lab__row">
-      <label for="leds-lab-sat">Saturación</label>
-      <input type="range" id="leds-lab-sat" min="0" max="100" step="1" value="100" class="leds-lab__slider leds-lab__slider--sat">
-    </div>
-    <div class="leds-lab__row">
-      <label for="leds-lab-val">Brillo</label>
-      <input type="range" id="leds-lab-val" min="5" max="100" step="1" value="100" class="leds-lab__slider leds-lab__slider--val">
-    </div>
-  </div>
-</div>
-
 <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
 <script src="theme.js?v=1"></script>
-<script src="app.js?v=32"></script>
+<script src="app.js?v=33"></script>
 </body>
 </html>

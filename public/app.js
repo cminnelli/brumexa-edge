@@ -4,7 +4,6 @@
 // ESTADO GLOBAL
 // ============================================================
 const state = {
-  mode: 'livekit',   // 'livekit' | 'mictest'
   active: false,
 
   // LiveKit
@@ -12,12 +11,6 @@ const state = {
   localTrack: null,
   lkMonitor:  null,   // { stop() } — monitor del track local (analyser)
   lkStats:    null,   // { stop() } — monitor de stats del RTCRtpSender
-
-  // Test Mic — Web Audio API
-  stream:    null,
-  audioCtx:  null,
-  analyser:  null,
-  animFrame: null,
 
   // Config (from /config)
   micGain: null,
@@ -28,7 +21,6 @@ const state = {
 // ============================================================
 const ui = {
   btnMic:        document.getElementById('btn-mic'),
-  btnMicTest:    document.getElementById('btn-mictest'),
   btnReconectar: document.getElementById('btn-reconectar'),
   log:           document.getElementById('log'),
 
@@ -64,20 +56,6 @@ const ui = {
   miniVuWrap: document.getElementById('mini-vu-wrap'),
   miniVuBar:  document.getElementById('mini-vu-bar'),
   miniVuDb:   document.getElementById('mini-vu-db'),
-
-  // VU Meter (Test Mic)
-  vumeterCard: document.getElementById('vumeter-card'),
-  vuCanvas:    document.getElementById('vu-canvas'),
-  vuBar:       document.getElementById('vu-bar'),
-  vuDb:        document.getElementById('vu-db'),
-
-  // Grabaciones
-  recordingsCard:   document.getElementById('recordings-card'),
-  recTimer:         document.getElementById('rec-timer'),
-  recSeconds:       document.getElementById('rec-seconds'),
-  btnRecStart:      document.getElementById('btn-rec-start'),
-  btnRecStop:       document.getElementById('btn-rec-stop'),
-  recordingsList:   document.getElementById('recordings-list'),
 
   // Fuente de audio (browser / Pi)
   audioSourceWrap:  document.getElementById('audio-source-wrap'),
@@ -288,7 +266,6 @@ function showReconectar(show) {
 
 ui.btnReconectar.addEventListener('click', async () => {
   if (state.active) return;
-  state.mode = 'livekit';
   ui.btnMic.click();
 });
 
@@ -737,30 +714,6 @@ function getSelectedSpeakerDest() {
 
 function getSelectedAlsaSpeaker() {
   return document.getElementById('alsa-speaker-select')?.value || 'plughw:0,0';
-}
-
-/**
- * getAudioTrack()
- *
- * Abstrae la fuente: devuelve un MediaStream ya listo,
- * ya sea de getUserMedia (browser) o del WebSocket Pi.
- * LiveKit siempre recibe un MediaStream igual.
- *
- * @returns {Promise<{ stream: MediaStream, source: 'browser'|'pi' }>}
- */
-async function getAudioTrack() {
-  const source = getSelectedSource();
-
-  if (source === 'pi') {
-    const device = getSelectedAlsaDevice();
-    log(`Capturando audio de la Pi — dispositivo: ${device}`);
-    const stream = await PiMicModule.start(device);
-    return { stream, source: 'pi' };
-  }
-
-  // Fuente browser (getUserMedia — comportamiento original)
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-  return { stream, source: 'browser' };
 }
 
 // ============================================================
@@ -1488,114 +1441,6 @@ const LiveKitModule = {
 };
 
 // ============================================================
-// MÓDULO TEST MIC
-// ============================================================
-const MicTestModule = {
-
-  async start() {
-    log('Iniciando test de micrófono…');
-    setMicStatus('requesting', 'obteniendo fuente…');
-
-    const { stream, source: src } = await getAudioTrack();
-    state.stream = stream;
-
-    let audioCtx, analyser;
-
-    if (src === 'pi' && PiMicModule._workletNode && PiMicModule._audioCtx) {
-      // ALSA: conectar el analyser DIRECTAMENTE al workletNode en su propio AudioContext.
-      // Crear un nuevo AudioContext para analizar un stream de otro contexto no funciona
-      // bien en Chrome cuando los sample rates son distintos (16kHz vs 48kHz).
-      audioCtx = PiMicModule._audioCtx;
-      analyser = audioCtx.createAnalyser();
-      analyser.fftSize               = 256;
-      analyser.smoothingTimeConstant = 0.6;
-      PiMicModule._workletNode.connect(analyser);
-    } else {
-      // Browser mic: AudioContext normal
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      await audioCtx.resume();
-      const source = audioCtx.createMediaStreamSource(stream);
-      analyser = audioCtx.createAnalyser();
-      analyser.fftSize               = 256;
-      analyser.smoothingTimeConstant = 0.6;
-      source.connect(analyser);
-    }
-
-    state.audioCtx = audioCtx;
-    state.analyser = analyser;
-
-    const label = src === 'pi' ? 'Pi ALSA' : 'Browser';
-    log(`Micrófono capturado — fuente: ${label}. Hablá para ver el nivel.`, 'success');
-    setMicStatus('active', label);
-
-    this._renderLoop();
-  },
-
-  _renderLoop() {
-    const analyser  = state.analyser;
-    const canvas    = ui.vuCanvas;
-    const ctx       = canvas.getContext('2d');
-    const bufferLen = analyser.frequencyBinCount;
-    const dataArr   = new Uint8Array(bufferLen);
-    canvas.width    = canvas.offsetWidth || 440;
-
-    const draw = () => {
-      if (!state.active) return;
-      state.animFrame = requestAnimationFrame(draw);
-      analyser.getByteFrequencyData(dataArr);
-
-      let sum = 0;
-      for (let i = 0; i < bufferLen; i++) sum += dataArr[i];
-      const avg   = sum / bufferLen;
-      const pct   = avg / 255;
-      const db    = avg > 0 ? (20 * Math.log10(avg / 255)).toFixed(1) : '-∞';
-      const color = pct < 0.6 ? '#3dba76' : pct < 0.85 ? '#e0a032' : '#e05555';
-
-      ui.vuBar.style.width      = `${Math.min(pct * 100, 100)}%`;
-      ui.vuBar.style.background = color;
-      ui.vuDb.textContent       = `${db} dB`;
-
-      const W = canvas.width, H = canvas.height;
-      ctx.clearRect(0, 0, W, H);
-      const barW = W / bufferLen;
-      let   x    = 0;
-      for (let i = 0; i < bufferLen; i++) {
-        const barH = (dataArr[i] / 255) * H;
-        const hue  = Math.round(120 - (dataArr[i] / 255) * 120);
-        ctx.fillStyle = `hsl(${hue}, 80%, 55%)`;
-        ctx.fillRect(x, H - barH, barW - 1, barH);
-        x += barW;
-      }
-    };
-
-    draw();
-  },
-
-  stop() {
-    PiMicModule.stop();
-    if (state.animFrame) {
-      cancelAnimationFrame(state.animFrame);
-      state.animFrame = null;
-    }
-    // Solo cerrar el AudioContext si es nuestro (no el de PiMicModule)
-    if (state.audioCtx && state.audioCtx !== PiMicModule._audioCtx) {
-      state.audioCtx.close();
-    }
-    state.audioCtx = null;
-    state.analyser = null;
-    state.stream?.getTracks().forEach((t) => t.stop());
-    state.stream = null;
-
-    const ctx = ui.vuCanvas.getContext('2d');
-    ctx.clearRect(0, 0, ui.vuCanvas.width, ui.vuCanvas.height);
-    ui.vuBar.style.width = '0%';
-    ui.vuDb.textContent  = '— dB';
-    setMicStatus('idle');
-    log('Test de micrófono detenido', 'warn');
-  },
-};
-
-// ============================================================
 // BOTÓN PRINCIPAL
 // ============================================================
 function updateMicButton(active) {
@@ -1608,50 +1453,24 @@ function updateMicButton(active) {
   }
 }
 
-function updateMicTestButton(active) {
-  if (active) {
-    ui.btnMicTest.textContent = 'Detener análisis';
-    ui.btnMicTest.classList.add('recording');
-  } else {
-    ui.btnMicTest.textContent = 'Analizar micrófono';
-    ui.btnMicTest.classList.remove('recording');
-  }
-}
-
-// LiveKit y Test de micrófono son dos cards separadas con su propio botón
-// cada una — comparten esta misma función (mismo manejo de estado/errores
-// que antes tenía el selector de modo), solo que ahora el "modo" lo define
-// qué botón tocaste, no un toggle previo. No se puede correr los dos a la
-// vez (comparten el mic físico), así que uno deshabilita al otro mientras
-// está activo.
-async function handleConnectClick(mode) {
-  const btn      = mode === 'livekit' ? ui.btnMic     : ui.btnMicTest;
-  const otherBtn = mode === 'livekit' ? ui.btnMicTest : ui.btnMic;
-  const setBtn   = mode === 'livekit' ? updateMicButton : updateMicTestButton;
-
+// El "Test de micrófono" (browser Web Audio API) que vivía acá se movió a
+// /diagnostico — esa página ya no necesita capturar audio del browser: lee
+// el nivel real que el server ya está monitoreando (GET /local/status), más
+// simple y funciona igual en reposo o en medio de una sesión.
+async function handleConnectClick() {
+  const btn = ui.btnMic;
   btn.disabled = true;
   try {
     if (!state.active) {
-      state.mode   = mode;
       state.active = true;
-      setBtn(true);
-      if (mode === 'livekit') {
-        if (state.usePiNative) await PiNativeModule.start();
-        else                   await LiveKitModule.start();
-      } else {
-        await MicTestModule.start();
-      }
-      otherBtn.disabled = true;
+      updateMicButton(true);
+      if (state.usePiNative) await PiNativeModule.start();
+      else                   await LiveKitModule.start();
     } else {
       state.active = false;
-      setBtn(false);
-      if (mode === 'livekit') {
-        if (state.usePiNative) await PiNativeModule.stop();
-        else                   await LiveKitModule.stop();
-      } else {
-        MicTestModule.stop();
-      }
-      otherBtn.disabled = false;
+      updateMicButton(false);
+      if (state.usePiNative) await PiNativeModule.stop();
+      else                   await LiveKitModule.stop();
     }
   } catch (err) {
     // Si el server dice "sesión ya activa" (409), no es un error real —
@@ -1662,13 +1481,12 @@ async function handleConnectClick(mode) {
     // frenarla desde acá.
     if (/sesión ya activa/i.test(err.message)) {
       state.active = true;
-      setBtn(true);
+      updateMicButton(true);
       log('[pi-native] Ya había una sesión activa — sincronizando botón a "Desconectar"', 'warn');
       if (state.usePiNative) PiNativeModule._startPolling();
     } else {
       state.active = false;
-      setBtn(false);
-      otherBtn.disabled = false;
+      updateMicButton(false);
       setMicStatus('error');
       log(formatError(err), 'error');
       console.error(err);
@@ -1678,8 +1496,7 @@ async function handleConnectClick(mode) {
   }
 }
 
-ui.btnMic.addEventListener('click', () => handleConnectClick('livekit'));
-ui.btnMicTest.addEventListener('click', () => handleConnectClick('mictest'));
+ui.btnMic.addEventListener('click', () => handleConnectClick());
 
 // ============================================================
 // LIMPIAR LOG
@@ -1718,556 +1535,10 @@ function formatError(err) {
 }
 
 // ============================================================
-// MÓDULO PLAYBACK — reproduce grabaciones en browser o Pi speaker
-// ============================================================
-const PlaybackModule = {
-  _audio:        null,   // HTMLAudioElement (browser)
-  _activeBtn:    null,   // botón ▶ activo, para restaurarlo al parar
-  _pollInterval: null,   // polling de /recordings/play-status (Pi)
-  _piActive:     false,  // si hay un aplay corriendo en la Pi
-  _busy:         false,  // evita operaciones concurrentes
-  _playStartAt:  0,      // timestamp cuando empezó el aplay (para detectar fallos rápidos)
-
-  async play(filename, btn) {
-    if (this._busy) return;
-    this._busy = true;
-    try {
-      await this._stop();
-      this._activeBtn = btn || null;
-      if (btn) { btn.textContent = '⏹'; btn.classList.add('playing'); }
-
-      const isBrowserRec = filename.includes('_browser_');  // WebM — aplay no soporta
-
-      // En modo Pi-native: siempre reproducir en la Pi (ALSA).
-      // Única excepción: grabaciones WebM del browser (aplay no las soporta).
-      if (state.usePiNative) {
-        if (isBrowserRec) {
-          log(`⚠ "${filename}" es WebM — aplay no lo soporta, se ignora`, 'warn');
-          this._finish();
-          return;
-        }
-        log(`▶ Pi ALSA: "${filename}"`, 'info');
-        await this._playOnPi(filename, getSelectedAlsaSpeaker() || 'plughw:0,0');
-        return;
-      }
-
-      // Modo browser clásico (no Pi-native): usar el selector speaker-dest
-      const dest = getSelectedSpeakerDest();
-      if (dest === 'pi' && !isBrowserRec) {
-        log(`▶ Pi ALSA: "${filename}"`, 'info');
-        await this._playOnPi(filename, getSelectedAlsaSpeaker());
-      } else {
-        log(`▶ Browser: "${filename}"`, 'info');
-        this._playInBrowser(filename);
-      }
-    } finally {
-      this._busy = false;
-    }
-  },
-
-  _playInBrowser(filename) {
-    const audio = new Audio(`/recordings/${encodeURIComponent(filename)}`);
-    this._audio   = audio;
-    this._piActive = false;
-    audio.onended = () => this._finish();
-    audio.onerror = () => {
-      log(`Error reproduciendo "${filename}" en browser`, 'error');
-      this._finish();
-    };
-    audio.play().catch(err => {
-      log(`Error audio: ${err.message}`, 'error');
-      this._finish();
-    });
-  },
-
-  async _playOnPi(filename, device) {
-    try {
-      const res = await fetch('/recordings/play', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ filename, device }),
-      }).then(r => r.json());
-
-      if (!res.ok) {
-        log(`[Pi] Error aplay: ${res.error}`, 'error');
-        this._finish();
-        return;
-      }
-
-      this._piActive    = true;
-      this._playStartAt = Date.now();
-      log(`▶ aplay iniciado — ${device}: "${res.filename}"`, 'success');
-
-      // Pollear hasta que aplay termine (máx. 30 min)
-      let ticks = 0;
-      this._pollInterval = setInterval(async () => {
-        ticks++;
-        if (ticks > 2250) { // 30 min a 800ms/tick
-          this._stopPoll();
-          this._finish();
-          return;
-        }
-        try {
-          const { playing, result } = await fetch('/recordings/play-status').then(r => r.json());
-          if (!playing) {
-            this._stopPoll();
-            if (result && result.exitCode !== 0) {
-              // aplay falló — mostrar error claro
-              const detail = result.stderr ? `: ${result.stderr.split('\n')[0]}` : '';
-              log(`[Pi] Error reproduciendo "${filename}"${detail}`, 'error');
-            } else {
-              log(`✔ Reproducción completa: "${filename}"`, 'info');
-            }
-            this._finish();
-          }
-        } catch { this._stopPoll(); this._finish(); }
-      }, 800);
-
-    } catch (err) {
-      log(`Error Pi: ${err.message}`, 'error');
-      this._piActive = false;
-      this._finish();
-    }
-  },
-
-  async stop() {
-    if (this._busy) return;
-    this._busy = true;
-    try { await this._stop(); } finally { this._busy = false; }
-  },
-
-  // stop interno — sin guardia _busy (llamado desde play que ya la tiene)
-  async _stop() {
-    this._stopPoll();
-    if (this._audio) {
-      this._audio.pause();
-      this._audio.src = '';
-      this._audio = null;
-    }
-    // Solo llama al servidor si había un aplay Pi activo
-    if (this._piActive) {
-      this._piActive = false;
-      try { await fetch('/recordings/stop-play', { method: 'POST' }); } catch {}
-    }
-    this._finish();
-  },
-
-  _stopPoll() {
-    if (this._pollInterval) { clearInterval(this._pollInterval); this._pollInterval = null; }
-  },
-
-  _finish() {
-    if (this._activeBtn) {
-      this._activeBtn.textContent = '▶';
-      this._activeBtn.classList.remove('playing');
-      this._activeBtn = null;
-    }
-  },
-};
-
-// ============================================================
-// MÓDULO GRABACIONES — ALSA (Pi) + Browser MediaRecorder
-// ============================================================
-const RecorderModule = {
-  _interval:   null,
-  _elapsed:    0,
-  _statusPoll: null,   // detecta si arecord muere durante la grabación ALSA
-  // Browser recording state
-  _mediaRec:   null,
-  _chunks:     [],
-  _brFilename: null,
-
-  async show() {
-    ui.recordingsCard.style.display = '';
-    await this.refreshList();
-  },
-
-  // ── Arrancar: elige ALSA o browser según la fuente activa ────────────────
-  async start() {
-    // En modo Pi-native forzamos siempre ALSA (el browser ya no captura audio).
-    const source = state.usePiNative ? 'pi' : getSelectedSource();
-
-    if (source === 'pi') {
-      // ── ALSA: arecord server-side ──────────────────────────────────────
-      const device = getSelectedAlsaDevice();
-      console.log(`[rec] Iniciando grabación ALSA — device: ${device}`);
-
-      const res = await fetch('/record/start', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ device, normTarget: GainControls.normTarget }),
-      }).then(r => r.json());
-
-      if (!res.ok) throw new Error(res.error);
-      log(`⏺ Grabando Pi ALSA — ${res.filename} (${device})`, 'success');
-
-      // Detectar si arecord muere antes de que el usuario detenga la grabación
-      this._statusPoll = setInterval(async () => {
-        try {
-          const s = await fetch('/record/status').then(r => r.json());
-          if (!s.recording && this._interval !== null) {
-            // arecord salió inesperadamente
-            this._clearStatusPoll();
-            clearInterval(this._interval);
-            this._interval = null;
-            ui.btnRecStop.style.display  = 'none';
-            ui.btnRecStart.style.display = '';
-            ui.recTimer.style.display    = 'none';
-            ui.recSeconds.textContent    = '0';
-            log(`arecord terminó inesperadamente. Verificá que el dispositivo "${device}" sea correcto (probá en terminal: arecord -D ${device} -f S16_LE -r 16000 test.wav)`, 'error');
-            await this.refreshList();
-          }
-        } catch { /* servidor reconectando, ignorar */ }
-      }, 2000);
-
-    } else {
-      // ── Browser: MediaRecorder client-side ────────────────────────────
-      console.log('[rec] Iniciando grabación Browser — getUserMedia');
-      log('[Debug] Grabación Browser — getUserMedia (mic del dispositivo que abre la página)', 'info');
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-      // Obtener nombre reservado del servidor
-      const { filename } = await fetch('/record/reserve-browser', { method: 'POST' }).then(r => r.json());
-      this._brFilename = filename;
-      this._chunks     = [];
-
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus' : 'audio/webm';
-
-      this._mediaRec = new MediaRecorder(stream, { mimeType });
-      this._mediaRec.ondataavailable = (e) => { if (e.data.size > 0) this._chunks.push(e.data); };
-      this._mediaRec.start(500);
-
-      log(`⏺ Grabando Browser — ${filename}`, 'success');
-    }
-
-    // Timer común
-    ui.btnRecStart.style.display = 'none';
-    ui.btnRecStop.style.display  = '';
-    ui.recTimer.style.display    = '';
-    this._elapsed  = 0;
-    this._interval = setInterval(() => {
-      this._elapsed++;
-      ui.recSeconds.textContent = this._elapsed;
-    }, 1000);
-  },
-
-  _clearStatusPoll() {
-    if (this._statusPoll) { clearInterval(this._statusPoll); this._statusPoll = null; }
-  },
-
-  // ── Detener ───────────────────────────────────────────────────────────────
-  async stop() {
-    this._clearStatusPoll();
-    clearInterval(this._interval);
-    this._interval = null;
-    ui.btnRecStop.style.display  = 'none';
-    ui.btnRecStart.style.display = '';
-    ui.recTimer.style.display    = 'none';
-    ui.recSeconds.textContent    = '0';
-
-    if (this._mediaRec) {
-      // ── Browser: subir blob al servidor ──────────────────────────────
-      await new Promise(resolve => {
-        this._mediaRec.onstop = resolve;
-        this._mediaRec.stop();
-        this._mediaRec.stream.getTracks().forEach(t => t.stop());
-      });
-
-      const blob    = new Blob(this._chunks, { type: this._mediaRec.mimeType });
-      const buffer  = await blob.arrayBuffer();
-      console.log(`[rec] Subiendo grabación browser — ${this._brFilename} (${(buffer.byteLength/1024).toFixed(1)} KB)`);
-
-      const res = await fetch(`/record/upload/${this._brFilename}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/octet-stream' },
-        body:   buffer,
-      }).then(r => r.json());
-
-      this._mediaRec = null;
-      this._chunks   = [];
-
-      if (!res.ok) throw new Error(res.error || 'Error al guardar grabación');
-      log(`✔ Guardado browser: ${res.filename}`, 'success');
-
-    } else {
-      // ── ALSA: detener arecord ─────────────────────────────────────────
-      const res = await fetch('/record/stop', { method: 'POST' }).then(r => r.json());
-      if (!res.ok) throw new Error(res.error);
-      log(`✔ Guardado ALSA: ${res.filename} (${res.duration}s)`, 'success');
-      // Esperar que arecord termine de escribir el WAV antes de listar
-      await new Promise(r => setTimeout(r, 400));
-    }
-
-    await this.refreshList();
-  },
-
-  async refreshList() {
-    try {
-      const { files } = await fetch('/recordings').then(r => r.json());
-      ui.recordingsList.innerHTML = '';
-      if (files.length === 0) {
-        ui.recordingsList.innerHTML = '<li class="rec-empty">Sin grabaciones aún.</li>';
-        return;
-      }
-      for (const f of files) ui.recordingsList.appendChild(this._makeRecItem(f));
-    } catch (err) {
-      log(`Error cargando grabaciones: ${err.message}`, 'error');
-    }
-  },
-
-  _makeRecItem(f) {
-    const kb        = (f.size / 1024).toFixed(1);
-    const date      = new Date(f.created).toLocaleString();
-    const isBrowser = f.filename.includes('_browser_');
-
-    const li = document.createElement('li');
-    li.className = 'rec-item';
-
-    const srcEl = document.createElement('span');
-    srcEl.title       = isBrowser ? 'Browser mic' : 'Pi ALSA mic';
-    srcEl.textContent = isBrowser ? '🌐' : '🍓';
-
-    const nameEl = document.createElement('span');
-    nameEl.className = 'rec-item-name';
-    nameEl.title     = f.filename;
-    nameEl.textContent = f.filename;
-
-    const sizeEl = document.createElement('span');
-    sizeEl.className   = 'rec-item-size';
-    sizeEl.textContent = `${kb} KB · ${date}`;
-
-    const playBtn = document.createElement('button');
-    playBtn.className        = 'rec-item-play';
-    playBtn.dataset.filename = f.filename;
-    playBtn.textContent      = '▶';
-    playBtn.title            = 'Reproducir';
-    playBtn.addEventListener('click', () => {
-      if (playBtn.classList.contains('playing')) {
-        PlaybackModule.stop();
-      } else {
-        PlaybackModule.play(f.filename, playBtn);
-      }
-    });
-
-    const dlLink = document.createElement('a');
-    dlLink.className = 'rec-item-dl';
-    dlLink.href      = `/recordings/${encodeURIComponent(f.filename)}`;
-    dlLink.download  = f.filename;
-    dlLink.textContent = '↓';
-
-    const delBtn = document.createElement('button');
-    delBtn.className   = 'rec-item-del';
-    delBtn.textContent = '🗑';
-    delBtn.title       = 'Eliminar';
-    delBtn.addEventListener('click', async () => {
-      if (delBtn.disabled) return;
-      if (!confirm(`¿Eliminar "${f.filename}"?`)) return;
-      delBtn.disabled = true;
-      try {
-        const res = await fetch(`/recordings/${encodeURIComponent(f.filename)}`, { method: 'DELETE' }).then(r => r.json());
-        if (!res.ok) throw new Error(res.error);
-        log(`🗑 Eliminado: ${f.filename}`, 'info');
-        await RecorderModule.refreshList();
-      } catch (err) {
-        log(`Error al eliminar: ${err.message}`, 'error');
-        delBtn.disabled = false;
-      }
-    });
-
-    li.append(srcEl, nameEl, sizeEl, playBtn, dlLink, delBtn);
-    return li;
-  },
-};
-
-// ============================================================
-// CONTROLES DE GANANCIA
-// ============================================================
-const GainControls = {
-  _sliderMic:  document.getElementById('slider-mic-gain'),
-  _sliderNorm: document.getElementById('slider-norm-target'),
-  _valMic:     document.getElementById('val-mic-gain'),
-  _valNorm:    document.getElementById('val-norm-target'),
-  _dbMic:      document.getElementById('db-mic-gain'),
-  _dbNorm:     document.getElementById('db-norm-target'),
-
-  // Valor actual de normTarget (0.3–1.0) para enviarlo con /record/start
-  get normTarget() { return parseFloat(this._sliderNorm?.value || 85) / 100; },
-  get micGain()    { return parseFloat(this._sliderMic?.value  || 4); },
-
-  init(serverMicGain) {
-    if (!this._sliderMic) return; // card no visible aún
-
-    // Restaurar normTarget desde localStorage
-    const savedNorm = parseFloat(localStorage.getItem('brumexa_norm_target'));
-    if (!isNaN(savedNorm)) this._sliderNorm.value = Math.round(savedNorm * 100);
-
-    // Inicializar mic gain desde el servidor
-    if (serverMicGain) this._sliderMic.value = serverMicGain;
-
-    this._updateLabels();
-
-    // Mic gain — actualizar label en tiempo real, enviar al servidor con debounce
-    let _micTimer = null;
-    this._sliderMic.addEventListener('input', () => {
-      this._updateLabels();
-      clearTimeout(_micTimer);
-      _micTimer = setTimeout(() => this._pushMicGain(), 400);
-    });
-
-    // Norm target — solo localStorage (se aplica al grabar)
-    this._sliderNorm.addEventListener('input', () => {
-      this._updateLabels();
-      localStorage.setItem('brumexa_norm_target', this.normTarget.toFixed(2));
-    });
-  },
-
-  _updateLabels() {
-    if (!this._sliderMic) return;
-    const gain = this.micGain;
-    const db   = (20 * Math.log10(gain)).toFixed(1);
-    this._valMic.textContent = `${gain}x`;
-    this._dbMic.textContent  = `+${db} dB`;
-
-    const pct   = parseInt(this._sliderNorm.value);
-    const dbNorm = (20 * Math.log10(pct / 100)).toFixed(1);
-    this._valNorm.textContent = `${pct}%`;
-    this._dbNorm.textContent  = `${dbNorm} dBFS`;
-  },
-
-  async _pushMicGain() {
-    try {
-      await fetch('/config/mic-gain', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ gain: this.micGain }),
-      });
-      log(`Ganancia mic → ${this.micGain}x`, 'info');
-    } catch (err) {
-      log(`Error actualizando ganancia: ${err.message}`, 'error');
-    }
-  },
-};
-
-// Botones de grabación
-document.getElementById('btn-rec-start').addEventListener('click', async () => {
-  try { await RecorderModule.start(); }
-  catch (err) { log(`Error al grabar: ${err.message}`, 'error'); }
-});
-document.getElementById('btn-rec-stop').addEventListener('click', async () => {
-  try { await RecorderModule.stop(); }
-  catch (err) { log(`Error al detener: ${err.message}`, 'error'); }
-});
-
-document.getElementById('leds-alert-retry')?.addEventListener('click', () => {
-  DebugModule._ledsLastFetch = 0; // fuerza re-fetch inmediato, salta el throttle de 3s
-  DebugModule._renderLeds();
-});
-
-document.getElementById('btn-leds-test')?.addEventListener('click', () => LedsLab.open());
-
-// ============================================================
-// LEDS LAB — modal minimalista para mover hue/saturación/brillo en vivo
-// sobre el hardware real (POST /diag/leds/set). No toca color-schemes.json
-// ni .env, es solo laboratorio — al cerrar vuelve a la animación normal.
-// ============================================================
-const LedsLab = {
-  el:       null,
-  hueEl:    null,
-  satEl:    null,
-  valEl:    null,
-  swatchEl: null,
-  _sendTimer:   null,
-  _settleTimer: null,
-
-  open() {
-    this.el       = this.el       || document.getElementById('leds-lab');
-    this.hueEl    = this.hueEl    || document.getElementById('leds-lab-hue');
-    this.satEl    = this.satEl    || document.getElementById('leds-lab-sat');
-    this.valEl    = this.valEl    || document.getElementById('leds-lab-val');
-    this.swatchEl = this.swatchEl || document.getElementById('leds-lab-swatch');
-    if (!this.el) return;
-
-    if (!this._wired) {
-      this._wired = true;
-      const onMove = () => this._render();
-      this.hueEl.addEventListener('input', onMove);
-      this.satEl.addEventListener('input', onMove);
-      this.valEl.addEventListener('input', onMove);
-      document.getElementById('leds-lab-close')?.addEventListener('click', () => this.close());
-      document.getElementById('leds-lab-backdrop')?.addEventListener('click', () => this.close());
-      document.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Escape' && this.el.style.display !== 'none') this.close();
-      });
-    }
-
-    this.el.style.display = 'flex';
-    this.el.setAttribute('aria-hidden', 'false');
-    this._render();
-  },
-
-  close() {
-    if (!this.el) return;
-    this.el.style.display = 'none';
-    this.el.setAttribute('aria-hidden', 'true');
-    clearTimeout(this._sendTimer);
-    clearTimeout(this._settleTimer);
-    fetch('/diag/leds/set/exit', { method: 'POST' }).catch(() => {});
-  },
-
-  // hsv (0-360, 0-1, 0-1) → rgb — fórmula estándar, la misma que usa el
-  // server (leds.hsvToRgbStd) para /diag/leds/set y previewBreathe, así el
-  // swatch de la web se ve IGUAL a como queda el LED de verdad.
-  _hsvToRgb(h, s, v) {
-    const i = Math.floor(h / 60) % 6;
-    const f = h / 60 - Math.floor(h / 60);
-    const p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
-    const table = [[v,t,p],[q,v,p],[p,v,t],[p,q,v],[t,p,v],[v,p,q]][i];
-    return table.map(ch => Math.round(ch * 255));
-  },
-
-  _render() {
-    const h = Number(this.hueEl.value);
-    const s = Number(this.satEl.value) / 100;
-    const v = Number(this.valEl.value) / 100;
-    const [r, g, b] = this._hsvToRgb(h, s, v);
-
-    this.swatchEl.style.background = `rgb(${r},${g},${b})`;
-    this.satEl.style.background = `linear-gradient(to right, ${this._toCss(this._hsvToRgb(h, 0, v))}, ${this._toCss(this._hsvToRgb(h, 1, v))})`;
-    this.valEl.style.background = `linear-gradient(to right, #000, ${this._toCss(this._hsvToRgb(h, s, 1))})`;
-
-    // Mientras se mueve: color sólido fijo, para ver el tono exacto sin la
-    // curva de brillo de la respiración de por medio.
-    clearTimeout(this._sendTimer);
-    this._sendTimer = setTimeout(() => {
-      fetch('/diag/leds/set', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ h, s, v }),
-      }).catch(() => {});
-    }, 40);
-
-    // 2s quieto sin tocar los sliders → pasa a respirar con ese color, así
-    // se ve cómo queda de verdad en uso normal (no solo el chispazo sólido).
-    clearTimeout(this._settleTimer);
-    this._settleTimer = setTimeout(() => {
-      fetch('/diag/leds/preview-breathe', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ h, s }),
-      }).catch(() => {});
-    }, 2000);
-  },
-
-  _toCss([r, g, b]) { return `rgb(${r},${g},${b})`; },
-};
-
-// ============================================================
 // DEBUG MODULE — panel de estado en tiempo real (actualiza cada 500ms)
 // ============================================================
 const DebugModule = {
   _interval: null,
-  _ledsDiag: null,
-  _ledsLastFetch: 0,
 
   start() {
     if (this._interval) return;
@@ -2298,121 +1569,14 @@ const DebugModule = {
     }
   },
 
+  // Estado de LEDs se movió a /diagnostico (LedsDiag.check), y el estado de
+  // mic vivía en la card "Test de micrófono" (también movida a
+  // /diagnostico) — este panel ahora es solo lo que es realmente "de la
+  // conexión": LiveKit, agente, speaker.
   _render() {
-    this._renderMic();
     this._renderSpeaker();
     this._renderLiveKit();
     this._renderAgent();
-    this._renderLeds();
-  },
-
-  // Estado de los LEDs (paquete instalado / configurado / error) — vía
-  // GET /diag/leds. No cambia tick a tick como el resto, así que solo se
-  // vuelve a pedir al server cada 3s (el _render de 500ms sigue repintando
-  // desde el último dato conocido).
-  async _renderLeds() {
-    const now = Date.now();
-    if (now - this._ledsLastFetch > 3000) {
-      this._ledsLastFetch = now;
-      try {
-        const r = await fetch('/diag/leds');
-        this._ledsDiag = await r.json();
-      } catch {
-        this._ledsDiag = null;
-      }
-    }
-    this._paintLeds();
-  },
-
-  _paintLeds() {
-    const d = this._ledsDiag;
-    const banner     = document.getElementById('leds-alert-banner');
-    const bannerText = document.getElementById('leds-alert-text');
-    const showBanner = (text) => {
-      if (bannerText) bannerText.textContent = text;
-      if (banner) banner.style.display = 'flex';
-    };
-    const hideBanner = () => { if (banner) banner.style.display = 'none'; };
-
-    if (!d) {
-      this._set('dbg-leds', 'Sin respuesta', 'No se pudo consultar /diag/leds', 'error');
-      showBanner('no se pudo consultar el diagnóstico (/diag/leds) — ¿el server está corriendo?');
-      return;
-    }
-    if (d.platform !== 'linux') {
-      this._set('dbg-leds', 'No aplica', `Plataforma: ${d.platform}`, 'idle');
-      hideBanner();
-      return;
-    }
-    if (!d.packageInstalled) {
-      this._set('dbg-leds', 'Paquete no instalado', 'rpi-ws281x no está en node_modules — correr: sudo npm install rpi-ws281x', 'error');
-      showBanner('el paquete rpi-ws281x NO está instalado en node_modules. En la Pi: sudo npm install rpi-ws281x — y reiniciá el server.');
-      return;
-    }
-    if (!d.configured) {
-      const rootHint = d.isRoot === false ? ' — probá corriendo el server con sudo' : '';
-      this._set('dbg-leds', 'Instalado, pero falló', d.lastError || 'configure() falló — revisar sudo / GPIO ocupado', 'error');
-      showBanner(`paquete instalado (v${d.packageVersion || '?'}) pero falló al configurar: ${d.lastError || 'error desconocido'}${rootHint}`);
-      return;
-    }
-    const rootWarn = d.isRoot === false ? ' · ⚠ no corre como root' : '';
-    this._set('dbg-leds', `OK — v${d.packageVersion}`, `${d.numLeds} LEDs · GPIO ${d.gpioPin}${rootWarn}`, 'ok');
-    hideBanner();
-  },
-
-  _renderMic() {
-    const m = PiMicModule;
-
-    // Pi mic activo
-    if (m._ws && m._ws.readyState === WebSocket.OPEN) {
-      const ago     = m._lastFrameAt ? Math.round((Date.now() - m._lastFrameAt) / 1000) : null;
-      const flowing = ago !== null && ago < 2;
-      const ctxState = m._audioCtx?.state || '—';
-      const gain    = state.micGain ? `gain ${state.micGain}x` : '';
-
-      const subParts = [];
-      if (m._device)     subParts.push(m._device);
-      if (gain)          subParts.push(gain);
-      if (ctxState !== '—') subParts.push(`ctx:${ctxState}`);
-
-      this._set('dbg-mic',
-        flowing
-          ? `Pi — frame #${m._frameCount} · ${ago}s ago`
-          : m._frameCount > 0
-            ? `Pi — frame #${m._frameCount} · ${ago ?? '?'}s (sin flujo)`
-            : `Pi — conectando…`,
-        subParts.join(' · '),
-        flowing ? 'ok pulse' : m._frameCount > 0 ? 'warn' : 'idle pulse'
-      );
-      return;
-    }
-
-    // Mic test browser (modo mictest, no Pi)
-    if (state.mode === 'mictest' && state.stream) {
-      const tracks = state.stream.getAudioTracks();
-      const active = tracks.length > 0 && tracks[0].readyState === 'live';
-      this._set('dbg-mic',
-        active ? 'Browser mic — activo' : 'Browser mic — sin señal',
-        tracks[0]?.label?.slice(0, 40) || '',
-        active ? 'ok' : 'warn'
-      );
-      return;
-    }
-
-    // LiveKit local track publicado
-    if (state.active && state.localTrack) {
-      const track = state.localTrack;
-      const ms    = track.mediaStreamTrack;
-      const alive = ms?.readyState === 'live';
-      this._set('dbg-mic',
-        alive ? 'LiveKit mic — publicado' : 'LiveKit mic — track inactivo',
-        ms?.label?.slice(0, 40) || '',
-        alive ? 'ok' : 'warn'
-      );
-      return;
-    }
-
-    this._set('dbg-mic', 'Inactivo', 'Sin fuente de audio', 'idle');
   },
 
   _renderSpeaker() {
@@ -2435,19 +1599,6 @@ const DebugModule = {
             : `Pi LiveKit — esperando audio…`,
         subParts.join(' · '),
         flowing ? 'ok pulse' : s._frameCount > 0 ? 'warn' : 'idle pulse'
-      );
-      return;
-    }
-
-    // Pi speaker activo — reproducción de grabación via aplay
-    if (PlaybackModule._piActive) {
-      const pb = PlaybackModule;
-      const filename = pb._activeBtn?.dataset?.filename || '—';
-      const elapsed  = pb._playStartAt ? Math.round((Date.now() - pb._playStartAt) / 1000) : 0;
-      this._set('dbg-spk',
-        `Pi aplay — ${elapsed}s`,
-        filename,
-        'ok pulse'
       );
       return;
     }
@@ -2668,12 +1819,10 @@ const DebugModule = {
       updateSpeakerState();
     }
 
-    // Mostrar/ocultar dropdown ALSA — grabación disponible en ambas fuentes
+    // Mostrar/ocultar dropdown ALSA
     const updateSourceState = () => {
       const isPi = getSelectedSource() === 'pi';
       ui.alsaDeviceWrap.style.display = isPi ? '' : 'none';
-      ui.btnRecStart.disabled         = false;
-      ui.btnRecStart.title            = '';
     };
 
     ui.audioSourceRadios.forEach((radio) => {
@@ -2711,10 +1860,6 @@ const DebugModule = {
       } catch { /* si falla, arrancamos como si no hubiera sesión */ }
     }
   }
-
-  // ─── Grabaciones — siempre visible (browser recording funciona en cualquier plataforma) ──
-  await RecorderModule.show();
-  GainControls.init(state.micGain || 4);
 
   // ─── Nav — "Terminal Pi" y "Configuracion" son links normales a sus
   // propias páginas (/terminal, /configuracion); Terminal solo tiene sentido

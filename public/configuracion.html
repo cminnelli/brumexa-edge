@@ -26,6 +26,7 @@
       <a class="tab-btn" href="/">Panel</a>
       <a class="tab-btn" id="nav-terminal" href="/terminal">Terminal Pi</a>
       <a class="tab-btn active" href="/configuracion">Configuracion</a>
+      <a class="tab-btn" href="/diagnostico">Diagnóstico</a>
     </nav>
     <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambiar tema" title="Cambiar tema"></button>
   </div>
@@ -83,21 +84,6 @@
       <div id="creds-save-result" style="margin-top:10px"></div>
     </div>
 
-    <!-- § Diagnóstico de conexión — un solo botón, prueba auth + token juntos -->
-    <div class="card" id="card-diag">
-      <div class="card-hdr-row">
-        <div class="card-section-hdr" style="margin-bottom:0">
-          <span class="card-section-icon">🔗</span>
-          <div>
-            <div class="card-section-title">Diagnóstico de conexión</div>
-            <div class="card-section-desc">Prueba autenticación contra la RAG API y pedido de token de LiveKit, de una</div>
-          </div>
-        </div>
-        <button class="btn-ghost" id="btn-test-connection" type="button">Probar conexión</button>
-      </div>
-      <div class="kv" id="kv-diag"></div>
-      <div id="diag-result" style="margin-top:8px"></div>
-    </div>
   </div>
 
   <!-- ═══ Grupo: Dispositivo ═══ -->
@@ -222,13 +208,7 @@
       <div class="field">
         <label class="field-label">Micrófono</label>
         <button class="btn-ghost" id="btn-mic-toggle" type="button">Cargando…</button>
-        <p class="field-hint">Aplica en la próxima sesión — no afecta una ya conectada. No se guarda en .env.</p>
-      </div>
-
-      <div class="field">
-        <label class="field-label">Parlante</label>
-        <button class="btn-ghost" id="btn-speaker-test" type="button">🔊 Probar parlante (tono 1kHz)</button>
-        <div id="speaker-test-result" style="margin-top:8px"></div>
+        <p class="field-hint">Aplica en la próxima sesión — no afecta una ya conectada. No se guarda en .env. Para probar mic/parlante/LEDs, ver <a href="/diagnostico" style="color:var(--accent)">Diagnóstico</a>.</p>
       </div>
 
       <div class="divider"></div>
@@ -698,53 +678,6 @@
     btn.textContent = restoreText;
   }
 
-  // ─── Diagnóstico de conexión — un botón, prueba auth + token juntos ──────
-  document.getElementById('btn-test-connection').addEventListener('click', testConnection);
-  async function testConnection() {
-    const btn    = document.getElementById('btn-test-connection');
-    const kv     = document.getElementById('kv-diag');
-    const result = document.getElementById('diag-result');
-    btn.disabled = true;
-    btn.textContent = 'Probando…';
-    kv.innerHTML = '';
-    result.innerHTML = '';
-
-    let auth;
-    try {
-      auth = await fetch('/configuracion/force-auth', { method: 'POST' }).then(r => r.json());
-    } catch (e) {
-      auth = { ok: false, error: e.message };
-    }
-
-    const rows = [
-      ['Autenticación', auth.ok ? '✅ OK' : `❌ ${esc(auth.error || 'falló')}`],
-      ['Negocio', auth.status?.businessId || '—'],
-    ];
-
-    let token = null;
-    if (auth.ok) {
-      try {
-        token = await fetch('/configuracion/force-token', { method: 'POST' }).then(r => r.json());
-      } catch (e) {
-        token = { ok: false, error: e.message };
-      }
-      rows.push(['Token LiveKit', token.ok ? '✅ OK' : `❌ ${esc(token.error || 'falló')}`]);
-      if (token.ok) {
-        rows.push(['Sala', token.roomName]);
-        rows.push(['Servidor', token.serverUrl]);
-      }
-    }
-
-    kv.innerHTML = kvRows(rows);
-    const allOk = auth.ok && token?.ok;
-    result.innerHTML = allOk
-      ? '<div class="flow-note ok">✔ Todo funciona — autenticación y token de LiveKit OK</div>'
-      : '<div class="flow-note bad">✘ Algo falló — revisá las credenciales arriba</div>';
-
-    btn.disabled = false;
-    btn.textContent = 'Probar conexión';
-  }
-
   function updateMicButton() {
     const btn = document.getElementById('btn-mic-toggle');
     btn.className = 'btn-ghost' + (micEnabledState ? '' : ' btn-ghost--accent');
@@ -768,27 +701,6 @@
     }
     updateMicButton();
     btn.disabled = false;
-  }
-
-  document.getElementById('btn-speaker-test').addEventListener('click', runSpeakerTest);
-  async function runSpeakerTest() {
-    const btn    = document.getElementById('btn-speaker-test');
-    const result = document.getElementById('speaker-test-result');
-    btn.disabled = true;
-    btn.textContent = '🔊 Reproduciendo…';
-    result.innerHTML = '';
-    try {
-      const res  = await fetch('/configuracion/speaker-test', { method: 'POST' });
-      const data = await res.json();
-      result.innerHTML = data.ok
-        ? `<div class="pill ok">✅ ${esc(data.note || 'Tono reproducido')}</div>`
-        : `<div class="pill bad">⚠ Error: ${esc(data.error || data.output || 'desconocido')}</div>`;
-    } catch (e) {
-      result.innerHTML = `<div class="pill bad">⚠ Error: ${esc(e.message)}</div>`;
-    } finally {
-      btn.disabled = false;
-      btn.textContent = '🔊 Probar parlante (tono 1kHz)';
-    }
   }
 
   // Sparkline SVG a mano (sin librerías) — muestra cómo evolucionó el nivel
