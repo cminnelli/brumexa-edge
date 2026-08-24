@@ -211,6 +211,24 @@
         <p class="field-hint">Aplica en la próxima sesión — no afecta una ya conectada. No se guarda en .env. Para probar mic/parlante/LEDs, ver <a href="/diagnostico" style="color:var(--accent)">Diagnóstico</a>.</p>
       </div>
 
+      <div class="field">
+        <details class="tech-details">
+          <summary>Elegir dispositivo de audio a mano</summary>
+          <div style="display:flex; flex-direction:column; gap:0.75rem">
+            <div>
+              <label class="field-label" for="sel-alsa-mic">Dispositivo de micrófono</label>
+              <select id="sel-alsa-mic" class="select-input"></select>
+            </div>
+            <div>
+              <label class="field-label" for="sel-alsa-speaker">Dispositivo de parlante</label>
+              <select id="sel-alsa-speaker" class="select-input"></select>
+            </div>
+            <p class="field-hint">Normalmente no hace falta tocar esto — el dispositivo ya viene con el correcto. Cambialo solo si el mic o el parlante no andan con el que está elegido. Se aplica en la próxima sesión.</p>
+            <div id="alsa-device-result"></div>
+          </div>
+        </details>
+      </div>
+
       <div class="divider"></div>
 
       <div class="field-group-label">Calibración de ruido ambiente</div>
@@ -404,6 +422,7 @@
       const btnRestart = document.getElementById('btn-restart');
       if (cfg2.server?.platform === 'linux') {
         loadVersion();
+        loadAlsaDevices(cfg.alsaMicDevice, cfg.alsaSpeakerDevice);
       } else {
         btnUpdate.disabled = true;
         btnRestart.disabled = true;
@@ -412,6 +431,54 @@
       }
     } catch {}
   }
+
+  // Dispositivos ALSA (mic/parlante) — se usa el mismo par de endpoints que
+  // ya tenía el Panel para listarlos, pero ACÁ la elección se persiste
+  // (POST /setup/config → .env) en vez de vivir en un dropdown de la misma
+  // página que arranca la sesión. currentMic/currentSpeaker vienen de
+  // /setup/config (lo que ya está guardado) para preseleccionar la opción
+  // correcta en el <select>.
+  async function loadAlsaDevices(currentMic, currentSpeaker) {
+    const micSel = document.getElementById('sel-alsa-mic');
+    const spkSel = document.getElementById('sel-alsa-speaker');
+    try {
+      const { devices } = await fetch('/audio-devices').then(r => r.json());
+      micSel.innerHTML = devices.length
+        ? devices.map(d => `<option value="${esc(d.id)}">${esc(d.name)} (${esc(d.id)})</option>`).join('')
+        : '<option value="default">default</option>';
+    } catch {
+      micSel.innerHTML = '<option value="default">default</option>';
+    }
+    micSel.value = currentMic || 'default';
+
+    try {
+      const { devices } = await fetch('/audio-playback-devices').then(r => r.json());
+      spkSel.innerHTML = devices.length
+        ? devices.map(d => `<option value="${esc(d.id)}">${esc(d.name)} (${esc(d.id)})</option>`).join('')
+        : '<option value="plughw:0,0">plughw:0,0 (default)</option>';
+    } catch {
+      spkSel.innerHTML = '<option value="plughw:0,0">plughw:0,0 (default)</option>';
+    }
+    spkSel.value = currentSpeaker || 'plughw:0,0';
+  }
+
+  function wireAlsaDeviceSave(selectId, bodyKey) {
+    document.getElementById(selectId).addEventListener('change', async (e) => {
+      const result = document.getElementById('alsa-device-result');
+      try {
+        await fetch('/setup/config', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ [bodyKey]: e.target.value }),
+        });
+        result.innerHTML = '<div class="flow-note ok">✔ Guardado — se aplica en la próxima sesión</div>';
+      } catch (err) {
+        result.innerHTML = `<div class="flow-note bad">✘ ${esc(err.message)}</div>`;
+      }
+    });
+  }
+  wireAlsaDeviceSave('sel-alsa-mic',     'alsaMicDevice');
+  wireAlsaDeviceSave('sel-alsa-speaker', 'alsaSpeakerDevice');
 
   async function loadVersion() {
     const kv = document.getElementById('kv-version');

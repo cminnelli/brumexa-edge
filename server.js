@@ -92,6 +92,16 @@ app.get('/diagnostico', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'diagnostico.html'));
 });
 
+// Lee una clave KEY=valor de .env en el momento (sin caché — si alguien la
+// cambió a mano por SSH, se ve reflejada al toque). Compartida por /config
+// y /setup/config para no duplicar el mismo regex dos veces.
+function getEnvVal(key) {
+  let content = '';
+  try { content = require('fs').readFileSync(path.join(__dirname, '.env'), 'utf8'); } catch {}
+  const m = content.match(new RegExp(`^${key}=(.*)$`, 'm'));
+  return m ? m[1].trim() : '';
+}
+
 // ─── GET /config — info del dispositivo y configuración (sin secretos) ───────
 app.get('/config', (_req, res) => {
   res.json({
@@ -99,6 +109,12 @@ app.get('/config', (_req, res) => {
     tokenConfigured: DEVICE_CONFIGURED,
     port:               Number(PORT),
     micGain:            getMicGain(),
+    // Dispositivo ALSA elegido en Configuración — el Panel lo lee de acá al
+    // conectar en vez de tener su propio selector (ver PiNativeModule.start
+    // en app.js). Default 'default'/'plughw:0,0': mismo fallback que ya
+    // usaba el selector viejo cuando no había nada elegido.
+    alsaMicDevice:      getEnvVal('MIC_ALSA_DEVICE')     || 'default',
+    alsaSpeakerDevice:  getEnvVal('SPEAKER_ALSA_DEVICE') || 'plughw:0,0',
     server: {
       hostname: os.hostname(),
       platform: process.platform,
@@ -204,6 +220,8 @@ app.get('/setup/config', (_req, res) => {
     ledHangoverMs:      getVal('LED_HANGOVER_MS')       || '2000',
     ledOnsetMs:         getVal('LED_ONSET_MS')          || '536',
     ledOffsetMs:        getVal('LED_OFFSET_MS')         || '965',
+    alsaMicDevice:      getVal('MIC_ALSA_DEVICE')     || 'default',
+    alsaSpeakerDevice:  getVal('SPEAKER_ALSA_DEVICE') || 'plughw:0,0',
   });
 });
 
@@ -243,6 +261,7 @@ app.post('/setup/config', express.json(), (req, res) => {
   const {
     ragApiUrl, deviceId, apiKey, deviceName, micGain, speakerGain, talkThreshold, silenceTimeoutMs, brumexaColor,
     ledBreathePeriodMs, ledHangoverMs, ledOnsetMs, ledOffsetMs,
+    alsaMicDevice, alsaSpeakerDevice,
   } = req.body || {};
   let content = '';
   try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
@@ -260,6 +279,8 @@ app.post('/setup/config', express.json(), (req, res) => {
   if (ledHangoverMs      !== undefined) content = setEnvLine(content, 'LED_HANGOVER_MS',       ledHangoverMs);
   if (ledOnsetMs         !== undefined) content = setEnvLine(content, 'LED_ONSET_MS',          ledOnsetMs);
   if (ledOffsetMs        !== undefined) content = setEnvLine(content, 'LED_OFFSET_MS',         ledOffsetMs);
+  if (alsaMicDevice     !== undefined) content = setEnvLine(content, 'MIC_ALSA_DEVICE',     alsaMicDevice);
+  if (alsaSpeakerDevice !== undefined) content = setEnvLine(content, 'SPEAKER_ALSA_DEVICE', alsaSpeakerDevice);
 
   try {
     require('fs').writeFileSync(envFile, content, 'utf8');

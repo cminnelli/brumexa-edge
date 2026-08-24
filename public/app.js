@@ -14,6 +14,8 @@ const state = {
 
   // Config (from /config)
   micGain: null,
+  alsaMicDevice:     null, // elegido/persistido en Configuración, no en esta página
+  alsaSpeakerDevice: null,
 };
 
 // ============================================================
@@ -57,11 +59,10 @@ const ui = {
   miniVuBar:  document.getElementById('mini-vu-bar'),
   miniVuDb:   document.getElementById('mini-vu-db'),
 
-  // Fuente de audio (browser / Pi)
-  audioSourceWrap:  document.getElementById('audio-source-wrap'),
+  // Fuente de audio (browser / Pi) — el dispositivo ALSA específico ya no
+  // se elige acá (ver getSelectedAlsaDevice/getSelectedAlsaSpeaker), pero
+  // el radio browser/pi lo sigue usando LiveKitModule (modo no-Raspberry).
   audioSourceRadios: document.querySelectorAll('input[name="audio-source"]'),
-  alsaDeviceWrap:   document.getElementById('alsa-device-wrap'),
-  alsaDeviceSelect: document.getElementById('alsa-device-select'),
 };
 
 // ============================================================
@@ -702,8 +703,13 @@ function getSelectedSource() {
   return 'browser';
 }
 
+// El dispositivo ALSA específico ya NO se elige en esta página — es un
+// ajuste que se guarda en Configuración y llega acá vía /config al cargar
+// (ver state.alsaMicDevice/alsaSpeakerDevice en INIT). Estas dos funciones
+// quedan con el mismo nombre para no tener que tocar cada lugar que las
+// llama (PiNativeModule, LiveKitModule, etc.).
 function getSelectedAlsaDevice() {
-  return ui.alsaDeviceSelect.value || 'default';
+  return state.alsaMicDevice || 'default';
 }
 
 function getSelectedSpeakerDest() {
@@ -713,7 +719,7 @@ function getSelectedSpeakerDest() {
 }
 
 function getSelectedAlsaSpeaker() {
-  return document.getElementById('alsa-speaker-select')?.value || 'plughw:0,0';
+  return state.alsaSpeakerDevice || 'plughw:0,0';
 }
 
 // ============================================================
@@ -1713,6 +1719,8 @@ const DebugModule = {
       isRaspberry = isLinux && /arm/i.test(cfg.server.arch);
       log(`Debug: platform=${cfg.server.platform} arch=${cfg.server.arch} isLinux=${isLinux} isRaspberry=${isRaspberry}`, 'info');
       if (cfg.micGain) state.micGain = cfg.micGain;
+      state.alsaMicDevice     = cfg.alsaMicDevice     || 'default';
+      state.alsaSpeakerDevice = cfg.alsaSpeakerDevice || 'plughw:0,0';
     }
 
     // cfg.livekitUrl es dinámico — llega recién tras la primera conexión
@@ -1745,120 +1753,32 @@ const DebugModule = {
   if (isRaspberry) {
     state.usePiNative = true;
     log('Raspberry detectada → modo Pi-native (rtc-node + ALSA, sin browser audio)', 'success');
-  }
 
-  // ─── Selector de fuente de audio (visible siempre en Raspberry) ──────────
-  if (isRaspberry) {
-    ui.audioSourceWrap.style.display = '';
+    // El dispositivo ALSA específico (mic/parlante) ya llegó en cfg más
+    // arriba (state.alsaMicDevice/alsaSpeakerDevice) — es un ajuste que se
+    // elige y persiste en Configuración, no un dropdown acá. En modo
+    // Pi-native no hay "fuente browser vs Pi" para elegir tampoco (el mic
+    // siempre es el de la Pi), así que esta página no muestra nada de eso
+    // — ver PiNativeModule.start() más abajo, que ya lee state.alsa*.
+    log(`[pi-native] Dispositivos ALSA (desde Configuración): mic=${state.alsaMicDevice}  speaker=${state.alsaSpeakerDevice}`, 'info');
 
-    // En Raspberry el default es Pi para mic y speaker
-    const piSrcRadio = document.querySelector('input[name="audio-source"][value="pi"]');
-    const piDstRadio = document.querySelector('input[name="speaker-dest"][value="pi"]');
-    if (piSrcRadio) piSrcRadio.checked = true;
-    if (piDstRadio) piDstRadio.checked = true;
-    log('Raspberry detectada — mic y speaker por defecto: Pi (ALSA)', 'info');
-
-    // Cargar dispositivos ALSA en el dropdown
+    // Sincronizar el botón con el estado REAL del server al cargar la
+    // página — si ya había una sesión activa (p.ej. recargaste el
+    // navegador), el botón tiene que arrancar en "Desconectar", no en
+    // "Conectar" (que chocaría con un 409 "Sesión ya activa").
     try {
-      const { devices } = await fetch('/audio-devices').then((r) => r.json());
-      if (devices.length > 0) {
-        ui.alsaDeviceSelect.innerHTML = devices
-          .map((d) => `<option value="${d.id}">${d.name} (${d.id})</option>`)
-          .join('');
-        log(`${devices.length} dispositivo(s) ALSA: ${devices.map((d) => d.id).join(', ')}`, 'info');
-      } else {
-        ui.alsaDeviceSelect.innerHTML = '<option value="">Sin dispositivos ALSA</option>';
-        log('Raspberry detectada — sin dispositivos ALSA conectados', 'warn');
+      const s = await fetch('/session/status').then(r => r.json());
+      if (s.isConnected) {
+        state.active = true;
+        updateMicButton(true);
+        setLiveKitStatus('connected', 'sesión ya activa');
+        setChannelStatus('connected', s.roomName ? `sala: ${s.roomName}` : 'conectado');
+        setMicStatus(s.micActive ? 'on' : 'off');
+        log('[pi-native] Sesión ya estaba activa — sincronizando UI', 'info');
+        startSessionTimer();
+        PiNativeModule._startPolling();
       }
-    } catch {
-      ui.alsaDeviceSelect.innerHTML = '<option value="">Error al leer ALSA</option>';
-    }
-
-    // ── Selector de speaker (Pi o browser) ──────────────────────────────────
-    const speakerDestWrap  = document.getElementById('speaker-dest-wrap');
-    const alsaSpeakerWrap  = document.getElementById('alsa-speaker-wrap');
-    const alsaSpeakerSel   = document.getElementById('alsa-speaker-select');
-
-    if (speakerDestWrap) {
-      speakerDestWrap.style.display = '';
-
-      // Cargar dispositivos ALSA de reproducción
-      let hasAlsaPlayback = false;
-      try {
-        const { devices: pbDevices } = await fetch('/audio-playback-devices').then(r => r.json());
-        if (pbDevices.length > 0) {
-          hasAlsaPlayback = true;
-          alsaSpeakerSel.innerHTML = pbDevices
-            .map(d => `<option value="${d.id}">${d.name} (${d.id})</option>`)
-            .join('');
-          log(`${pbDevices.length} dispositivo(s) ALSA playback: ${pbDevices.map(d => d.id).join(', ')}`, 'info');
-        } else {
-          alsaSpeakerSel.innerHTML = '<option value="plughw:0,0">plughw:0,0 (default)</option>';
-        }
-      } catch {
-        alsaSpeakerSel.innerHTML = '<option value="plughw:0,0">plughw:0,0 (default)</option>';
-      }
-
-      // Default a "pi" cuando la Pi tiene playback — evita que el agente hable
-      // por el browser cuando se esperaba que hable por el parlante del HAT.
-      if (hasAlsaPlayback) {
-        const piRadio = document.querySelector('input[name="speaker-dest"][value="pi"]');
-        if (piRadio) {
-          piRadio.checked = true;
-          log('[speaker] Default → Raspberry Pi (ALSA playback detectado)', 'info');
-        }
-      }
-
-      // Mostrar/ocultar dropdown ALSA playback
-      const updateSpeakerState = () => {
-        alsaSpeakerWrap.style.display = getSelectedSpeakerDest() === 'pi' ? '' : 'none';
-      };
-      document.querySelectorAll('input[name="speaker-dest"]').forEach(r => {
-        r.addEventListener('change', updateSpeakerState);
-      });
-      updateSpeakerState();
-    }
-
-    // Mostrar/ocultar dropdown ALSA
-    const updateSourceState = () => {
-      const isPi = getSelectedSource() === 'pi';
-      ui.alsaDeviceWrap.style.display = isPi ? '' : 'none';
-    };
-
-    ui.audioSourceRadios.forEach((radio) => {
-      radio.addEventListener('change', updateSourceState);
-    });
-
-    updateSourceState(); // estado inicial
-
-    // En modo Pi-native: el browser ya NO captura ni reproduce audio.
-    // Ocultamos los radios "browser/pi" pero dejamos los dropdowns ALSA
-    // (mic y speaker) siempre visibles para que el usuario elija el dispositivo.
-    if (state.usePiNative) {
-      document.querySelectorAll('#audio-source-wrap .source-selector, #speaker-dest-wrap .source-selector')
-        .forEach(el => { el.style.display = 'none'; });
-      ui.alsaDeviceWrap.style.display       = '';
-      const alsaSpeakerWrap2 = document.getElementById('alsa-speaker-wrap');
-      if (alsaSpeakerWrap2) alsaSpeakerWrap2.style.display = '';
-
-      // Sincronizar el botón con el estado REAL del server al cargar la
-      // página — si ya había una sesión activa (p.ej. recargaste el
-      // navegador), el botón tiene que arrancar en "Desconectar", no en
-      // "Conectar" (que chocaría con un 409 "Sesión ya activa").
-      try {
-        const s = await fetch('/session/status').then(r => r.json());
-        if (s.isConnected) {
-          state.active = true;
-          updateMicButton(true);
-          setLiveKitStatus('connected', 'sesión ya activa');
-          setChannelStatus('connected', s.roomName ? `sala: ${s.roomName}` : 'conectado');
-          setMicStatus(s.micActive ? 'on' : 'off');
-          log('[pi-native] Sesión ya estaba activa — sincronizando UI', 'info');
-          startSessionTimer();
-          PiNativeModule._startPolling();
-        }
-      } catch { /* si falla, arrancamos como si no hubiera sesión */ }
-    }
+    } catch { /* si falla, arrancamos como si no hubiera sesión */ }
   }
 
   // ─── Nav — "Terminal Pi" y "Configuracion" son links normales a sus
