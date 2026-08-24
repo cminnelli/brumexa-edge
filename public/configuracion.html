@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=20" />
+  <link rel="stylesheet" href="style.css?v=21" />
 </head>
 <body>
 
@@ -50,29 +50,31 @@
         <span class="card-section-icon">🔑</span>
         <div>
           <div class="card-section-title">Credenciales</div>
-          <div class="card-section-desc">Se aplican al toque, sin reiniciar el servidor — solo se guardan en el .env para el próximo arranque</div>
+          <div class="card-section-desc">A diferencia del resto de la página, esto necesita "Guardar" — para no mandar credenciales a medio escribir</div>
         </div>
       </div>
 
-      <div class="field">
-        <label class="field-label" for="inp-rag-url">RAG_API_URL</label>
-        <input type="text" id="inp-rag-url" class="setup-input" placeholder="http://192.168.0.x:4000" autocomplete="off" spellcheck="false" />
+      <div class="field-row" style="margin-bottom:1rem">
+        <div class="field">
+          <label class="field-label" for="inp-rag-url">Servidor</label>
+          <input type="text" id="inp-rag-url" class="setup-input" placeholder="http://192.168.0.x:4000" autocomplete="off" spellcheck="false" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="inp-device-id">ID del dispositivo</label>
+          <input type="text" id="inp-device-id" class="setup-input" placeholder="mi-dispositivo-01" autocomplete="off" spellcheck="false" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="inp-device-name">Nombre del dispositivo</label>
+          <input type="text" id="inp-device-name" class="setup-input" placeholder="brumexa-01" autocomplete="off" />
+        </div>
       </div>
       <div class="field">
-        <label class="field-label" for="inp-device-id">BRUMEXA_DEVICE_ID</label>
-        <input type="text" id="inp-device-id" class="setup-input" placeholder="mi-dispositivo-01" autocomplete="off" spellcheck="false" />
-      </div>
-      <div class="field">
-        <label class="field-label" for="inp-api-key">BRUMEXA_API_KEY</label>
+        <label class="field-label" for="inp-api-key">Clave de acceso (API key)</label>
         <div class="setup-token-row">
           <input type="password" id="inp-api-key" class="setup-input" placeholder="brx_..." autocomplete="off" spellcheck="false" />
           <button class="btn-ghost" id="btn-toggle-key" type="button" title="Mostrar/ocultar">👁</button>
           <button class="btn-ghost" id="btn-copy-key" type="button" title="Copiar">⧉</button>
         </div>
-      </div>
-      <div class="field">
-        <label class="field-label" for="inp-device-name">DEVICE_NAME</label>
-        <input type="text" id="inp-device-name" class="setup-input" placeholder="brumexa-01" autocomplete="off" />
       </div>
 
       <div class="connect-row">
@@ -108,19 +110,20 @@
         <span class="card-section-icon">🎨</span>
         <div>
           <div class="card-section-title">Apariencia</div>
-          <div class="card-section-desc">Color de la carcasa — cada uno tiene su propia combinación de luces. Es el único cambio que reinicia el servidor.</div>
+          <div class="card-section-desc">Color de la carcasa — cada uno tiene su propia combinación de luces</div>
         </div>
       </div>
       <input type="hidden" id="inp-brumexa-color" value="negro" />
       <div class="color-grid" id="color-grid"></div>
       <div class="color-detail" id="color-detail"></div>
-      <div class="connect-row">
+      <div class="connect-row" style="margin-top:1rem; align-items:center">
         <button class="btn-connect" id="btn-save-color" style="flex:none; padding:9px 20px">🎨 Guardar color</button>
+        <p class="field-hint" style="margin:0">Tocar una tarjeta ya lo prende en el dispositivo, para que lo veas antes de decidir. "Guardar" lo deja así después de reiniciar.</p>
       </div>
       <div id="color-save-result" style="margin-top:10px"></div>
     </div>
 
-    <!-- § Ritmo de LEDs — velocidad de la respiración y de las olas de habla -->
+    <!-- § Ritmo de LEDs — velocidad de la respiración y paciencia con pausas -->
     <div class="card" id="card-led-rhythm">
       <div class="card-section-hdr">
         <span class="card-section-icon">💡</span>
@@ -142,82 +145,80 @@
       </div>
 
       <div class="field">
-        <label class="field-label" for="inp-led-hangover">Pausa antes de dejar de "hablar"</label>
+        <label class="field-label" for="inp-led-hangover">Paciencia con las pausas al hablar</label>
         <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
           <div class="gain-row" style="grid-template-columns:1fr 70px">
             <input type="range" id="inp-led-hangover" class="gain-slider" min="300" max="6000" step="100" value="2000" />
             <span class="gain-val" id="val-led-hangover">2000 ms</span>
           </div>
         </div>
-        <p class="field-hint">Cuánto silencio tolera antes de asumir que dejaste de hablar — una pausa para pensar más corta que esto no corta la ola de LEDs.</p>
-      </div>
-
-      <div class="field">
-        <label class="field-label" for="inp-led-onset">Velocidad de la ola al empezar a hablar</label>
-        <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
-          <div class="gain-row" style="grid-template-columns:1fr 70px">
-            <input type="range" id="inp-led-onset" class="gain-slider" min="150" max="2000" step="20" value="536" />
-            <span class="gain-val" id="val-led-onset">536 ms</span>
-          </div>
-        </div>
-        <p class="field-hint">La "escalerita" que recorre las 8 LEDs de punta a punta cuando arrancás a hablar.</p>
-      </div>
-
-      <div class="field">
-        <label class="field-label" for="inp-led-offset">Velocidad de la ola al dejar de hablar</label>
-        <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
-          <div class="gain-row" style="grid-template-columns:1fr 70px">
-            <input type="range" id="inp-led-offset" class="gain-slider" min="150" max="3000" step="20" value="965" />
-            <span class="gain-val" id="val-led-offset">965 ms</span>
-          </div>
-        </div>
-        <p class="field-hint">La ola espejo que recorre las 8 LEDs al revés, volviendo a la respiración.</p>
+        <p class="field-hint">Si te quedás en silencio más de este tiempo (por ejemplo, pensando qué decir), Brumexa asume que terminaste de hablar y los LEDs vuelven a respirar. Más alto = tolera pausas más largas antes de "darte por terminado".</p>
       </div>
     </div>
 
-    <!-- § Sonido — ganancias, sensibilidad, mic/parlante, calibración -->
+    <!-- § Sonido — ganancias, sensibilidad, mic/parlante, calibración. Todo
+         lo que es una escala continua (ganancias, umbral, timeout) es un
+         slider que aplica al toque — nada de botón "Guardar" acá, ver
+         wireLiveSlider() más abajo. Solo quedan botones donde hay una
+         ACCIÓN real (probar parlante, prender/apagar mic, recalibrar). -->
     <div class="card" id="card-sound">
       <div class="card-section-hdr">
         <span class="card-section-icon">🔊</span>
         <div>
           <div class="card-section-title">Sonido</div>
-          <div class="card-section-desc">Ganancias, sensibilidad de voz, mic/parlante y calibración de ruido ambiente</div>
+          <div class="card-section-desc">Todo acá se aplica al toque, sin reiniciar ni tocar "Guardar"</div>
         </div>
       </div>
 
+      <div class="field-group-label">Voz</div>
       <div class="field">
-        <label class="field-label" for="inp-mic-gain">MIC_GAIN</label>
-        <input type="text" id="inp-mic-gain" class="setup-input setup-input--short" placeholder="4.0" />
-      </div>
-      <div class="field">
-        <label class="field-label" for="inp-speaker-gain">SPEAKER_GAIN (volumen de la voz del agente)</label>
-        <input type="text" id="inp-speaker-gain" class="setup-input setup-input--short" placeholder="3.0" />
-      </div>
-      <div class="field">
-        <label class="field-label" for="inp-silence-timeout">Corte automático por silencio (segundos)</label>
-        <input type="text" id="inp-silence-timeout" class="setup-input setup-input--short" placeholder="10" />
-        <p class="field-hint">Si nadie habla (ni vos ni el agente) durante estos segundos, la sesión se desconecta sola. Poné 0 para desactivarlo.</p>
-      </div>
-      <div class="connect-row">
-        <button class="btn-connect" id="btn-save-sound" style="flex:none; padding:9px 20px">💾 Guardar ganancias</button>
-      </div>
-      <div id="sound-save-result" style="margin-top:10px"></div>
-
-      <div class="divider"></div>
-
-      <div class="field">
-        <label class="field-label" for="inp-talk-threshold">Sensibilidad de la voz (umbral, dBFS)</label>
+        <label class="field-label" for="inp-mic-gain">Sensibilidad del micrófono</label>
         <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
-          <div class="gain-row" style="grid-template-columns:1fr 60px">
+          <div class="gain-row" style="grid-template-columns:1fr 55px">
+            <input type="range" id="inp-mic-gain" class="gain-slider" min="0" max="20" step="0.5" value="4" />
+            <span class="gain-val" id="val-mic-gain">4.0x</span>
+          </div>
+        </div>
+        <p class="field-hint">Qué tan fuerte amplifica tu voz antes de mandarla. Subí si cuesta que te escuche bien; bajá si hay eco o se satura.</p>
+      </div>
+      <div class="field">
+        <label class="field-label" for="inp-speaker-gain">Volumen del agente</label>
+        <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
+          <div class="gain-row" style="grid-template-columns:1fr 55px">
+            <input type="range" id="inp-speaker-gain" class="gain-slider" min="0" max="20" step="0.5" value="3" />
+            <span class="gain-val" id="val-speaker-gain">3.0x</span>
+          </div>
+        </div>
+        <p class="field-hint">Qué tan fuerte sale la voz del agente por el parlante.</p>
+      </div>
+      <div class="field">
+        <label class="field-label" for="inp-talk-threshold">Sensibilidad de la voz (umbral)</label>
+        <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
+          <div class="gain-row" style="grid-template-columns:1fr 65px">
             <input type="range" id="inp-talk-threshold" class="gain-slider" min="-50" max="-15" step="1" value="-25" />
             <span class="gain-val" id="val-talk-threshold">-25 dBFS</span>
           </div>
         </div>
-        <p class="field-hint">Se aplica al toque, sin reiniciar. Más a la izquierda (negativo) = más sensible — por debajo de -30 puede dispararse con ruido ambiente.</p>
+        <p class="field-hint">Más a la izquierda = más sensible — por debajo de -30 puede dispararse con ruido ambiente.</p>
       </div>
 
       <div class="divider"></div>
 
+      <div class="field-group-label">Sesión</div>
+      <div class="field">
+        <label class="field-label" for="inp-silence-timeout">Corte automático por silencio</label>
+        <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
+          <div class="gain-row" style="grid-template-columns:1fr 55px">
+            <input type="range" id="inp-silence-timeout" class="gain-slider" min="0" max="120" step="5" value="10" />
+            <span class="gain-val" id="val-silence-timeout">10 s</span>
+          </div>
+        </div>
+        <p class="field-hint">Si nadie habla (ni vos ni el agente) durante este tiempo, la sesión se desconecta sola. Arrastrá del todo a la izquierda (0s) para desactivarlo.</p>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="field-group-label">Hardware</div>
       <div class="field">
         <label class="field-label">Micrófono</label>
         <button class="btn-ghost" id="btn-mic-toggle" type="button">Cargando…</button>
@@ -232,8 +233,8 @@
 
       <div class="divider"></div>
 
+      <div class="field-group-label">Calibración de ruido ambiente</div>
       <div class="field">
-        <label class="field-label">Calibración de ruido ambiente</label>
         <p class="field-hint">Corre sola al arrancar (fija el umbral según el ruido real de este ambiente). Volvé a correrla si el arranque agarró un mal momento.</p>
         <div class="kv" id="kv-calibration" style="margin-top:6px"></div>
         <button class="btn-ghost" id="btn-recalibrate" type="button" style="margin-top:8px">🎚️ Recalibrar ahora (4s de silencio)</button>
@@ -394,15 +395,12 @@
       document.getElementById('inp-api-key').value      = cfg.apiKey       || '';
       document.getElementById('inp-device-name').value = cfg.deviceName   || '';
       await initColorPicker(cfg.brumexaColor || 'negro');
-      document.getElementById('inp-mic-gain').value     = cfg.micGain      || '';
-      document.getElementById('inp-speaker-gain').value = cfg.speakerGain  || '';
-      document.getElementById('inp-talk-threshold').value = cfg.talkThreshold || '-25';
-      document.getElementById('val-talk-threshold').textContent = `${cfg.talkThreshold || '-25'} dBFS`;
-      document.getElementById('inp-silence-timeout').value = Math.round((parseInt(cfg.silenceTimeoutMs, 10) || 10000) / 1000);
-      setLedRhythmField('inp-led-breathe',  'val-led-breathe',  cfg.ledBreathePeriodMs, 1900);
-      setLedRhythmField('inp-led-hangover', 'val-led-hangover', cfg.ledHangoverMs,      2000);
-      setLedRhythmField('inp-led-onset',    'val-led-onset',    cfg.ledOnsetMs,         536);
-      setLedRhythmField('inp-led-offset',   'val-led-offset',   cfg.ledOffsetMs,        965);
+      setLiveSliderField('inp-mic-gain',     'val-mic-gain',     cfg.micGain,     4,     v => `${parseFloat(v).toFixed(1)}x`);
+      setLiveSliderField('inp-speaker-gain', 'val-speaker-gain', cfg.speakerGain, 3,     v => `${parseFloat(v).toFixed(1)}x`);
+      setLiveSliderField('inp-talk-threshold', 'val-talk-threshold', cfg.talkThreshold, -25, v => `${v} dBFS`);
+      setLiveSliderField('inp-silence-timeout', 'val-silence-timeout', (parseInt(cfg.silenceTimeoutMs, 10) || 10000) / 1000, 10, v => `${v} s`);
+      setLiveSliderField('inp-led-breathe',  'val-led-breathe',  cfg.ledBreathePeriodMs, 1900, v => `${v} ms`);
+      setLiveSliderField('inp-led-hangover', 'val-led-hangover', cfg.ledHangoverMs,      2000, v => `${v} ms`);
 
       micEnabledState = status.micEnabled !== false;
       updateMicButton();
@@ -623,21 +621,45 @@
     });
   });
 
-  document.getElementById('btn-save-sound').addEventListener('click', () => {
-    const secs = parseFloat(document.getElementById('inp-silence-timeout').value.trim());
-    saveFields({
-      micGain:          document.getElementById('inp-mic-gain').value.trim(),
-      speakerGain:      document.getElementById('inp-speaker-gain').value.trim(),
-      silenceTimeoutMs: isNaN(secs) ? undefined : Math.round(secs * 1000),
-    }, {
-      btn:    document.getElementById('btn-save-sound'),
-      result: document.getElementById('sound-save-result'),
-      okMsg:  'Guardado y aplicado, sin reiniciar',
+  // ─── Sliders "en vivo": arrastrás y ya se aplica, sin botón "Guardar" ────
+  // setLiveSliderField() solo pone el valor inicial (al cargar la página).
+  // wireLiveSlider() escucha el arrastre: actualiza el label al toque, y
+  // manda el cambio al servidor con un pequeño debounce (para no mandar un
+  // request por cada pixel que se mueve el mouse, solo cuando hace una
+  // pausa de 400ms). formatLabel/buildBody son funciones porque cada campo
+  // necesita su propia unidad (ms, x, dBFS, s) y su propia forma de request.
+  function setLiveSliderField(inputId, valId, cfgValue, fallback, formatLabel) {
+    const v = parseFloat(cfgValue);
+    const val = isNaN(v) ? fallback : v;
+    document.getElementById(inputId).value = val;
+    document.getElementById(valId).textContent = formatLabel(val);
+  }
+  function wireLiveSlider(inputId, valId, formatLabel, buildBody) {
+    let timer = null;
+    document.getElementById(inputId).addEventListener('input', (e) => {
+      document.getElementById(valId).textContent = formatLabel(e.target.value);
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        try {
+          await fetch('/setup/config', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify(buildBody(e.target.value)),
+          });
+        } catch {}
+      }, 400);
     });
-  });
+  }
+  wireLiveSlider('inp-mic-gain',      'val-mic-gain',      v => `${parseFloat(v).toFixed(1)}x`, v => ({ micGain: v }));
+  wireLiveSlider('inp-speaker-gain',  'val-speaker-gain',  v => `${parseFloat(v).toFixed(1)}x`, v => ({ speakerGain: v }));
+  wireLiveSlider('inp-silence-timeout', 'val-silence-timeout', v => `${v} s`, v => ({ silenceTimeoutMs: Math.round(parseFloat(v) * 1000) }));
+  wireLiveSlider('inp-led-breathe',   'val-led-breathe',   v => `${v} ms`, v => ({ ledBreathePeriodMs: v }));
+  wireLiveSlider('inp-led-hangover',  'val-led-hangover',  v => `${v} ms`, v => ({ ledHangoverMs: v }));
 
-  // Slider de sensibilidad — label en vivo + push al servidor con debounce
-  // (no requiere "Guardar", aplica al toque).
+  // Sensibilidad de voz es la excepción: pega directo a /session/talk-threshold
+  // (aplica en vivo pero NO persiste en cada arrastre — solo la calibración
+  // persiste este valor, ver runRecalibration más abajo) en vez de
+  // /setup/config, así que queda con su propio wiring.
   let _threshTimer = null;
   document.getElementById('inp-talk-threshold').addEventListener('input', (e) => {
     document.getElementById('val-talk-threshold').textContent = `${e.target.value} dBFS`;
@@ -652,36 +674,6 @@
       } catch {}
     }, 400);
   });
-
-  // ─── Ritmo de LEDs — 4 sliders, mismo criterio que arriba: label en vivo +
-  // push con debounce a /setup/config (persiste Y aplica, no hace falta
-  // tocar "Guardar" — arrastrás y el dispositivo ya responde). ─────────────
-  function setLedRhythmField(inputId, valId, cfgValue, fallback) {
-    const v = parseFloat(cfgValue);
-    const ms = isNaN(v) ? fallback : v;
-    document.getElementById(inputId).value = ms;
-    document.getElementById(valId).textContent = `${ms} ms`;
-  }
-  function wireLedRhythmSlider(inputId, valId, bodyKey) {
-    let timer = null;
-    document.getElementById(inputId).addEventListener('input', (e) => {
-      document.getElementById(valId).textContent = `${e.target.value} ms`;
-      clearTimeout(timer);
-      timer = setTimeout(async () => {
-        try {
-          await fetch('/setup/config', {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ [bodyKey]: e.target.value }),
-          });
-        } catch {}
-      }, 400);
-    });
-  }
-  wireLedRhythmSlider('inp-led-breathe',  'val-led-breathe',  'ledBreathePeriodMs');
-  wireLedRhythmSlider('inp-led-hangover', 'val-led-hangover', 'ledHangoverMs');
-  wireLedRhythmSlider('inp-led-onset',    'val-led-onset',    'ledOnsetMs');
-  wireLedRhythmSlider('inp-led-offset',   'val-led-offset',   'ledOffsetMs');
 
   // Sondea /configuracion/status cada 2s hasta 20s (solo se usa cuando SÍ
   // hubo reinicio — cambio de color o "Actualizar Brumexa"). Si vuelve,

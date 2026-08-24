@@ -1220,6 +1220,28 @@ body {
 }
 .setup-token-row .setup-input { flex: 1; }
 
+/* Fila compacta de campos cortos (ej. Servidor / ID / Nombre en
+   Credenciales) — se apilan solos en pantallas angostas. */
+.field-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem 0.875rem;
+}
+.field-row .field { margin-bottom: 0; }
+
+/* Subtítulo chico DENTRO de una card, para separar clusters de campos
+   relacionados sin necesitar una card nueva (ej. "Voz" vs "Hardware" vs
+   "Calibración" adentro de Sonido) — más liviano que .section-group-label,
+   que es para separar CARDS enteras. */
+.field-group-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.75rem;
+}
+
 .setup-actions {
   display: flex;
   align-items: center;
