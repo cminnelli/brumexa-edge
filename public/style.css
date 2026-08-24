@@ -1213,6 +1213,28 @@ body {
 .setup-input::placeholder { color: var(--muted); }
 .setup-input--short { width: 120px; }
 
+/* Desplegable liviano para un detalle técnico que casi nunca hace falta
+   tocar (ej. elegir el dispositivo ALSA a mano) — colapsado por default,
+   con una flechita en vez del marcador nativo del navegador. */
+.tech-details summary {
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  list-style: none;
+  user-select: none;
+}
+.tech-details summary::-webkit-details-marker { display: none; }
+.tech-details summary::before {
+  content: '▸';
+  display: inline-block;
+  width: 12px;
+  transition: transform var(--tr);
+}
+.tech-details[open] summary::before { transform: rotate(90deg); }
+.tech-details summary:hover { color: var(--text2); }
+.tech-details > div { margin-top: 8px; }
+
 .setup-token-row {
   display: flex;
   gap: 8px;

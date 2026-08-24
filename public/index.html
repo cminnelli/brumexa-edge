@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=19" />
+  <link rel="stylesheet" href="style.css?v=21" />
 </head>
 <body>
 
@@ -131,10 +131,14 @@
             </div>
           </div>
           <div id="alsa-device-wrap" style="display:none">
-            <div class="field">
-              <label class="field-label">Dispositivo ALSA</label>
-              <select id="alsa-device-select" class="select-input"></select>
-            </div>
+            <details class="tech-details">
+              <summary>Elegir dispositivo de micrófono a mano</summary>
+              <div class="field">
+                <label class="field-label">Dispositivo ALSA (mic)</label>
+                <select id="alsa-device-select" class="select-input"></select>
+                <p class="field-hint">Normalmente no hace falta tocar esto — ya viene con el correcto. Cambialo solo si el mic no anda con el que está.</p>
+              </div>
+            </details>
           </div>
         </div>
 
@@ -167,10 +171,14 @@
             </div>
           </div>
           <div id="alsa-speaker-wrap" style="display:none">
-            <div class="field">
-              <label class="field-label">Dispositivo ALSA (playback)</label>
-              <select id="alsa-speaker-select" class="select-input"></select>
-            </div>
+            <details class="tech-details">
+              <summary>Elegir dispositivo de parlante a mano</summary>
+              <div class="field">
+                <label class="field-label">Dispositivo ALSA (parlante)</label>
+                <select id="alsa-speaker-select" class="select-input"></select>
+                <p class="field-hint">Normalmente no hace falta tocar esto — ya viene con el correcto. Cambialo solo si no se escucha por el parlante que esperás.</p>
+              </div>
+            </details>
           </div>
         </div>
 
