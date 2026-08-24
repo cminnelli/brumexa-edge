@@ -129,20 +129,16 @@
     <div id="speaker-test-result" style="margin-top:8px"></div>
   </div>
 
-  <!-- § LEDs — estado + chispazo de prueba + laboratorio de color -->
+  <!-- § LEDs — estado + laboratorio de color -->
   <div class="card">
     <div class="card-section-hdr">
       <span class="card-section-icon">💡</span>
       <div>
         <div class="card-section-title">LEDs</div>
-        <div class="card-section-desc">Estado del hardware, prueba rápida y laboratorio de color en vivo</div>
+        <div class="card-section-desc">Estado del hardware y laboratorio de color en vivo — elegí cualquier color para probar</div>
       </div>
     </div>
     <div class="kv" id="kv-leds-diag"></div>
-    <div class="connect-row" style="margin-top:0.75rem">
-      <button class="btn-ghost" id="btn-leds-flash" type="button">✅ Chispazo verde (2.5s)</button>
-    </div>
-    <div id="leds-flash-result" style="margin-top:8px"></div>
 
     <div class="divider"></div>
 
@@ -161,6 +157,7 @@
       <input type="range" id="leds-lab-val" min="5" max="100" step="1" value="100" class="leds-lab__slider">
     </div>
     <button class="btn-ghost" id="btn-leds-lab-exit" type="button">Salir del laboratorio (volver al color normal)</button>
+    <div id="leds-lab-result" style="margin-top:8px"></div>
   </div>
 
   <!-- § Grabaciones -->

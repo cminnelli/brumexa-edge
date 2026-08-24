@@ -216,23 +216,6 @@ const LedsDiag = {
   },
 };
 
-async function runLedsFlash() {
-  const btn    = document.getElementById('btn-leds-flash');
-  const result = document.getElementById('leds-flash-result');
-  btn.disabled = true;
-  try {
-    const res  = await fetch('/diag/leds/test', { method: 'POST' });
-    const data = await res.json();
-    result.innerHTML = data.ok
-      ? '<div class="pill ok">✅ Verde fijo ~2.5s — si no lo viste, revisá el estado de arriba</div>'
-      : `<div class="pill bad">⚠ ${esc(data.error || 'No se pudo prender')}</div>`;
-  } catch (e) {
-    result.innerHTML = `<div class="pill bad">⚠ Error: ${esc(e.message)}</div>`;
-  } finally {
-    setTimeout(() => { btn.disabled = false; }, 1000);
-  }
-}
-
 // Laboratorio de color — igual lógica que el modal viejo del Panel, pero
 // inline (esta página ya ES el lugar dedicado a probar cosas, no hace
 // falta un overlay encima de otra pantalla). "Salir del laboratorio"
@@ -302,7 +285,7 @@ const LedsLab = {
     clearTimeout(this._sendTimer);
     clearTimeout(this._settleTimer);
     fetch('/diag/leds/set/exit', { method: 'POST' }).catch(() => {});
-    const result = document.getElementById('leds-flash-result');
+    const result = document.getElementById('leds-lab-result');
     if (result) result.innerHTML = '<div class="pill ok">✔ Laboratorio cerrado — volvió al color normal de la carcasa</div>';
   },
 };
@@ -514,7 +497,6 @@ const Recorder = {
 (async function init() {
   document.getElementById('btn-speaker-test')?.addEventListener('click', runSpeakerTest);
   document.getElementById('btn-test-connection')?.addEventListener('click', testConnection);
-  document.getElementById('btn-leds-flash')?.addEventListener('click', runLedsFlash);
   document.getElementById('btn-rec-start')?.addEventListener('click', () => Recorder.start());
   document.getElementById('btn-rec-stop')?.addEventListener('click', () => Recorder.stop());
 
