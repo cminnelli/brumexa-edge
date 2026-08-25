@@ -657,7 +657,7 @@ let _micLevel = { level: 0, peak: 0, updatedAt: 0, source: null };
 // de diagnóstico, no para sondearlo seguido. El medidor de mic en vivo de
 // /diagnostico lo sondea cada 200ms — con /local/status eso eran ~8
 // execSync (BLOQUEANTES, cortan el event loop entero de Node — audio,
-// LEDs, wake word, todo) cinco veces por segundo, sin parar mientras la
+// LEDs, todo) cinco veces por segundo, sin parar mientras la
 // página estuviera abierta. Esta ruta solo lee la variable en memoria que
 // ya se actualiza sola — sin spawnear nada.
 app.get('/diag/mic-level', (_req, res) => {

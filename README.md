@@ -23,28 +23,30 @@ Hardware ya armado (mic/parlante/LEDs cableados, ver [`cableado-diagrama.pdf`](c
 - Elegir sistema operativo ("Choose OS") → **Raspberry Pi OS (other)** →
   **Raspberry Pi OS Lite (64-bit)**, la que NO dice "Legacy" (necesita aarch64 + NetworkManager)
 - Elegir almacenamiento ("Choose Storage") → la SD
-- ⚙️ Configuración avanzada ("Edit Settings") → hostname **único** para este dispositivo, ej.
-  `brumexa-juan` (anotalo, lo usás en el paso 2) — **no uses `brumexa` a secas**: si en algún
-  momento hay más de una Brumexa en la misma red, dos dispositivos con el mismo hostname
-  chocan por `brumexa.local` (mDNS/Avahi le agrega un sufijo automático tipo `-2` al segundo
-  que arranca, y termina siendo confuso saber cuál es cuál) — habilitar SSH (usuario/contraseña), WiFi
+- ⚙️ Configuración avanzada ("Edit Settings"):
+  - **Hostname**: `brumexa-<identificador>`, único por dispositivo — ej. `brumexa-oficina` (si
+    hay más de una Brumexa en ese mismo local, `brumexa-oficina-1`, `brumexa-oficina-2`). El
+    prefijo `brumexa` es a propósito, pero **nunca lo dejes a secas ni repetido en dos
+    dispositivos de la misma red**: chocan por `.local` (Avahi le agrega un sufijo tipo `-2` al
+    segundo que arranca, y es un lío saber cuál es cuál).
+  - **Usuario SSH**: `user`, siempre el mismo en todos los dispositivos — a diferencia del
+    hostname, no participa en cómo se encuentra el dispositivo en la red, así que no genera
+    conflictos (`install.sh` detecta solo qué usuario se usó y ajusta el servicio de arranque
+    temprano acorde, no hace falta que coincida con nada hardcodeado).
+  - Contraseña, habilitar SSH, WiFi
 - Grabar ("Write")
 
 **2. Primer boot y SSH**
-- Sacar la SD de la PC, ponerla en la Pi, conectar alimentación
-- Esperar ~1 min
-- Conectarte por SSH desde tu PC. En Windows no hace falta instalar nada — PowerShell o
-  Windows Terminal ya traen `ssh`:
+- Sacar la SD de la PC, ponerla en la Pi, conectar alimentación, esperar ~1 min
+- Conectarte por SSH (PowerShell en Windows ya trae `ssh`, no hace falta instalar nada):
   ```
-  ssh <usuario>@<hostname>.local
+  ssh user@brumexa-oficina.local
   ```
-  Reemplazá `<usuario>` y `<hostname>` por lo que configuraste en el paso 1 (ej: usuario `juan`,
-  hostname `brumexa-juan` → `ssh juan@brumexa-juan.local`). Pide la contraseña que pusiste ahí
-  — no hace falta nada más, SSH ya quedó habilitado al grabar la SD.
+  Reemplazá `brumexa-oficina` por el hostname que elegiste en el paso 1. Pide la contraseña que
+  pusiste ahí — no hace falta nada más, SSH ya quedó habilitado al grabar la SD.
 
-  Si el hostname que elegiste ya está en uso por otra Brumexa en esa red (o repetiste
-  `brumexa` a secas por accidente), Avahi le agrega un sufijo automático al segundo dispositivo
-  — probá `<hostname>-2.local` si `<hostname>.local` no conecta.
+  Si no conecta y hay más de una Brumexa en esa red, puede que Avahi le haya agregado un sufijo
+  al hostname — probá `brumexa-oficina-2.local`.
 
 **3. Instalar**
 
@@ -60,10 +62,9 @@ bash install.sh
 `install.sh` hace todo esto solo (10-15 min):
 - Chequea que el OS sea 64-bit, actualiza el sistema, instala ALSA/Python/Node.js 20/Git
 - Clona el repo en `~/proyectos/brumexa-edge` e instala las dependencias del proyecto (`npm install`)
-- Arma el entorno Python de la wake word "Hey Brumexa"
 - Pide `RAG_API_URL` / `BRUMEXA_DEVICE_ID` / `BRUMEXA_API_KEY` — si todavía no las tenés,
   Enter las deja en blanco, se cargan después sin reiniciar (ver paso 6)
-- Habilita I2S (audio) y SPI (LEDs)
+- Habilita I2S (audio) y SPI (LEDs), y deshabilita el audio onboard
 - Pregunta si querés arranque automático con PM2 → **sí**
 - Deja instalado el arranque temprano (LEDs prendidos mientras bootea)
 
@@ -72,9 +73,8 @@ bash install.sh
 sudo reboot
 ```
 Con esto ya tenés la Pi arriba y el server corriendo (LEDs prenden solos, panel accesible en
-`http://<hostname>.local:3000`, con el hostname que elegiste en el paso 1 — de acá en adelante
-los ejemplos usan `brumexa.local`, reemplazalo por el tuyo), aunque todavía no esté autenticada
-contra la API.
+`http://brumexa-oficina.local:3000` — con el hostname que elegiste en el paso 1), aunque
+todavía no esté autenticada contra la API.
 
 **5. Dar de alta el dispositivo**
 - En la plataforma de admin de Brumexa → Devices → crear dispositivo → copiar el `apiKey`
@@ -82,11 +82,11 @@ contra la API.
 - Anotar: `RAG_API_URL`, `BRUMEXA_DEVICE_ID`, `BRUMEXA_API_KEY`
 
 **6. Cargar las credenciales**
-- Desde el navegador, `http://brumexa.local:3000/configuracion` → Credenciales → pegar los 3
+- Desde el navegador, `http://brumexa-oficina.local:3000/configuracion` → Credenciales → pegar los 3
   valores del paso anterior → Guardar (aplica al toque, sin reiniciar el server)
 
 **7. Verificar**
-- Entrar a `http://brumexa.local:3000` — es el panel principal del dispositivo, desde ahí se
+- Entrar a `http://brumexa-oficina.local:3000` — es el panel principal del dispositivo, desde ahí se
   conecta y se prueba todo. En la card **LiveKit — Agente IA**, tocar **Conectar** inicia una
   sesión real que sirve para confirmar que anda todo junto: se escucha al agente por el
   **parlante**, los **LEDs** cambian de color mientras habla, y el **mic** lo capta si le
@@ -121,7 +121,7 @@ npm start          # una vez, sin autoreload
 npm run brumexa    # con autoreload — se reinicia solo al editar un archivo
 ```
 
-En el panel (`http://brumexa.local:3000`): la card **LiveKit — Agente IA** conecta a una
+En el panel (`http://brumexa-oficina.local:3000`): la card **LiveKit — Agente IA** conecta a una
 sesión real (ver Paso 7 de la instalación), y **Test Mic** es un VU meter local, sin sesión ni
 internet, para probar solo el mic sin depender de la API.
 
@@ -131,16 +131,13 @@ Una vez instalada, no hace falta volver a conectarte por SSH para usar Brumexa �
 maneja desde el navegador. El server escucha en toda la red (no solo `localhost`), así que
 cualquier otro dispositivo de esa red entra directo.
 
-**Caso normal — la Pi ya tiene WiFi:** entrás por `http://<hostname>.local:3000`, con el
-hostname único que le pusiste a la Pi en el Paso 1 de la instalación (Raspberry Pi Imager).
-Funciona por mDNS/Avahi, instalado de fábrica en Raspberry Pi OS: cualquier otro dispositivo de
-la misma red resuelve ese nombre solo a la IP real de la Pi, sin que tengas que buscarla a mano
-ni que sea siempre la misma.
+**Caso normal — la Pi ya tiene WiFi:** entrás por `http://brumexa-oficina.local:3000` (el
+hostname que le pusiste en el Paso 1). Funciona por mDNS/Avahi, de fábrica en Raspberry Pi OS:
+cualquier otro dispositivo de la red resuelve ese nombre solo a la IP real de la Pi.
 
-⚠️ Si dos Brumexas de la misma red terminan con el mismo hostname (por ejemplo, las dos con
-`brumexa` a secas en vez de uno único por dispositivo), Avahi le agrega un sufijo automático al
-segundo que arranca (`brumexa-2.local`) — si `<hostname>.local` no conecta y sabés que hay más
-de un dispositivo Brumexa cerca, probá con el sufijo antes de asumir que algo está roto.
+⚠️ Si dos Brumexas de la misma red terminan con el mismo hostname, Avahi le agrega un sufijo
+automático al segundo (`brumexa-oficina-2.local`) — probá con el sufijo si no conecta y sabés
+que hay más de una Brumexa cerca.
 
 **Si la Pi todavía no tiene WiFi cargado, o se le cortó y no logra reconectar sola:** arranca
 sola un Access Point (AP) de emergencia — su propia red WiFi, para poder entrar y cargarle la
@@ -152,7 +149,7 @@ red real. Por default:
 (los tres son configurables — `WIFI_AP_SSID` / `WIFI_AP_PASS` / `WIFI_AP_IP` en `.env.example`).
 Conectate a esa red WiFi desde tu celu/PC y entrá a `http://10.42.0.1:3000/setup` para cargar
 el SSID/contraseña de tu WiFi real — apenas lo guardás, la Pi se conecta sola y volvés a
-entrar por `brumexa.local` como siempre.
+entrar por `brumexa-oficina.local` como siempre.
 
 Esto es automático, no hace falta tocar nada: `lib/wifi.js` monitorea la señal cada 15s (LEDs
 en naranja si está débil) y, si se pierde la conexión por más de 45s sin reconectar sola,
@@ -168,7 +165,7 @@ Páginas útiles además de `/`:
 
 ## Variables de entorno
 
-Ver `.env.example` para la lista completa (wake word, ganancias, umbrales). Las imprescindibles:
+Ver `.env.example` para la lista completa (ganancias, umbrales). Las imprescindibles:
 
 | Variable | Descripción |
 |---|---|

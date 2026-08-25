@@ -71,21 +71,6 @@ ok "npm install completado"
 info "Instalando librería NeoPixel..."
 npm install rpi-ws281x --silent 2>/dev/null && ok "rpi-ws281x instalado" || info "rpi-ws281x no disponible (se omite)"
 
-# ─── 8b. Wake word "Hey Brumexa" — Python aislado en wake-word/venv ──────────
-# openWakeWord es la única opción open source que puede aprender un nombre de
-# marca inventado (no es un reconocedor de voz de diccionario como Vosk) —
-# por eso es Python y no un paquete npm. Vive en su propia carpeta con su
-# propio entorno virtual, sin tocar el Python del sistema.
-info "Armando entorno Python para la wake word (wake-word/)..."
-python3 -m venv wake-word/venv
-wake-word/venv/bin/pip install --quiet --upgrade pip
-wake-word/venv/bin/pip install --quiet -r wake-word/requirements.txt
-ok "Entorno Python listo"
-
-info "Descargando modelos base de openWakeWord..."
-wake-word/venv/bin/python -c "from openwakeword.utils import download_models; download_models()" > /dev/null 2>&1
-ok "Modelos base descargados"
-
 # ─── 9. Configurar .env ──────────────────────────────────────────────────────
 echo ""
 if [ -f ".env" ]; then
@@ -97,12 +82,10 @@ else
   read -p "RAG_API_URL (ej: http://192.168.1.50:4000): " RAG_URL
   read -p "BRUMEXA_DEVICE_ID (ej: brume-1): " DEV_ID
   read -p "BRUMEXA_API_KEY (generado/rotado en brumexa-admin-v2 → Devices): " DEV_KEY
-  read -p "Ruta al modelo de wake word entrenado (.onnx/.tflite — Enter para omitir por ahora): " WW_MODEL
 
   sed -i "s|RAG_API_URL=.*|RAG_API_URL=${RAG_URL}|" .env
   sed -i "s|BRUMEXA_DEVICE_ID=.*|BRUMEXA_DEVICE_ID=${DEV_ID}|" .env
   sed -i "s|BRUMEXA_API_KEY=.*|BRUMEXA_API_KEY=${DEV_KEY}|" .env
-  [ -n "$WW_MODEL" ] && sed -i "s|WAKE_WORD_MODEL_PATH=.*|WAKE_WORD_MODEL_PATH=${WW_MODEL}|" .env
 
   ok ".env configurado"
 fi
@@ -111,7 +94,7 @@ fi
 CONFIG=/boot/firmware/config.txt
 info "Configurando /boot/firmware/config.txt..."
 
-if grep -q "googlevoicehat-soundcard" "$CONFIG"; then
+if grep -qE "^\s*dtoverlay=googlevoicehat-soundcard" "$CONFIG"; then
   ok "config.txt ya tiene audio I2S configurado"
 else
   echo "" | sudo tee -a "$CONFIG" > /dev/null
@@ -121,7 +104,14 @@ else
   ok "Audio I2S agregado al config.txt"
 fi
 
-if grep -q "dtparam=spi=on" "$CONFIG"; then
+if grep -qE "^\s*dtparam=audio=off" "$CONFIG"; then
+  ok "config.txt ya tiene dtparam=audio=off configurado"
+else
+  echo "dtparam=audio=off" | sudo tee -a "$CONFIG" > /dev/null
+  ok "Audio onboard deshabilitado en config.txt (evita que tome la tarjeta ALSA 0 antes que el HAT I2S)"
+fi
+
+if grep -qE "^\s*dtparam=spi=on" "$CONFIG"; then
   ok "config.txt ya tiene SPI configurado"
 else
   echo "" | sudo tee -a "$CONFIG" > /dev/null

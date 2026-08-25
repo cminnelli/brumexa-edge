@@ -53,7 +53,7 @@ const MicMeter = {
   // vcgencmd, bluetoothctl x2, tail de logs) + un fetch de red a la RAG API
   // en CADA llamada — pensado para cargarse una vez en un dashboard, no
   // para sondearlo cada 200ms. Sondeado así, esos ~8 execSync BLOQUEANTES
-  // (cortan el event loop entero de Node — audio, LEDs, wake word, todo)
+  // (cortan el event loop entero de Node — audio, LEDs, todo)
   // cinco veces por segundo terminaban trabando el dispositivo entero
   // mientras esta página estuviera abierta. /diag/mic-level solo lee una
   // variable en memoria, no spawnea nada.

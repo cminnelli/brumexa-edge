@@ -864,9 +864,9 @@ function startLkSenderStats(pub, label) {
   return { stop() { clearInterval(interval); } };
 }
 
-// Si la sesión ya está corriendo cuando se carga la página (por ejemplo la
-// arrancó la wake word "Hey Brumexa" y nadie tocó el botón todavía), esto
-// sincroniza el botón/UI a "Desconectar" en vez de dejarlo trabado en
+// Si la sesión ya está corriendo cuando se carga la página (por ejemplo se
+// arrancó desde otra pestaña/dispositivo y nadie tocó el botón acá todavía),
+// esto sincroniza el botón/UI a "Desconectar" en vez de dejarlo trabado en
 // "Conectar" — mismo estado al que ya se sincroniza el catch de 409 del
 // click handler (ver más abajo), solo que acá se chequea proactivamente
 // al cargar en vez de esperar a que el usuario clickee y choque con un 409.
@@ -1789,8 +1789,8 @@ const DebugModule = {
     if (termLink) termLink.style.display = 'none';
   }
 
-  // ─── Sincronizar el botón si ya hay una sesión activa (ej. arrancada por
-  // wake word mientras esta página no estaba abierta) ──────────────────────
+  // ─── Sincronizar el botón si ya hay una sesión activa (ej. arrancada desde
+  // otro lado mientras esta página no estaba abierta) ──────────────────────
   if (isRaspberry) await syncActiveSessionIfAny();
 
   // ─── Verificar conectividad con LiveKit + arrancar chequeo periódico ─────
