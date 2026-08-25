@@ -103,6 +103,7 @@ const MicMeter = {
     });
     if (this._history.length > this.MAX_SAMPLES) this._history.shift();
     this._calibratedThresholdDbfs = mic.calibratedThresholdDbfs;
+    this._lastMic = mic; // para el popup de detalles técnicos, que solo se lee al abrirlo
     this._renderChart();
     this._renderStatus(mic);
     this._renderNumbers(mic, dbfs);
@@ -133,61 +134,64 @@ const MicMeter = {
     }
   },
 
-  // "¿Qué está pasando AHORA?" — prioriza señales que sirven para MEDIR el
-  // entorno, no cualquier parpadeo interno del gate. "Sensando" (isSensing,
-  // ~100-250ms, cualquier muestra que roza el umbral) se sacó de acá: dura
-  // demasiado poco y no dice nada real del cuarto. En cambio, si el umbral
-  // EFECTIVO subió por encima del calibrado (ver mic-speech-gate.js) SÍ es
-  // una señal real de "el ambiente está más ruidoso que cuando calibraste"
-  // — eso es justo lo que sirve para decidir si conviene recalibrar.
+  // Un comentario en una sola frase, en criollo — no un panel de estado. Los
+  // números/nombres técnicos (piso ambiente, umbral calibrado/efectivo)
+  // quedan afuera de acá a propósito: viven en el popup de detalles (ver
+  // _renderDetails), esto es solo "¿qué está pasando, en criollo?".
   _renderStatus(mic) {
-    const el = document.getElementById('sound-status-pill');
+    const el = document.getElementById('sound-alert');
     if (!el) return;
 
     if (mic.sessionActive && !mic.micGateEnabled) {
-      el.className = 'pill dot warn';
-      el.textContent = '⚠️ Gate OFF — todo sin filtrar';
+      el.className = 'sound-alert warn';
+      el.textContent = '⚠️ El filtro de ruido está apagado — se manda todo tal cual, sin filtrar';
       return;
     }
 
+    // Ambiente más ruidoso que cuando calibraste — dato del popup, acá solo
+    // se usa para elegir la frase, no se muestra el número.
     const rise = (mic.effectiveThresholdDbfs != null && mic.calibratedThresholdDbfs != null)
       ? mic.effectiveThresholdDbfs - mic.calibratedThresholdDbfs
       : 0;
-    const noisyEnv = rise > 2; // >2dB por encima de lo calibrado — el piso ambiente ya lo empujó
+    const noisyEnv = rise > 2;
 
-    const detect = mic.gateOpen
-      ? '🎙 Hablando'
-      : noisyEnv ? `🔊 Ambiente ruidoso (+${rise.toFixed(1)}dB)` : '🤫 Silencio';
-
-    let cls, tx;
-    if (!mic.sessionActive) {
-      cls = mic.gateOpen ? 'live' : noisyEnv ? 'warn' : 'muted';
-      tx = 'sin sesión';
-    } else if (mic.gateOpen) {
-      cls = 'live'; tx = '→ LiveKit';
+    let cls, text;
+    if (mic.gateOpen) {
+      cls = 'live';
+      text = mic.sessionActive ? '🎙️ Te está escuchando y mandando tu voz' : '🎙️ Te está escuchando (sin sesión activa)';
+    } else if (noisyEnv) {
+      cls = 'warn';
+      text = 'Hay más ruido de lo normal en el ambiente';
     } else {
-      cls = noisyEnv ? 'warn' : 'muted';
-      tx = 'atenuado';
+      cls = 'muted';
+      text = mic.sessionActive ? 'Todo tranquilo, esperando que hables' : 'Todo tranquilo — sin sesión activa';
     }
 
-    el.className = `pill dot ${cls}`;
-    el.textContent = `${detect} · ${tx}`;
+    el.className = `sound-alert ${cls}`;
+    el.textContent = text;
   },
 
-  // ── Gráfico: una sola línea con la voz (el hilo del que se trata todo:
-  // acento de marca, la más gruesa) + 3 líneas de contexto en tonos grises
-  // (calibrado/efectivo/piso ambiente — nunca compiten en color con la
-  // principal) + franja ámbar marcando cuándo se confirmó "hablando". Cada
-  // línea de contexto lleva su propio label pegado a la punta derecha en vez
-  // de una leyenda aparte — así el gráfico se explica solo. SVG a mano
-  // (mismo criterio que el sparkline de calibración en /configuracion), sin
-  // ninguna librería de gráficos, no hace falta.
-  MAX_SAMPLES: 150, // ~30s a 200ms/muestra
+  // ── Gráfico: SOLO 2 líneas — tu volumen (suavizado, acento de marca) y
+  // "se activa acá" (el umbral que se usa AHORA, gris, sin nombre técnico) —
+  // más la franja ámbar de "hablando confirmado". Todo lo demás (piso
+  // ambiente, calibrado vs. efectivo) se sacó del gráfico — vive en el popup
+  // de detalles (ver _renderDetails), no acá.
+  //
+  // Ventana más larga (60s en vez de 30s) + redibujado más espaciado
+  // (RENDER_INTERVAL_MS, no cada muestra) + suavizado (_smoothedDbfs) =
+  // se lee como una tendencia tranquila, no como un electrocardiograma.
+  // Los DATOS se siguen juntando cada 200ms igual (el pill/stat-tiles no
+  // pierden reactividad) — solo el DIBUJO del gráfico va más despacio.
+  MAX_SAMPLES: 300, // ~60s a 200ms/muestra
+  RENDER_INTERVAL_MS: 700,
+  SMOOTH_WINDOW: 3,
   Y_MIN: -60,
   Y_MAX: 0,
-  CHART_W: 640, CHART_H: 156, PAD_L: 30, PAD_R: 4, PAD_T: 12, PAD_B: 6,
+  CHART_W: 640, CHART_H: 190, PAD_L: 6, PAD_R: 4, PAD_T: 16, PAD_B: 6,
   _history: [],
   _calibratedThresholdDbfs: null,
+  _lastMic: null,
+  _lastRenderAt: 0,
 
   _xFor(i, n) {
     const usable = this.CHART_W - this.PAD_L - this.PAD_R;
@@ -207,76 +211,93 @@ const MicMeter = {
     }
     return out.join(' ');
   },
+  // Promedio de las últimas SMOOTH_WINDOW muestras — calma el jitter de
+  // sample a sample sin agregar demora perceptible (la ventana es de menos
+  // de 1s de audio real).
+  _smoothedDbfs() {
+    const hist = this._history, n = hist.length, out = [];
+    for (let i = 0; i < n; i++) {
+      let sum = 0, cnt = 0;
+      for (let j = Math.max(0, i - this.SMOOTH_WINDOW + 1); j <= i; j++) { sum += hist[j].dbfs; cnt++; }
+      out.push(sum / cnt);
+    }
+    return out;
+  },
   _renderChart() {
+    const now = Date.now();
+    if (now - this._lastRenderAt < this.RENDER_INTERVAL_MS) return; // los datos se siguen juntando; el DIBUJO va más espaciado
+    this._lastRenderAt = now;
+
     const wrap = document.getElementById('sound-chart-wrap');
     if (!wrap) return;
     const hist = this._history, n = hist.length;
     if (!n) { wrap.innerHTML = '<p class="field-hint">Esperando datos…</p>'; return; }
 
-    // Franja: solo lo confirmado (gateOpen) — "sensando" dura ~100-250ms y
-    // no aporta nada para leer el gráfico, ver comentario en _renderStatus.
     const step = n > 1 ? (this.CHART_W - this.PAD_L - this.PAD_R) / (n - 1) : (this.CHART_W - this.PAD_L - this.PAD_R);
     let bands = '';
     for (let i = 0; i < n; i++) {
       if (!hist[i].gateOpen) continue;
       const x = this._xFor(i, n) - step / 2;
-      bands += `<rect x="${x.toFixed(1)}" y="${this.PAD_T}" width="${(step + 0.6).toFixed(1)}" height="${this.CHART_H - this.PAD_T - this.PAD_B}" fill="rgba(224,160,50,0.26)" />`;
+      bands += `<rect x="${x.toFixed(1)}" y="${this.PAD_T}" width="${(step + 0.6).toFixed(1)}" height="${this.CHART_H - this.PAD_T - this.PAD_B}" fill="rgba(224,160,50,0.22)" />`;
     }
 
-    // Gridlines cada 10dB — hairline, sin protagonismo, para ubicar valores
-    // sin necesitar leer un número aparte.
+    // 2 gridlines nomás, sin números — solo para tener una referencia visual
+    // de escala, sin agregar más texto para leer.
     let grid = '';
-    for (let db = this.Y_MIN; db <= this.Y_MAX; db += 10) {
+    for (const db of [-20, -40]) {
       const y = this._yFor(db);
       grid += `<line x1="${this.PAD_L}" y1="${y.toFixed(1)}" x2="${this.CHART_W - this.PAD_R}" y2="${y.toFixed(1)}" stroke="var(--border)" stroke-width="1" />`;
-      grid += `<text x="1" y="${(y + 3).toFixed(1)}" font-size="8.5" fill="var(--text2)">${db}</text>`;
     }
+
+    const smoothed = this._smoothedDbfs();
+    const dbfsLine = this._pointsFromArray(smoothed);
+    const effLine  = this._points(s => s.effectiveThresholdDbfs);
 
     const lastSample = hist[n - 1];
-    const dbfsLine = this._points(s => s.dbfs);
-    const ambLine  = this._points(s => s.ambientFloorDbfs);
-    const effLine  = this._points(s => s.effectiveThresholdDbfs);
-    const calibY   = this._calibratedThresholdDbfs != null ? this._yFor(this._calibratedThresholdDbfs) : null;
-    const effY     = (lastSample.effectiveThresholdDbfs != null && !isNaN(lastSample.effectiveThresholdDbfs))
+    const lastX = this._xFor(n - 1, n);
+    const lastY = this._yFor(smoothed[n - 1]);
+    const endDot = `<circle cx="${lastX.toFixed(1)}" cy="${lastY.toFixed(1)}" r="4.5" fill="var(--accent)" stroke="var(--bg)" stroke-width="2" />`;
+
+    const effY = (lastSample.effectiveThresholdDbfs != null && !isNaN(lastSample.effectiveThresholdDbfs))
       ? this._yFor(lastSample.effectiveThresholdDbfs) : null;
-
-    // Labels pegados a la punta derecha de cada línea gris — si calibrado y
-    // efectivo están tan cerca que se pisarían, un solo label combinado en
-    // vez de superponerlos (ver "cuando los end-labels colisionan" en la
-    // guía de gráficos).
-    const labelX = this.CHART_W - this.PAD_R - 3;
-    let refLabels = '';
-    if (calibY !== null && effY !== null && Math.abs(calibY - effY) < 9) {
-      refLabels += `<text x="${labelX}" y="${(Math.min(calibY, effY) - 4).toFixed(1)}" font-size="9" text-anchor="end" fill="var(--text)">calibrado = efectivo</text>`;
-    } else {
-      if (calibY !== null) refLabels += `<text x="${labelX}" y="${(calibY - 4).toFixed(1)}" font-size="9" text-anchor="end" fill="var(--text2)">calibrado</text>`;
-      if (effY   !== null) refLabels += `<text x="${labelX}" y="${(effY - 4).toFixed(1)}" font-size="9" text-anchor="end" fill="var(--text)">efectivo</text>`;
-    }
-    if (lastSample.ambientFloorDbfs != null && !isNaN(lastSample.ambientFloorDbfs)) {
-      const ambY = this._yFor(lastSample.ambientFloorDbfs);
-      refLabels += `<text x="${labelX}" y="${(ambY - 4).toFixed(1)}" font-size="8.5" text-anchor="end" fill="var(--text2)" opacity="0.75">piso ambiente</text>`;
-    }
-
-    // Punta viva: dónde está el nivel AHORA, marcado sobre la propia línea
-    // (mismo valor que el stat-tile de arriba, pero en contexto de la
-    // tendencia) — anillo en el color de fondo para que se lea limpio si
-    // cruza otra línea.
-    const lastX  = this._xFor(n - 1, n);
-    const lastY  = this._yFor(lastSample.dbfs);
-    const endDot = `<circle cx="${lastX.toFixed(1)}" cy="${lastY.toFixed(1)}" r="4" fill="var(--accent)" stroke="var(--bg)" stroke-width="2" />`;
+    const effLabel = effY !== null
+      ? `<text x="${this.CHART_W - this.PAD_R - 3}" y="${(effY - 5).toFixed(1)}" font-size="10" text-anchor="end" fill="var(--text2)">se activa acá</text>`
+      : '';
 
     wrap.innerHTML = `
       <svg width="100%" height="${this.CHART_H}" viewBox="0 0 ${this.CHART_W} ${this.CHART_H}" style="display:block; min-width:420px; background:var(--bg); border-radius:8px">
         ${bands}
         ${grid}
-        ${ambLine ? `<polyline points="${ambLine}" fill="none" stroke="var(--text2)" stroke-width="1" stroke-dasharray="1,2.5" opacity="0.7" />` : ''}
-        ${calibY !== null ? `<line x1="${this.PAD_L}" y1="${calibY.toFixed(1)}" x2="${this.CHART_W - this.PAD_R}" y2="${calibY.toFixed(1)}" stroke="var(--text2)" stroke-width="1.2" stroke-dasharray="4,3" />` : ''}
-        ${effLine ? `<polyline points="${effLine}" fill="none" stroke="var(--text)" stroke-width="1.2" opacity="0.8" />` : ''}
-        <polyline points="${dbfsLine}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+        ${effLine ? `<polyline points="${effLine}" fill="none" stroke="var(--text2)" stroke-width="1.3" stroke-dasharray="4,3" opacity="0.85" />` : ''}
+        <polyline points="${dbfsLine}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
         ${endDot}
-        ${refLabels}
+        ${effLabel}
       </svg>
     `;
+  },
+  _pointsFromArray(values) {
+    const n = values.length, out = [];
+    for (let i = 0; i < n; i++) {
+      const v = values[i];
+      if (v === null || v === undefined || isNaN(v)) continue;
+      out.push(`${this._xFor(i, n).toFixed(1)},${this._yFor(v).toFixed(1)}`);
+    }
+    return out.join(' ');
+  },
+
+  // Popup de detalles técnicos — se rellena solo al abrirlo (no hace falta
+  // que esté en vivo mientras está cerrado). Acá SÍ van los nombres/números
+  // técnicos que se sacaron del gráfico y del comentario simple.
+  _renderDetails() {
+    const kv = document.getElementById('kv-sound-details');
+    if (!kv || !this._lastMic) return;
+    const mic = this._lastMic;
+    const fmt = v => (v === null || v === undefined || isNaN(v)) ? '—' : `${v.toFixed(1)} dBFS`;
+    kv.innerHTML = kvRows([
+      ['Ruido de fondo del cuarto', fmt(mic.ambientFloorDbfs)],
+      ['Umbral de la calibración',  fmt(mic.calibratedThresholdDbfs)],
+      ['Umbral que se usa ahora',   fmt(mic.effectiveThresholdDbfs)],
+    ]);
   },
 };
 
@@ -744,6 +765,17 @@ const CalibrationPanorama = {
   document.getElementById('btn-test-connection')?.addEventListener('click', testConnection);
   document.getElementById('btn-rec-start')?.addEventListener('click', () => Recorder.start());
   document.getElementById('btn-rec-stop')?.addEventListener('click', () => Recorder.stop());
+
+  // Popup de detalles técnicos — dialog nativo, cerrado por default. Se
+  // rellena recién al abrir (no hace falta que esté en vivo mientras nadie
+  // lo está mirando).
+  const soundDialog = document.getElementById('sound-details-dialog');
+  document.getElementById('btn-sound-details')?.addEventListener('click', () => {
+    MicMeter._renderDetails();
+    soundDialog?.showModal();
+  });
+  document.getElementById('btn-sound-details-close')?.addEventListener('click', () => soundDialog?.close());
+  soundDialog?.addEventListener('click', (e) => { if (e.target === soundDialog) soundDialog.close(); }); // click afuera del contenido = cerrar
 
   // Todo lo que es Linux-only se avisa acá arriba una sola vez, en vez de
   // que cada card lo chequee por separado.

@@ -15,7 +15,31 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css?v=21" />
   <style>
-    .sound-kpis { display: flex; gap: 10px; margin-bottom: 12px; }
+    /* ── Botón ⓘ de detalles técnicos, arriba a la derecha del título ── */
+    .sound-info-btn {
+      margin-left: auto; flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
+      border: 1px solid var(--border); background: var(--surface2); color: var(--text2);
+      font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    }
+    .sound-info-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Comentario simple de lo que está pasando — una frase, no un panel ── */
+    .sound-alert {
+      display: flex; align-items: center; gap: 9px;
+      padding: 10px 14px; border-radius: 10px; margin-bottom: 12px;
+      font-size: 13.5px; font-weight: 500;
+    }
+    .sound-alert::before {
+      content: ''; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: currentColor;
+    }
+    .sound-alert.muted { background: var(--surface2); color: var(--text2); }
+    .sound-alert.live  { background: rgba(239,68,68,.13); color: var(--danger); }
+    .sound-alert.live::before { box-shadow: 0 0 6px currentColor; animation: sound-alert-pulse 1.1s ease-in-out infinite; }
+    .sound-alert.warn  { background: rgba(224,160,50,.14); color: var(--warn); }
+    @keyframes sound-alert-pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+    /* ── Stat tiles ── */
+    .sound-kpis { display: flex; gap: 10px; margin-bottom: 14px; }
     .stat-tile {
       flex: 1; background: var(--surface2); border: 1px solid var(--border);
       border-radius: 10px; padding: 10px 14px;
@@ -27,18 +51,29 @@
     .stat-tile__value { font-size: 26px; font-weight: 600; color: var(--text); line-height: 1.1; font-variant-numeric: proportional-nums; }
     .stat-tile__unit  { font-size: 12px; font-weight: 500; color: var(--text2); margin-left: 4px; }
     .stat-tile__sub   { font-size: 10.5px; color: var(--text2); margin-top: 3px; min-height: 13px; }
+
+    /* ── Popup de detalles técnicos (dialog nativo) ── */
+    .sound-dialog {
+      border: 1px solid var(--border); border-radius: 14px; padding: 0;
+      width: min(480px, 92vw); background: var(--surface); color: var(--text);
+      box-shadow: 0 12px 40px rgba(0,0,0,.25);
+    }
+    .sound-dialog::backdrop { background: rgba(0,0,0,.45); }
+    .sound-dialog__hdr {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px; border-bottom: 1px solid var(--border);
+    }
+    .sound-dialog__title { font-weight: 700; font-size: 14.5px; }
+    .sound-dialog__close {
+      width: 26px; height: 26px; border-radius: 50%; border: none;
+      background: var(--surface2); color: var(--text2); cursor: pointer; font-size: 13px;
+    }
+    .sound-dialog__close:hover { color: var(--text); }
+    .sound-dialog__body { padding: 16px; max-height: 70vh; overflow-y: auto; }
+
     .calib-history-row { display: flex; align-items: flex-end; gap: 2px; height: 46px; }
     .calib-history-bar { flex: 1; min-width: 3px; border-radius: 2px 2px 0 0; background: var(--accent); opacity: .55; }
     .calib-history-bar:hover { opacity: 1; }
-    .pill.live    { background: rgba(239,68,68,.16);  color: var(--danger); }
-    .pill.sensing { background: rgba(140,110,230,.16); color: #8c6ee6; }
-    .pill.muted   { background: var(--surface2); color: var(--text2); }
-    .pill.dot::before {
-      content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
-      background: currentColor; margin-right: 6px; vertical-align: 1px;
-    }
-    .pill.live.dot::before { box-shadow: 0 0 6px currentColor; animation: pill-pulse 1.1s ease-in-out infinite; }
-    @keyframes pill-pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
   </style>
 </head>
 <body>
@@ -143,50 +178,55 @@
     <p class="field-hint" id="mic-vu-note">Consultando…</p>
   </div>
 
-  <!-- § Panorama de sonido — dBFS en vivo + umbrales + calibración -->
+  <!-- § Panorama de sonido — simple por default: un comentario de lo que
+       pasa + el gráfico. Todo lo técnico (piso ambiente, umbral calibrado
+       vs. el que se usa ahora) vive escondido atrás del ícono ⓘ, en un
+       popup — no estorba a quien solo quiere entender de un vistazo. -->
   <div class="card">
     <div class="card-section-hdr">
       <span class="card-section-icon">📈</span>
       <div>
         <div class="card-section-title">Panorama de sonido</div>
-        <div class="card-section-desc">Nivel real en vivo, umbrales, y cuándo detecta que estás hablando — para decidir con datos, no a ojo</div>
+        <div class="card-section-desc">Cuándo detecta que estás hablando, en vivo</div>
       </div>
+      <button class="sound-info-btn" id="btn-sound-details" type="button" title="Ver detalles técnicos" aria-label="Ver detalles técnicos">ⓘ</button>
     </div>
 
-    <div id="sound-status-pill" class="pill dot muted" style="margin-bottom:12px">Consultando…</div>
+    <div id="sound-alert" class="sound-alert muted">Consultando…</div>
 
     <div class="sound-kpis">
       <div class="stat-tile">
-        <div class="stat-tile__label">Nivel actual</div>
+        <div class="stat-tile__label">Volumen actual</div>
         <div class="stat-tile__value"><span id="stat-level-num">—</span><span class="stat-tile__unit">dBFS</span></div>
       </div>
       <div class="stat-tile">
-        <div class="stat-tile__label">Margen al umbral</div>
+        <div class="stat-tile__label">Para activarse falta</div>
         <div class="stat-tile__value"><span id="stat-margin-num">—</span><span class="stat-tile__unit">dB</span></div>
         <div class="stat-tile__sub" id="stat-margin-sub">&nbsp;</div>
       </div>
     </div>
 
     <div id="sound-chart-wrap" style="overflow-x:auto"></div>
-
-    <details class="tech-details" style="margin-top:8px">
-      <summary>¿Cómo se lee el gráfico?</summary>
-      <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px; font-size:12.5px; color:var(--text2)">
-        <div><strong style="color:var(--accent)">Línea llena de color</strong> — tu nivel real, en vivo.</div>
-        <div><strong style="color:var(--text2)">Línea punteada gris</strong> — umbral calibrado, fijo (solo cambia si recalibrás).</div>
-        <div><strong style="color:var(--text)">Línea gris sólida</strong> — umbral efectivo: <code>máximo(calibrado, piso ambiente + margen)</code>. Es el que decide de verdad ahora — sube solo si el cuarto se pone más ruidoso que cuando calibraste.</div>
-        <div><strong style="color:var(--text2)">Línea gris fina punteada (abajo)</strong> — piso ambiente real del cuarto, sin margen.</div>
-        <div>Franja <strong style="color:#c98a2e">ámbar</strong> = confirmado, hablando de verdad y (si hay sesión) mandándose a LiveKit.</div>
-      </div>
-    </details>
-
-    <div class="divider"></div>
-
-    <div class="field-group-label">Calibración</div>
-    <div class="kv" id="kv-calibration-diag"></div>
-    <div id="calibration-history-wrap" style="margin-top:10px"></div>
-    <p class="field-hint">Para recalibrar o ajustar el umbral a mano, ver <a href="/configuracion" style="color:var(--accent)">Configuración → Sonido</a>.</p>
   </div>
+
+  <!-- Popup de detalles técnicos — cerrado por default, se abre con el ⓘ -->
+  <dialog id="sound-details-dialog" class="sound-dialog">
+    <div class="sound-dialog__hdr">
+      <div class="sound-dialog__title">Detalles técnicos</div>
+      <button class="sound-dialog__close" id="btn-sound-details-close" type="button" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="sound-dialog__body">
+      <p class="field-hint" style="margin:0 0 12px">Esto es lo que usa el dispositivo por dentro para decidir si estás hablando o es ruido — no hace falta entenderlo para usar Brumexa, es para quien quiere afinar la sensibilidad.</p>
+      <div class="kv" id="kv-sound-details"></div>
+
+      <div class="divider" style="margin:14px 0"></div>
+
+      <div class="field-group-label">Calibración</div>
+      <div class="kv" id="kv-calibration-diag"></div>
+      <div id="calibration-history-wrap" style="margin-top:10px"></div>
+      <p class="field-hint">Para recalibrar o ajustar la sensibilidad a mano, ver <a href="/configuracion" style="color:var(--accent)">Configuración → Sonido</a>.</p>
+    </div>
+  </dialog>
 
   <!-- § Parlante -->
   <div class="card">
