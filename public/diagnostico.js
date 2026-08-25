@@ -107,31 +107,39 @@ const MicMeter = {
     this._renderStatus(mic);
   },
 
-  // "¿Qué está pasando AHORA?" — sin sesión activa, nada se manda a
-  // LiveKit sin importar qué diga el gate (el gate igual corre en el
-  // monitor idle, pero solo para el LED). Con sesión activa, el gate
-  // (gateOpen/sensing) SÍ decide si lo que sale por el mic es tu voz real
-  // o silencio atenuado — ver _publishMic en lib/livekit-session.js.
+  // "¿Qué está pasando AHORA?" — dos partes SIEMPRE mostradas juntas:
+  // (1) qué detecta el gate ahora mismo (hablando/sensando/silencio) — esto
+  // es lo mismo que mueve el LED (lib/mic-speech-gate.js + lib/leds.js), y
+  // vale haya sesión o no: el gate corre igual en el monitor idle. (2) qué
+  // pasa con eso — solo si hay una sesión LiveKit a la que mandarle algo,
+  // el gate decide si lo que sale es tu voz real o silencio atenuado (ver
+  // _publishMic en lib/livekit-session.js); sin sesión, el gate solo mueve
+  // el LED, no hay nada a lo que transmitir.
   _renderStatus(mic) {
     const el = document.getElementById('sound-status-pill');
     if (!el) return;
-    let cls = 'pill dot muted', text;
-    if (!mic.sessionActive) {
-      text = 'Sin sesión activa — el mic solo alimenta el LED, nada se manda a LiveKit';
-    } else if (!mic.micGateEnabled) {
-      cls = 'pill dot warn';
-      text = 'Sesión activa — gate DESACTIVADO: se manda TODO el audio a LiveKit sin filtrar';
-    } else if (mic.gateOpen) {
-      cls = 'pill dot live';
-      text = 'Transmitiendo tu voz real a LiveKit ahora mismo';
-    } else if (mic.sensing) {
-      cls = 'pill dot sensing';
-      text = 'Sensando — confirmando si es voz real (todavía no se manda)';
-    } else {
-      text = 'Sesión activa — mandando silencio atenuado, esperando que hables';
+
+    if (mic.sessionActive && !mic.micGateEnabled) {
+      el.className = 'pill dot warn';
+      el.textContent = '⚠️ Gate OFF — todo sin filtrar';
+      return;
     }
-    el.className = cls;
-    el.textContent = text;
+
+    const detect = mic.gateOpen ? '🎙 Hablando' : mic.sensing ? '👂 Sensando' : '🤫 Silencio';
+    let cls, tx;
+    if (!mic.sessionActive) {
+      cls = mic.gateOpen ? 'live' : mic.sensing ? 'sensing' : 'muted';
+      tx = 'sin sesión';
+    } else if (mic.gateOpen) {
+      cls = 'live'; tx = '→ LiveKit';
+    } else if (mic.sensing) {
+      cls = 'sensing'; tx = 'sin enviar';
+    } else {
+      cls = 'muted'; tx = 'atenuado';
+    }
+
+    el.className = `pill dot ${cls}`;
+    el.textContent = `${detect} · ${tx}`;
   },
 
   // ── Gráfico: dBFS en vivo + umbral calibrado (fijo) + umbral efectivo
