@@ -14,6 +14,15 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css?v=21" />
+  <style>
+    #card-update.highlight-pulse {
+      animation: card-highlight-pulse 1.3s ease-out;
+    }
+    @keyframes card-highlight-pulse {
+      0%   { box-shadow: 0 0 0 3px var(--accent); }
+      100% { box-shadow: 0 0 0 3px transparent; }
+    }
+  </style>
 </head>
 <body>
 
@@ -29,6 +38,7 @@
       <a class="tab-btn" href="/diagnostico">Diagnóstico</a>
       <a class="tab-btn" href="/logs">Logs</a>
     </nav>
+    <button id="btn-update-header" class="btn-ghost" type="button" style="flex-shrink:0; padding:6px 12px; font-size:12px" title="Ir a Actualizar Brumexa y buscar novedades ya">⬇️ Actualizar</button>
     <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambiar tema" title="Cambiar tema"></button>
   </div>
 </header>
@@ -784,6 +794,20 @@
     }
   }
   document.getElementById('btn-update').addEventListener('click', runUpdate);
+
+  // Atajo en el header (siempre visible, es sticky) — para no tener que
+  // scrollear hasta el fondo de la página cada vez que querés buscar
+  // actualizaciones. Scrollea a la card real y dispara el mismo botón de
+  // siempre (mismo flujo, sin duplicar la lógica de update/restart-polling).
+  document.getElementById('btn-update-header').addEventListener('click', () => {
+    const card = document.getElementById('card-update');
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    card.classList.remove('highlight-pulse');
+    void card.offsetWidth; // fuerza reflow — para que la animación se repita si ya se había disparado antes
+    card.classList.add('highlight-pulse');
+    const btn = document.getElementById('btn-update');
+    if (!btn.disabled) setTimeout(() => btn.click(), 400); // pequeño delay para que se vea el scroll antes de arrancar
+  });
 
   async function runRestart() {
     const btn    = document.getElementById('btn-restart');
