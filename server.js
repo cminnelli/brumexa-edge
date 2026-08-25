@@ -3,6 +3,13 @@
 // ssh -L 3000:localhost:3000 brumelab@brumexa.local
 require('dotenv').config();
 
+// Lo más arriba posible — intercepta console.log/warn/error para que
+// /ws/logs (ver lib/log-stream.js, /logs en el navegador) tenga el
+// arranque completo en su buffer, no solo lo que se loguea después de
+// este punto.
+const { setupLogStream, handleLogsWsConnection } = require('./lib/log-stream');
+setupLogStream();
+
 const http    = require('http');
 const express = require('express');
 const path    = require('path');
@@ -83,6 +90,13 @@ app.get('/', (_req, res) => {
 // ─── GET /terminal — terminal remota como página propia (antes era un tab) ───
 app.get('/terminal', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'terminal.html'));
+});
+
+// ─── GET /logs — visor de logs en vivo (server via WS + sistema por polling
+// liviano) — pensado para mirar en paralelo mientras se prueba algo (ej. el
+// gate de ruido del mic), sin tener que entrar por SSH.
+app.get('/logs', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'logs.html'));
 });
 
 // ─── GET /diagnostico — pruebas de hardware (mic/speaker/LEDs/grabaciones)
@@ -1021,7 +1035,7 @@ app.post('/terminal/run', express.json(), (req, res) => {
 // ─── Inicio ───────────────────────────────────────────────────────────────────
 // Usamos http.createServer para que el WebSocket de audio comparta el mismo puerto
 const httpServer = http.createServer(app);
-setupAudio(app, httpServer);
+setupAudio(app, httpServer, { '/ws/logs': handleLogsWsConnection });
 setupWifi(app);
 setupLocalDebug(app, {
   getWifiStatus: getWifiStatus,
