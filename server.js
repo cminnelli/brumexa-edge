@@ -39,6 +39,7 @@ try {
 }
 
 const { session: lkSession }                           = require('./lib/livekit-session');
+const micGate                                          = require('./lib/mic-speech-gate');
 const leds                                             = require('./lib/leds');
 const ragAuth                                          = require('./lib/rag-auth');
 const { requestRoomToken, setCredentials: setTokenCredentials } = require('./lib/rag-token');
@@ -214,6 +215,11 @@ app.get('/setup/config', (_req, res) => {
     speakerGain:  getVal('SPEAKER_GAIN')  || '3.0',
     talkThreshold: getVal('MIC_TALK_THRESHOLD_DBFS') || '-25',
     silenceTimeoutMs: getVal('SILENCE_DISCONNECT_MS') || '10000',
+    // Gate de ruido sobre el audio publicado a LiveKit — ver
+    // lib/livekit-session.js (_publishMic) y lib/mic-speech-gate.js.
+    micGateEnabled:       getVal('MIC_GATE_ENABLED')       || 'true',
+    micGateAttenuationDb: getVal('MIC_GATE_ATTENUATION_DB') || '-90',
+    micPrerollMs:         getVal('MIC_PREROLL_MS')          || '500',
     brumexaColor: getVal('BRUMEXA_COLOR') || 'negro',
     // Ritmo de los LEDS — ver lib/leds.js (setBreathePeriodMs, setHangoverMs,
     // setOnsetDurationMs, setOffsetDurationMs) para el porqué de cada uno.
@@ -293,6 +299,7 @@ app.post('/setup/config', express.json(), (req, res) => {
     ragApiUrl, deviceId, apiKey, deviceName, micGain, speakerGain, talkThreshold, silenceTimeoutMs, brumexaColor,
     ledBreathePeriodMs, ledHangoverMs, ledOnsetMs, ledOffsetMs,
     alsaMicDevice, alsaSpeakerDevice,
+    micGateEnabled, micGateAttenuationDb, micPrerollMs,
   } = req.body || {};
   let content = '';
   try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
@@ -312,6 +319,9 @@ app.post('/setup/config', express.json(), (req, res) => {
   if (ledOffsetMs        !== undefined) content = setEnvLine(content, 'LED_OFFSET_MS',         ledOffsetMs);
   if (alsaMicDevice     !== undefined) content = setEnvLine(content, 'MIC_ALSA_DEVICE',     alsaMicDevice);
   if (alsaSpeakerDevice !== undefined) content = setEnvLine(content, 'SPEAKER_ALSA_DEVICE', alsaSpeakerDevice);
+  if (micGateEnabled       !== undefined) content = setEnvLine(content, 'MIC_GATE_ENABLED',        micGateEnabled);
+  if (micGateAttenuationDb !== undefined) content = setEnvLine(content, 'MIC_GATE_ATTENUATION_DB', micGateAttenuationDb);
+  if (micPrerollMs         !== undefined) content = setEnvLine(content, 'MIC_PREROLL_MS',           micPrerollMs);
 
   try {
     require('fs').writeFileSync(envFile, content, 'utf8');
@@ -342,6 +352,9 @@ app.post('/setup/config', express.json(), (req, res) => {
     if (ledHangoverMs      !== undefined) { const v = parseFloat(ledHangoverMs);      if (!isNaN(v)) leds.setHangoverMs(v); }
     if (ledOnsetMs         !== undefined) { const v = parseFloat(ledOnsetMs);         if (!isNaN(v)) leds.setOnsetDurationMs(v); }
     if (ledOffsetMs        !== undefined) { const v = parseFloat(ledOffsetMs);        if (!isNaN(v)) leds.setOffsetDurationMs(v); }
+    if (micGateEnabled       !== undefined) lkSession.setMicGateEnabled(micGateEnabled !== 'false' && micGateEnabled !== false);
+    if (micGateAttenuationDb !== undefined) { const v = parseFloat(micGateAttenuationDb); if (!isNaN(v)) lkSession.setMicGateAttenuationDb(v); }
+    if (micPrerollMs         !== undefined) { const v = parseFloat(micPrerollMs);         if (!isNaN(v)) lkSession.setMicPrerollMs(v); }
 
     res.json({ ok: true, restarting: false });
   } catch (err) {
@@ -696,6 +709,12 @@ function startMicMonitor() {
     }
     if (Date.now() - last > 100) {
       const level = peak / 32767;
+      // Fuera de sesión no hay LiveKit de por medio (no hay audio que
+      // gatear), pero el piso de ruido ambiente igual tiene que seguir
+      // actualizándose acá — si no, arrancar una sesión justo después de
+      // que algo ruidoso empezó (ej. la impresora) heredaría un piso
+      // desactualizado hasta que _publishMic lo alcance a corregir solo.
+      micGate.feed(level);
       leds.speaking(level);
       _micLevel = { level, peak, updatedAt: Date.now(), source: 'idle-monitor' };
       peak = 0;
