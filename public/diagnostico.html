@@ -21,6 +21,15 @@
     .calib-history-row { display: flex; align-items: flex-end; gap: 2px; height: 46px; }
     .calib-history-bar { flex: 1; min-width: 3px; border-radius: 2px 2px 0 0; background: var(--accent); opacity: .55; }
     .calib-history-bar:hover { opacity: 1; }
+    .pill.live    { background: rgba(239,68,68,.16);  color: var(--danger); }
+    .pill.sensing { background: rgba(140,110,230,.16); color: #8c6ee6; }
+    .pill.muted   { background: var(--surface2); color: var(--text2); }
+    .pill.dot::before {
+      content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+      background: currentColor; margin-right: 6px; vertical-align: 1px;
+    }
+    .pill.live.dot::before { box-shadow: 0 0 6px currentColor; animation: pill-pulse 1.1s ease-in-out infinite; }
+    @keyframes pill-pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
   </style>
 </head>
 <body>
@@ -134,9 +143,21 @@
         <div class="card-section-desc">Nivel real en vivo, umbrales, y cuándo detecta que estás hablando — para decidir con datos, no a ojo</div>
       </div>
     </div>
+
+    <div id="sound-status-pill" class="pill dot muted" style="margin-bottom:10px">Consultando…</div>
+
     <div id="sound-chart-wrap" style="overflow-x:auto"></div>
     <div class="sound-legend" id="sound-legend"></div>
-    <p class="field-hint">Últimos ~30s en vivo. Franja violeta clara = "sensando" (por ahí es algo); franja ámbar = confirmado, hablando de verdad. La línea punteada gris es tu umbral calibrado; la línea sólida celeste es el umbral EFECTIVO en este instante (sube solo si el ambiente se puso más ruidoso que cuando calibraste).</p>
+    <p class="field-hint">Últimos ~30s en vivo. Franja violeta clara = "sensando" (por ahí es algo); franja ámbar = confirmado, hablando de verdad.</p>
+
+    <details class="tech-details" style="margin-top:6px">
+      <summary>¿Qué diferencia hay entre las 3 líneas/umbrales?</summary>
+      <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px; font-size:12.5px; color:var(--text2)">
+        <div><strong style="color:var(--text)">Umbral calibrado</strong> — el número fijo que quedó de la última calibración (o que moviste a mano en Configuración). No se mueve solo; solo cambia si recalibrás o ajustás el slider.</div>
+        <div><strong style="color:var(--text)">Piso ambiente (en vivo)</strong> — el nivel de ruido REAL del cuarto ahora mismo, medido en todo momento con un promedio lento (tarda 25-75s en asentarse). Sigue el ambiente real, no lo que calibraste hace rato.</div>
+        <div><strong style="color:var(--text)">Umbral efectivo (en vivo)</strong> — el que se usa DE VERDAD en este instante para decidir "¿es tu voz o es ruido?". Es <code>máximo(umbral calibrado, piso ambiente + margen)</code>: normalmente es igual al calibrado, pero si el ambiente se pone más ruidoso que cuando calibraste (ej. arrancó una impresora), sube solo por encima — así no hace falta recalibrar cada vez que cambia el ruido de fondo.</div>
+      </div>
+    </details>
 
     <div class="divider"></div>
 

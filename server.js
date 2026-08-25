@@ -731,6 +731,13 @@ app.get('/diag/mic-level', (_req, res) => {
     ambientFloorDbfs:          micGate.getAmbientFloorDbfs(),
     effectiveThresholdDbfs:    micGate.getEffectiveThresholdDbfs(),
     calibratedThresholdDbfs:   micGate.getSpeakThresholdDbfs(),
+    // Para el panel de "¿qué está pasando ahora?" en /diagnostico — sin
+    // esto, gateOpen/sensing por sí solos no alcanzan para saber si de
+    // verdad hay algo yendo a LiveKit: durante el monitor idle (sin
+    // sesión) el gate igual corre (alimenta el LED), pero no hay ninguna
+    // conexión a la que mandarle nada.
+    sessionActive:             lkSession.isActive(),
+    micGateEnabled:            lkSession.getMicGateEnabled(),
   });
 });
 

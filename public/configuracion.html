@@ -425,7 +425,10 @@
   // ir y volver entre los dos espacios).
   const CustomColors = {
     _state: {}, // { roleKey: { hue, sat } } — SIEMPRE en espacio estándar (lo que ve el slider)
-    _timer: null,
+    _timer: null,        // debounce del guardado real (persiste + aplica de verdad)
+    _previewTimer: null, // debounce del preview plano en vivo (solo hardware, no toca .env)
+    _dirty: false,       // ¿tocaste algo desde que abriste el panel?
+    _previousColorKey: null, // color que estaba activo ANTES de abrir el panel — para volver si no guardás nada
 
     _hsvToRgb(h, s, v) {
       const i = Math.floor(h / 60) % 6;
@@ -493,13 +496,55 @@
         satEl.value = Math.round(this._state[role.key].sat * 100);
         const onMove = () => {
           this._state[role.key] = { hue: Number(hueEl.value), sat: Number(satEl.value) / 100 };
+          this._dirty = true;
           this._renderRole(role.key);
-          this._scheduleSave();
+          this._schedulePreview(role.key);  // plano en el hardware YA, sin respirar — para verlo bien
+          this._scheduleSave();             // persistir + aplicar de verdad, con más margen
         };
         hueEl.addEventListener('input', onMove);
         satEl.addEventListener('input', onMove);
         this._renderRole(role.key);
       }
+
+      // Abrir el panel: frena la respiración y muestra un color plano fijo
+      // (el primer rol) para poder ver los colores sin el pulso de brillo
+      // encima. Cerrar: si tocaste algo, guarda YA (sin esperar el debounce)
+      // y queda respirando con lo nuevo; si no tocaste nada, vuelve tal cual
+      // estaba antes de abrir — nada se pierde ni se aplica de más.
+      const details = document.getElementById('custom-colors-details');
+      if (details && !details.dataset.wired) {
+        details.dataset.wired = '1';
+        details.addEventListener('toggle', () => {
+          if (details.open) {
+            this._dirty = false;
+            this._previousColorKey = document.getElementById('inp-brumexa-color').value;
+            const firstRole = _colorSchemes.roles[0]?.key;
+            if (firstRole) this._schedulePreview(firstRole, 0);
+          } else {
+            clearTimeout(this._previewTimer);
+            clearTimeout(this._timer);
+            if (this._dirty) {
+              this._save(); // ya, sin esperar el debounce — deja de respirar apenas cierra
+            } else if (this._previousColorKey) {
+              previewColor(this._previousColorKey); // nada cambió — vuelve a como estaba
+            }
+          }
+        });
+      }
+    },
+
+    // Preview plano en el hardware (para VER el color sin el pulso de la
+    // respiración) — reusa /diag/leds/set, el mismo endpoint del laboratorio
+    // de LEDs de /diagnostico. No toca .env, no aplica nada "de verdad".
+    _schedulePreview(roleKey, delayMs = 40) {
+      clearTimeout(this._previewTimer);
+      this._previewTimer = setTimeout(() => {
+        const { hue, sat } = this._state[roleKey];
+        fetch('/diag/leds/set', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ h: hue, s: sat, v: 1 }),
+        }).catch(() => {});
+      }, delayMs);
     },
 
     _renderRole(key) {
