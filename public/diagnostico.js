@@ -63,8 +63,9 @@ const MicMeter = {
     const noteEl = document.getElementById('mic-vu-note');
     if (!bar) return;
 
+    let mic;
     try {
-      const mic = await fetch('/diag/mic-level', { cache: 'no-store' }).then(r => r.json());
+      mic = await fetch('/diag/mic-level', { cache: 'no-store' }).then(r => r.json());
 
       const level = Math.max(0, Math.min(1, mic.level || 0));
       const db    = mic.peak > 0 ? (20 * Math.log10(mic.peak / 32767)).toFixed(1) : '-∞';
@@ -87,6 +88,102 @@ const MicMeter = {
     } catch (e) {
       noteEl.textContent = `Error consultando el estado: ${e.message}`;
       Summary.set('mic', 'error', 'Sin respuesta del servidor');
+      return;
+    }
+
+    // ── Panorama de sonido: mismo poll de arriba, reusado para alimentar un
+    // historial rolling y redibujar el gráfico — un solo request por tick.
+    const dbfs = mic.peak > 0 ? 20 * Math.log10(mic.peak / 32767) : -90;
+    this._history.push({
+      dbfs,
+      ambientFloorDbfs:       mic.ambientFloorDbfs,
+      effectiveThresholdDbfs: mic.effectiveThresholdDbfs,
+      gateOpen: !!mic.gateOpen,
+      sensing:  !!mic.sensing,
+    });
+    if (this._history.length > this.MAX_SAMPLES) this._history.shift();
+    this._calibratedThresholdDbfs = mic.calibratedThresholdDbfs;
+    this._renderChart();
+  },
+
+  // ── Gráfico: dBFS en vivo + umbral calibrado (fijo) + umbral efectivo
+  // (sube solo si el ambiente está más ruidoso que al calibrar) + franjas de
+  // fondo marcando "sensando" (violeta) y "hablando confirmado" (ámbar) —
+  // SVG a mano (mismo criterio que el sparkline de calibración en
+  // /configuracion), sin ninguna librería de gráficos, no hace falta.
+  MAX_SAMPLES: 150, // ~30s a 200ms/muestra
+  Y_MIN: -60,
+  Y_MAX: 0,
+  CHART_W: 640, CHART_H: 130, PAD_L: 34, PAD_R: 6, PAD_T: 6, PAD_B: 6,
+  _history: [],
+  _calibratedThresholdDbfs: null,
+
+  _xFor(i, n) {
+    const usable = this.CHART_W - this.PAD_L - this.PAD_R;
+    return this.PAD_L + (n <= 1 ? 0 : (i / (n - 1)) * usable);
+  },
+  _yFor(dbfs) {
+    const v = Math.max(this.Y_MIN, Math.min(this.Y_MAX, dbfs));
+    const usable = this.CHART_H - this.PAD_T - this.PAD_B;
+    return this.PAD_T + (1 - (v - this.Y_MIN) / (this.Y_MAX - this.Y_MIN)) * usable;
+  },
+  _points(getter) {
+    const hist = this._history, n = hist.length, out = [];
+    for (let i = 0; i < n; i++) {
+      const v = getter(hist[i]);
+      if (v === null || v === undefined || isNaN(v)) continue;
+      out.push(`${this._xFor(i, n).toFixed(1)},${this._yFor(v).toFixed(1)}`);
+    }
+    return out.join(' ');
+  },
+  _renderChart() {
+    const wrap = document.getElementById('sound-chart-wrap');
+    if (!wrap) return;
+    const hist = this._history, n = hist.length;
+    if (!n) { wrap.innerHTML = '<p class="field-hint">Esperando datos…</p>'; return; }
+
+    const step = n > 1 ? (this.CHART_W - this.PAD_L - this.PAD_R) / (n - 1) : (this.CHART_W - this.PAD_L - this.PAD_R);
+    let bands = '';
+    for (let i = 0; i < n; i++) {
+      const s = hist[i];
+      if (!s.gateOpen && !s.sensing) continue;
+      const x = this._xFor(i, n) - step / 2;
+      const color = s.gateOpen ? 'rgba(224,160,50,0.30)' : 'rgba(140,110,230,0.22)';
+      bands += `<rect x="${x.toFixed(1)}" y="${this.PAD_T}" width="${(step + 0.6).toFixed(1)}" height="${this.CHART_H - this.PAD_T - this.PAD_B}" fill="${color}" />`;
+    }
+
+    let grid = '';
+    for (const db of [0, -20, -40, -60]) {
+      const y = this._yFor(db);
+      grid += `<line x1="${this.PAD_L}" y1="${y.toFixed(1)}" x2="${this.CHART_W - this.PAD_R}" y2="${y.toFixed(1)}" stroke="var(--border)" stroke-width="1" />`;
+      grid += `<text x="2" y="${(y + 3).toFixed(1)}" font-size="9" fill="var(--text2)">${db}</text>`;
+    }
+
+    const dbfsLine   = this._points(s => s.dbfs);
+    const ambLine    = this._points(s => s.ambientFloorDbfs);
+    const effLine    = this._points(s => s.effectiveThresholdDbfs);
+    const calibY     = this._calibratedThresholdDbfs != null ? this._yFor(this._calibratedThresholdDbfs) : null;
+
+    wrap.innerHTML = `
+      <svg width="100%" height="${this.CHART_H}" viewBox="0 0 ${this.CHART_W} ${this.CHART_H}" style="display:block; min-width:420px; background:var(--bg); border-radius:8px">
+        ${bands}
+        ${grid}
+        ${calibY !== null ? `<line x1="${this.PAD_L}" y1="${calibY.toFixed(1)}" x2="${this.CHART_W - this.PAD_R}" y2="${calibY.toFixed(1)}" stroke="var(--text2)" stroke-width="1" stroke-dasharray="4,3" />` : ''}
+        ${ambLine ? `<polyline points="${ambLine}" fill="none" stroke="var(--text2)" stroke-width="1" stroke-dasharray="1,2" opacity="0.8" />` : ''}
+        ${effLine ? `<polyline points="${effLine}" fill="none" stroke="#3dc7e0" stroke-width="1.3" />` : ''}
+        <polyline points="${dbfsLine}" fill="none" stroke="var(--accent)" stroke-width="1.6" />
+      </svg>
+    `;
+
+    const legend = document.getElementById('sound-legend');
+    if (legend) {
+      legend.innerHTML = `
+        <span><i style="background:var(--accent)"></i>Nivel real (dBFS)</span>
+        <span><i style="background:#3dc7e0"></i>Umbral efectivo (en vivo)</span>
+        <span><i style="background:var(--text2)"></i>Piso ambiente / umbral calibrado</span>
+        <span><i style="background:rgba(224,160,50,0.7)"></i>Hablando confirmado</span>
+        <span><i style="background:rgba(140,110,230,0.6)"></i>Sensando</span>
+      `;
     }
   },
 };
@@ -492,6 +589,62 @@ const Recorder = {
 };
 
 // ============================================================
+// CALIBRACIÓN — panorama: valores actuales + historial de corridas guardado
+// en disco (lib/calibration-history.js), para ver cómo cambió el umbral
+// entre distintos días/ambientes, no solo la última corrida.
+// ============================================================
+const CalibrationPanorama = {
+  async load() {
+    const kv       = document.getElementById('kv-calibration-diag');
+    const histWrap = document.getElementById('calibration-history-wrap');
+    if (!kv) return;
+
+    try {
+      const status = await fetch('/configuracion/status', { cache: 'no-store' }).then(r => r.json());
+      const cal = status.calibration;
+      kv.innerHTML = !cal
+        ? kvRows([['Estado', 'Sin calibrar todavía']])
+        : kvRows([
+            ['Piso de ruido medido', `${cal.noiseFloorDbfs} dBFS`],
+            ['Umbral aplicado',      `${cal.threshold} dBFS`],
+            ['Margen',               `+${cal.marginDb} dB`],
+            ['Cuándo',               new Date(cal.measuredAt).toLocaleString('es-AR')],
+            ['Disparada por',        cal.triggeredBy === 'boot' ? 'Automática (arranque)' : 'Manual'],
+          ]);
+    } catch (e) {
+      kv.innerHTML = kvRows([['Estado', `Error: ${esc(e.message)}`]]);
+    }
+
+    try {
+      const { runs } = await fetch('/diag/calibration-history', { cache: 'no-store' }).then(r => r.json());
+      this._renderHistory(histWrap, runs || []);
+    } catch {
+      if (histWrap) histWrap.innerHTML = '';
+    }
+  },
+
+  _renderHistory(wrap, runs) {
+    if (!wrap) return;
+    if (!runs.length) { wrap.innerHTML = '<p class="field-hint">Todavía no hay historial guardado — se va a ir llenando con cada calibración (automática al arrancar o manual).</p>'; return; }
+
+    const thresholds = runs.map(r => r.threshold);
+    const lo = Math.min(...thresholds) - 2;
+    const hi = Math.max(...thresholds, -12) + 2;
+    const bars = runs.map(r => {
+      const pct   = Math.max(4, Math.round(((r.threshold - lo) / (hi - lo || 1)) * 100));
+      const date  = new Date(r.measuredAt).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
+      const title = `${date} — umbral ${r.threshold}dBFS (piso ${r.noiseFloorDbfs}dBFS, ${r.triggeredBy === 'boot' ? 'auto' : 'manual'})`;
+      return `<div class="calib-history-bar" style="height:${pct}%" title="${esc(title)}"></div>`;
+    }).join('');
+
+    wrap.innerHTML = `
+      <div class="field-hint" style="margin-bottom:4px">Historial de umbrales (${runs.length} corrida${runs.length === 1 ? '' : 's'} — pasá el mouse por una barra)</div>
+      <div class="calib-history-row">${bars}</div>
+    `;
+  },
+};
+
+// ============================================================
 // INIT
 // ============================================================
 (async function init() {
@@ -514,5 +667,6 @@ const Recorder = {
   MicMeter.start();
   LedsDiag.check();
   LedsLab.init();
+  CalibrationPanorama.load();
   await Recorder.show();
 })();

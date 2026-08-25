@@ -14,6 +14,14 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css?v=21" />
+  <style>
+    .sound-legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 8px 0 4px; font-size: 11px; color: var(--text2); }
+    .sound-legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .sound-legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+    .calib-history-row { display: flex; align-items: flex-end; gap: 2px; height: 46px; }
+    .calib-history-bar { flex: 1; min-width: 3px; border-radius: 2px 2px 0 0; background: var(--accent); opacity: .55; }
+    .calib-history-bar:hover { opacity: 1; }
+  </style>
 </head>
 <body>
 
@@ -115,6 +123,27 @@
       <span id="mic-vu-db" class="vu-db">— dBFS</span>
     </div>
     <p class="field-hint" id="mic-vu-note">Consultando…</p>
+  </div>
+
+  <!-- § Panorama de sonido — dBFS en vivo + umbrales + calibración -->
+  <div class="card">
+    <div class="card-section-hdr">
+      <span class="card-section-icon">📈</span>
+      <div>
+        <div class="card-section-title">Panorama de sonido</div>
+        <div class="card-section-desc">Nivel real en vivo, umbrales, y cuándo detecta que estás hablando — para decidir con datos, no a ojo</div>
+      </div>
+    </div>
+    <div id="sound-chart-wrap" style="overflow-x:auto"></div>
+    <div class="sound-legend" id="sound-legend"></div>
+    <p class="field-hint">Últimos ~30s en vivo. Franja violeta clara = "sensando" (por ahí es algo); franja ámbar = confirmado, hablando de verdad. La línea punteada gris es tu umbral calibrado; la línea sólida celeste es el umbral EFECTIVO en este instante (sube solo si el ambiente se puso más ruidoso que cuando calibraste).</p>
+
+    <div class="divider"></div>
+
+    <div class="field-group-label">Calibración</div>
+    <div class="kv" id="kv-calibration-diag"></div>
+    <div id="calibration-history-wrap" style="margin-top:10px"></div>
+    <p class="field-hint">Para recalibrar o ajustar el umbral a mano, ver <a href="/configuracion" style="color:var(--accent)">Configuración → Sonido</a>.</p>
   </div>
 
   <!-- § Parlante -->

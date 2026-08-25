@@ -108,6 +108,14 @@
         <p class="field-hint" style="margin:0">Tocar una tarjeta ya lo prende en el dispositivo, para que lo veas antes de decidir. "Guardar" lo deja así después de reiniciar.</p>
       </div>
       <div id="color-save-result" style="margin-top:10px"></div>
+
+      <details class="tech-details" id="custom-colors-details" style="margin-top:14px">
+        <summary>🎨 Armar mis propios colores (en vez de un preset)</summary>
+        <div style="display:flex; flex-direction:column; gap:0.9rem; margin-top:0.75rem">
+          <p class="field-hint" style="margin:0">Un color propio para cada parte — se aplica y guarda solo con cada ajuste, elige "Personalizado" arriba para volver a verlo.</p>
+          <div id="custom-colors-roles"></div>
+        </div>
+      </details>
     </div>
 
     <!-- § Ritmo de LEDs — velocidad de la respiración y paciencia con pausas -->
@@ -406,6 +414,137 @@
     renderColorDetail(selected);
   }
 
+  // ─── Colores personalizados por rol ──────────────────────────────────────
+  // Reusa la MISMA fórmula HSV estándar que el laboratorio de LEDs de
+  // /diagnostico (hsvToRgbStd server-side) — así lo que se ve acá al
+  // arrastrar coincide con lo que se prende de verdad. lib/leds.js usa
+  // internamente una fórmula "permutada" distinta para todo lo demás
+  // (breathe, hablando, calibración, etc.) — toStdHue() hace la conversión
+  // antes de mandar cada hue al servidor (es su propia inversa, ver el
+  // comentario de _toStdHue en leds.js, así que la misma función sirve para
+  // ir y volver entre los dos espacios).
+  const CustomColors = {
+    _state: {}, // { roleKey: { hue, sat } } — SIEMPRE en espacio estándar (lo que ve el slider)
+    _timer: null,
+
+    _hsvToRgb(h, s, v) {
+      const i = Math.floor(h / 60) % 6;
+      const f = h / 60 - Math.floor(h / 60);
+      const p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+      const table = [[v,t,p],[q,v,p],[p,v,t],[p,q,v],[t,p,v],[v,p,q]][i];
+      return table.map(ch => Math.round(ch * 255));
+    },
+    _toCss(rgb) { return `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`; },
+    toStdHue(h) {
+      const i = Math.floor(h / 60) % 6;
+      return ((i * 120 + 60 - h) % 360 + 360) % 360;
+    },
+
+    async init() {
+      if (!_colorSchemes) await loadColorSchemes();
+      const wrap = document.getElementById('custom-colors-roles');
+      if (!wrap) return;
+
+      // Prefill: lo último guardado si existe; si no, una copia del preset
+      // hoy activo — arranca de algo razonable, no de negro/plano.
+      let saved = null;
+      try {
+        const res  = await fetch('/setup/custom-colors', { cache: 'no-store' });
+        const data = await res.json();
+        saved = data.colors;
+      } catch {}
+
+      const currentPreset = _colorSchemes.colors[document.getElementById('inp-brumexa-color').value];
+      for (const role of _colorSchemes.roles) {
+        const fromSaved  = saved && saved[role.key];
+        const fromPreset = currentPreset && currentPreset.leds[role.key];
+        if (fromSaved) {
+          this._state[role.key] = { hue: this.toStdHue(fromSaved.hue), sat: fromSaved.sat };
+        } else if (fromPreset && typeof fromPreset.hue === 'number') {
+          this._state[role.key] = { hue: this.toStdHue(fromPreset.hue), sat: fromPreset.sat ?? 1 };
+        } else {
+          this._state[role.key] = { hue: 220, sat: 0.8 }; // rol sin hue fijo (ej. calibración=blanco) — punto de partida cualquiera
+        }
+      }
+
+      wrap.innerHTML = _colorSchemes.roles.map(role => `
+        <div class="field" data-role="${role.key}" style="margin-bottom:0">
+          <label class="field-label" style="display:flex; align-items:center; gap:8px">
+            <span class="custom-color-swatch" id="cc-swatch-${role.key}" style="width:22px;height:22px;border-radius:6px;display:inline-block;border:1px solid var(--border); flex-shrink:0"></span>
+            ${esc(role.label)}
+          </label>
+          <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0; display:flex; flex-direction:column; gap:6px">
+            <div class="gain-row" style="grid-template-columns:1fr 55px">
+              <input type="range" class="gain-slider cc-hue" data-role="${role.key}" min="0" max="359" step="1" />
+              <span class="gain-val cc-hue-val" data-role="${role.key}"></span>
+            </div>
+            <div class="gain-row" style="grid-template-columns:1fr 55px">
+              <input type="range" class="gain-slider cc-sat" data-role="${role.key}" min="0" max="100" step="1" />
+              <span class="gain-val cc-sat-val" data-role="${role.key}"></span>
+            </div>
+          </div>
+        </div>
+      `).join('');
+
+      for (const role of _colorSchemes.roles) {
+        const hueEl = wrap.querySelector(`.cc-hue[data-role="${role.key}"]`);
+        const satEl = wrap.querySelector(`.cc-sat[data-role="${role.key}"]`);
+        hueEl.value = this._state[role.key].hue;
+        satEl.value = Math.round(this._state[role.key].sat * 100);
+        const onMove = () => {
+          this._state[role.key] = { hue: Number(hueEl.value), sat: Number(satEl.value) / 100 };
+          this._renderRole(role.key);
+          this._scheduleSave();
+        };
+        hueEl.addEventListener('input', onMove);
+        satEl.addEventListener('input', onMove);
+        this._renderRole(role.key);
+      }
+    },
+
+    _renderRole(key) {
+      const { hue, sat } = this._state[key];
+      const [r, g, b] = this._hsvToRgb(hue, sat, 1);
+      const swatch = document.getElementById(`cc-swatch-${key}`);
+      if (swatch) swatch.style.background = this._toCss([r, g, b]);
+      const hueVal = document.querySelector(`.cc-hue-val[data-role="${key}"]`);
+      if (hueVal) hueVal.textContent = `${hue}°`;
+      const satVal = document.querySelector(`.cc-sat-val[data-role="${key}"]`);
+      if (satVal) satVal.textContent = `${Math.round(sat * 100)}%`;
+      const satEl = document.querySelector(`.cc-sat[data-role="${key}"]`);
+      if (satEl) satEl.style.background = `linear-gradient(to right, ${this._toCss(this._hsvToRgb(hue, 0, 1))}, ${this._toCss(this._hsvToRgb(hue, 1, 1))})`;
+    },
+
+    _scheduleSave() {
+      clearTimeout(this._timer);
+      this._timer = setTimeout(() => this._save(), 400);
+    },
+
+    async _save() {
+      const payload = {};
+      for (const [key, { hue, sat }] of Object.entries(this._state)) {
+        const [r, g, b] = this._hsvToRgb(hue, sat, 1);
+        const toHex = v => v.toString(16).padStart(2, '0');
+        const hex = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+        payload[key] = { hue: this.toStdHue(hue), sat, swatch: hex, name: hex.toUpperCase() };
+      }
+      try {
+        const res = await fetch('/setup/custom-colors', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ colors: payload }),
+        });
+        if (!res.ok) return;
+        // El servidor ya tiene "custom" con estos colores — recargamos
+        // color-schemes para que la tarjeta aparezca/se actualice en el grid.
+        _colorSchemes = null;
+        await loadColorSchemes();
+        document.getElementById('inp-brumexa-color').value = 'custom';
+        renderColorGrid('custom');
+        renderColorDetail('custom');
+      } catch {}
+    },
+  };
+
   async function loadAll() {
     const chip = document.getElementById('chip-refresh');
     const txt  = document.getElementById('txt-refresh');
@@ -422,6 +561,7 @@
       document.getElementById('inp-api-key').value      = cfg.apiKey       || '';
       document.getElementById('inp-device-name').value = cfg.deviceName   || '';
       await initColorPicker(cfg.brumexaColor || 'negro');
+      await CustomColors.init();
       setLiveSliderField('inp-mic-gain',     'val-mic-gain',     cfg.micGain,     4,     v => `${parseFloat(v).toFixed(1)}x`);
       setLiveSliderField('inp-speaker-gain', 'val-speaker-gain', cfg.speakerGain, 3,     v => `${parseFloat(v).toFixed(1)}x`);
       setLiveSliderField('inp-talk-threshold', 'val-talk-threshold', cfg.talkThreshold, -25, v => `${v} dBFS`);

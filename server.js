@@ -47,6 +47,7 @@ try {
 
 const { session: lkSession }                           = require('./lib/livekit-session');
 const micGate                                          = require('./lib/mic-speech-gate');
+const calibrationHistory                               = require('./lib/calibration-history');
 const leds                                             = require('./lib/leds');
 const ragAuth                                          = require('./lib/rag-auth');
 const { requestRoomToken, setCredentials: setTokenCredentials } = require('./lib/rag-token');
@@ -251,6 +252,36 @@ app.get('/setup/config', (_req, res) => {
 // del panel de setup sin duplicar los datos ahí adentro.
 app.get('/setup/color-schemes', (_req, res) => {
   res.json(leds.getColorSchemes());
+});
+
+// GET /setup/custom-colors — para precargar los sliders del panel de
+// colores personalizados con lo último guardado (null si nunca se armó uno).
+app.get('/setup/custom-colors', (_req, res) => {
+  res.json({ colors: leds.getCustomColors() });
+});
+
+// POST /setup/custom-colors — guarda un set de colores personalizados (uno
+// por rol: respiracion/voz/agente/calibracion) y lo deja activo YA, sin
+// reiniciar. Ruta aparte de /setup/config porque el shape es distinto
+// (objeto anidado, no un string plano) y porque "guardar" y "aplicar" acá
+// son la misma acción — no tiene sentido persistir colores sin aplicarlos.
+app.post('/setup/custom-colors', express.json(), (req, res) => {
+  const { colors } = req.body || {};
+  const ok = leds.setCustomColors(colors);
+  if (!ok) {
+    return res.status(400).json({ ok: false, error: 'Colores inválidos — cada rol necesita hue (0-359) y sat (0-1).' });
+  }
+  const envFile = path.join(__dirname, '.env');
+  let content = '';
+  try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
+  content = setEnvLine(content, 'BRUMEXA_COLOR', 'custom');
+  content = setEnvLine(content, 'LED_CUSTOM_COLORS', JSON.stringify(leds.getCustomColors()));
+  try {
+    require('fs').writeFileSync(envFile, content, 'utf8');
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 // Escribe/reemplaza una línea KEY=value en el contenido de un .env — usado
@@ -688,7 +719,26 @@ let _micLevel = { level: 0, peak: 0, updatedAt: 0, source: null };
 // página estuviera abierta. Esta ruta solo lee la variable en memoria que
 // ya se actualiza sola — sin spawnear nada.
 app.get('/diag/mic-level', (_req, res) => {
-  res.json({ ..._micLevel, monitorActive: !!_micMonitor });
+  res.json({
+    ..._micLevel,
+    monitorActive: !!_micMonitor,
+    // Estado del gate (lib/mic-speech-gate.js) leído EN VIVO, no cacheado en
+    // _micLevel — isOpen()/isSensing() cambian por sus propios timers de
+    // hangover, no solo cuando llega una muestra nueva, así que un snapshot
+    // tomado en el último write podría estar desactualizado.
+    gateOpen:                  micGate.isOpen(),
+    sensing:                   micGate.isSensing(),
+    ambientFloorDbfs:          micGate.getAmbientFloorDbfs(),
+    effectiveThresholdDbfs:    micGate.getEffectiveThresholdDbfs(),
+    calibratedThresholdDbfs:   micGate.getSpeakThresholdDbfs(),
+  });
+});
+
+// GET /diag/calibration-history — todas las corridas guardadas (boot +
+// manuales), más viejas primero, para graficar la tendencia del umbral en
+// /diagnostico. Liviano: solo lee un archivo local, nada de shell.
+app.get('/diag/calibration-history', (_req, res) => {
+  res.json({ runs: calibrationHistory.readCalibrationHistory(200) });
 });
 
 function startMicMonitor() {
@@ -833,6 +883,18 @@ async function runCalibration(triggeredBy = 'manual') {
   };
 
   console.log(`[calibration] piso=${result.noiseFloorDbfs.toFixed(1)}dBFS → umbral=${threshold.toFixed(1)}dBFS (margen ${CALIBRATION_MARGIN_DB}dB, ${triggeredBy})`);
+
+  // Historial en disco (logs/calibration-history.jsonl) — a diferencia de
+  // _lastCalibration (se pisa acá arriba en cada corrida), esto se acumula.
+  // Sin ticksDbfs (la serie completa): eso es solo para el sparkline de la
+  // corrida MÁS RECIENTE, no hace falta guardarlo para cada una del historial.
+  calibrationHistory.appendCalibration({
+    measuredAt:     _lastCalibration.measuredAt,
+    triggeredBy:    _lastCalibration.triggeredBy,
+    noiseFloorDbfs: _lastCalibration.noiseFloorDbfs,
+    threshold:      _lastCalibration.threshold,
+    marginDb:       _lastCalibration.marginDb,
+  });
 
   leds.calibrationDone(true);
   startMicMonitor();
