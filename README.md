@@ -23,8 +23,11 @@ Hardware ya armado (mic/parlante/LEDs cableados, ver [`cableado-diagrama.pdf`](c
 - Elegir sistema operativo ("Choose OS") → **Raspberry Pi OS (other)** →
   **Raspberry Pi OS Lite (64-bit)**, la que NO dice "Legacy" (necesita aarch64 + NetworkManager)
 - Elegir almacenamiento ("Choose Storage") → la SD
-- ⚙️ Configuración avanzada ("Edit Settings") → hostname `brumexa` (anotalo, lo usás en el
-  paso 2), habilitar SSH (usuario/contraseña), WiFi
+- ⚙️ Configuración avanzada ("Edit Settings") → hostname **único** para este dispositivo, ej.
+  `brumexa-juan` (anotalo, lo usás en el paso 2) — **no uses `brumexa` a secas**: si en algún
+  momento hay más de una Brumexa en la misma red, dos dispositivos con el mismo hostname
+  chocan por `brumexa.local` (mDNS/Avahi le agrega un sufijo automático tipo `-2` al segundo
+  que arranca, y termina siendo confuso saber cuál es cuál) — habilitar SSH (usuario/contraseña), WiFi
 - Grabar ("Write")
 
 **2. Primer boot y SSH**
@@ -33,11 +36,15 @@ Hardware ya armado (mic/parlante/LEDs cableados, ver [`cableado-diagrama.pdf`](c
 - Conectarte por SSH desde tu PC. En Windows no hace falta instalar nada — PowerShell o
   Windows Terminal ya traen `ssh`:
   ```
-  ssh <usuario>@brumexa.local
+  ssh <usuario>@<hostname>.local
   ```
-  Reemplazá `<usuario>` y `brumexa` por lo que configuraste en el paso 1 (ej: usuario `juan`
-  → `ssh juan@brumexa.local`). Pide la contraseña que pusiste ahí — no hace falta nada más,
-  SSH ya quedó habilitado al grabar la SD.
+  Reemplazá `<usuario>` y `<hostname>` por lo que configuraste en el paso 1 (ej: usuario `juan`,
+  hostname `brumexa-juan` → `ssh juan@brumexa-juan.local`). Pide la contraseña que pusiste ahí
+  — no hace falta nada más, SSH ya quedó habilitado al grabar la SD.
+
+  Si el hostname que elegiste ya está en uso por otra Brumexa en esa red (o repetiste
+  `brumexa` a secas por accidente), Avahi le agrega un sufijo automático al segundo dispositivo
+  — probá `<hostname>-2.local` si `<hostname>.local` no conecta.
 
 **3. Instalar**
 
@@ -65,7 +72,9 @@ bash install.sh
 sudo reboot
 ```
 Con esto ya tenés la Pi arriba y el server corriendo (LEDs prenden solos, panel accesible en
-`http://brumexa.local:3000`), aunque todavía no esté autenticada contra la API.
+`http://<hostname>.local:3000`, con el hostname que elegiste en el paso 1 — de acá en adelante
+los ejemplos usan `brumexa.local`, reemplazalo por el tuyo), aunque todavía no esté autenticada
+contra la API.
 
 **5. Dar de alta el dispositivo**
 - En la plataforma de admin de Brumexa → Devices → crear dispositivo → copiar el `apiKey`
@@ -122,11 +131,16 @@ Una vez instalada, no hace falta volver a conectarte por SSH para usar Brumexa �
 maneja desde el navegador. El server escucha en toda la red (no solo `localhost`), así que
 cualquier otro dispositivo de esa red entra directo.
 
-**Caso normal — la Pi ya tiene WiFi:** entrás por `http://brumexa.local:3000`.
-`brumexa.local` es el hostname que le pusiste a la Pi en el Paso 1 de la instalación
-(Raspberry Pi Imager). Funciona por mDNS/Avahi, instalado de fábrica en Raspberry Pi OS:
-cualquier otro dispositivo de la misma red resuelve ese nombre solo a la IP real de la Pi, sin
-que tengas que buscarla a mano ni que sea siempre la misma.
+**Caso normal — la Pi ya tiene WiFi:** entrás por `http://<hostname>.local:3000`, con el
+hostname único que le pusiste a la Pi en el Paso 1 de la instalación (Raspberry Pi Imager).
+Funciona por mDNS/Avahi, instalado de fábrica en Raspberry Pi OS: cualquier otro dispositivo de
+la misma red resuelve ese nombre solo a la IP real de la Pi, sin que tengas que buscarla a mano
+ni que sea siempre la misma.
+
+⚠️ Si dos Brumexas de la misma red terminan con el mismo hostname (por ejemplo, las dos con
+`brumexa` a secas en vez de uno único por dispositivo), Avahi le agrega un sufijo automático al
+segundo que arranca (`brumexa-2.local`) — si `<hostname>.local` no conecta y sabés que hay más
+de un dispositivo Brumexa cerca, probá con el sufijo antes de asumir que algo está roto.
 
 **Si la Pi todavía no tiene WiFi cargado, o se le cortó y no logra reconectar sola:** arranca
 sola un Access Point (AP) de emergencia — su propia red WiFi, para poder entrar y cargarle la
@@ -189,6 +203,17 @@ sudo npm install -g pm2          # si no está instalado
 pm2 start server.js --name brumexa-edge
 pm2 startup
 ```
+
+⚠️ **Limitación conocida — LEDs sin sudo**: la librería de LEDs (`rpi-ws281x`) necesita acceso
+directo a GPIO/DMA que hoy solo tiene el usuario root — corriendo `server.js` como usuario
+normal (como pide el bloque de arriba), los LEDs no van a prender aunque el resto de Brumexa
+funcione bien (voz, mic, parlante). No es que hiciste algo mal. Si necesitás los LEDs
+funcionando ya, la única forma hoy es correr el proceso completo como root
+(`sudo pm2 start server.js --name brumexa-edge`, cargando también `pm2 startup`/`pm2 save` con
+`sudo` en ese caso) — asumiendo que PM2 guarde su estado en `/root/.pm2`, no en `~/.pm2`, así
+que `pm2 list` sin sudo después no lo va a mostrar (mismo bug que se explica arriba, pero acá es
+intencional). Es una limitación real de la librería, está pendiente de resolver de fondo
+(permisos vía `gpiomem`/udev en vez de root completo).
 
 `pm2 startup` **no configura nada por sí solo** — solo te *imprime en pantalla* un comando que arranca con `sudo env PATH=...`. Ese paso es manual a propósito (necesita tu contraseña de sudo): copiá esa línea completa que te tira **a vos** (el usuario/ruta varían según tu instalación — el ejemplo de abajo usa `brumelab`, el del dispositivo original) y ejecutala como comando aparte:
 
@@ -258,6 +283,17 @@ Chequeos rápidos:
   dispositivo está autenticado contra la API en este momento (no confundir con
   `/livekit-health`, que solo chequea si el HOST de LiveKit responde, no la autenticación).
 - Si no conecta: confirmar que `brumexa-rag-api-v2` esté arriba y que las credenciales del `.env` coincidan con las del admin panel.
+
+**Se escucha por el lugar equivocado (jack de auriculares en vez del parlante del HAT, o al
+revés), o el mic no anda**: el número de tarjeta ALSA (`plughw:0,0`, `plughw:1,0`, etc.) NO es
+fijo — lo asigna Linux según qué otro audio tenga esa Raspberry en particular. Una Pi Zero 2 W
+sin salida de audio propia suele darle tarjeta 0 al HAT (mic + parlante), pero una Pi con jack
+de 3.5mm/HDMI onboard (ej. 3 A+) puede correr esa numeración, dejando el HAT en tarjeta 1. El
+server detecta la tarjeta correcta solo al arrancar (busca la que tiene "googlevoicehat" en el
+nombre) y la guarda — no debería hacer falta tocar nada. Si aun así queda mal (hardware
+distinto, HAT no detectado), se puede elegir a mano en `/configuracion` → Sonido → "Elegir
+dispositivo de audio a mano", usando `aplay -l` / `arecord -l` por SSH para confirmar cuál es
+cuál.
 
 **Se escucha el saludo/respuesta del agente en el navegador (`meet.livekit.io` o el preview del admin) pero NO en la Pi** — con `stt`/`llm`/`tts` corriendo bien en los logs de `[agent]`, y `[lk-session] Abriendo AudioStream sid=...` en el log de la Pi pero nunca `✔ Primer frame del agente recibido`: el audio nunca cruza a nivel transporte (ICE/PeerConnection) aunque la señalización diga "conectado". Causa real encontrada una vez: el proceso de pm2 llevaba mucho tiempo corriendo con el entorno cacheado de cuando se hizo el `pm2 start` original — un `pm2 restart` normal no lo refresca. Se resuelve recreando el proceso de cero:
 

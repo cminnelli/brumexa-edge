@@ -8,7 +8,8 @@ const express = require('express');
 const path    = require('path');
 const os      = require('os');
 
-const { setupAudio, getMicGain, setMicGain }            = require('./lib/audio');
+const { setupAudio, getMicGain, setMicGain,
+        listAlsaDevices, listAlsaPlaybackDevices, findHatDevice } = require('./lib/audio');
 const { startRecording, stopRecording, getStatus,
         listRecordings, RECORDINGS_DIR,
         reserveBrowserFilename, saveBrowserRecording,
@@ -252,6 +253,36 @@ function setEnvLine(src, key, value) {
   return out.join('\n');
 }
 
+// Si todavía no hay tarjeta ALSA elegida a mano (ni por Configuración ni por
+// una instalación anterior), la busca sola por nombre de driver y la
+// persiste — así una instalación nueva no necesita que alguien entre a
+// Configuración a buscarla a mano antes de que el mic/parlante funcionen
+// (el número de tarjeta varía según qué otro audio tenga la Raspberry, ver
+// findHatDevice en lib/audio.js). Nunca pisa una elección ya guardada (solo
+// actúa si el campo está vacío) y si no encuentra el HAT (hardware
+// distinto, no conectado) no hace nada — el resto del código sigue con el
+// fallback de siempre (plughw:0,0) y el desplegable manual de Configuración
+// sigue disponible para corregirlo a mano.
+function autoDetectAlsaDevices() {
+  const hasMic     = !!getEnvVal('MIC_ALSA_DEVICE');
+  const hasSpeaker = !!getEnvVal('SPEAKER_ALSA_DEVICE');
+  if (hasMic && hasSpeaker) return;
+
+  const micId     = hasMic     ? null : findHatDevice(listAlsaDevices());
+  const speakerId = hasSpeaker ? null : findHatDevice(listAlsaPlaybackDevices());
+  if (!micId && !speakerId) return;
+
+  const envFile = path.join(__dirname, '.env');
+  let content = '';
+  try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
+  if (micId)     content = setEnvLine(content, 'MIC_ALSA_DEVICE',     micId);
+  if (speakerId) content = setEnvLine(content, 'SPEAKER_ALSA_DEVICE', speakerId);
+  require('fs').writeFileSync(envFile, content, 'utf8');
+
+  if (micId)     console.log(`[audio] tarjeta ALSA del mic detectada sola → ${micId}`);
+  if (speakerId) console.log(`[audio] tarjeta ALSA del parlante detectada sola → ${speakerId}`);
+}
+
 // ─── POST /setup/config — escribir .env y aplicar en caliente ────────────────
 // Todos estos campos, BRUMEXA_COLOR incluido, se aplican sin reiniciar el
 // proceso (credenciales → ragAuth/ragToken.setCredentials, ganancias/umbral →
@@ -460,7 +491,8 @@ function killAplay() {
 
 // POST /recordings/play — espera que el aplay previo muera antes de iniciar uno nuevo
 app.post('/recordings/play', express.json(), async (req, res) => {
-  const { filename, device = 'plughw:0,0' } = req.body || {};
+  const { filename, device } = req.body || {};
+  const playDevice = device || getEnvVal('SPEAKER_ALSA_DEVICE') || 'plughw:0,0';
   if (!filename || typeof filename !== 'string') {
     return res.status(400).json({ ok: false, error: 'filename requerido' });
   }
@@ -481,9 +513,9 @@ app.post('/recordings/play', express.json(), async (req, res) => {
   }
 
   _playResult = null;
-  const proc  = spawn('aplay', ['-D', device, '-v', filePath]);
+  const proc  = spawn('aplay', ['-D', playDevice, '-v', filePath]);
   _playProc   = proc;
-  console.log(`[play] ▶ aplay PID ${proc.pid} -D ${device} ${safeName}`);
+  console.log(`[play] ▶ aplay PID ${proc.pid} -D ${playDevice} ${safeName}`);
 
   let stderrBuf = '';
   proc.stderr.on('data', d => {
@@ -502,7 +534,7 @@ app.post('/recordings/play', express.json(), async (req, res) => {
     }
   });
 
-  res.json({ ok: true, filename: safeName, device, pid: proc.pid });
+  res.json({ ok: true, filename: safeName, device: playDevice, pid: proc.pid });
 });
 
 // GET /diag/audio — diagnóstico del estado de audio en la Pi
@@ -639,7 +671,7 @@ function startMicMonitor() {
   // reactive él mismo.
   if (!lkSession.getMicEnabled()) return;
   if (_micMonitor || process.platform !== 'linux') return;
-  const MIC = process.env.MIC_DEVICE || 'plughw:0,0';
+  const MIC = getEnvVal('MIC_ALSA_DEVICE') || 'plughw:0,0';
   const proc = spawn('arecord', ['-D', MIC, '-f', 'S16_LE', '-r', '16000', '-c', '1', '-t', 'raw', '-q']);
   const startedAt = Date.now();
   let peak = 0;
@@ -720,7 +752,7 @@ async function runCalibration(triggeredBy = 'manual') {
   leds.calibrating();  // 3 blinks + respiración blanca sostenida
   await new Promise(r => setTimeout(r, leds.CALIBRATION_COUNTDOWN_MS));
 
-  const device = process.env.MIC_DEVICE || 'plughw:0,0';
+  const device = getEnvVal('MIC_ALSA_DEVICE') || 'plughw:0,0';
   let result;
   try {
     result = await measureNoiseFloor({
@@ -865,8 +897,8 @@ app.post('/session/start', express.json(), async (req, res) => {
   const t0 = Date.now();
   console.log(`\n[session/start:${reqId}] ▶ BEGIN`);
   try {
-    const micDevice     = req.body?.micDevice     || process.env.MIC_DEVICE     || 'plughw:0,0';
-    const speakerDevice = req.body?.speakerDevice || process.env.SPEAKER_DEVICE || 'plughw:0,0';
+    const micDevice     = req.body?.micDevice     || getEnvVal('MIC_ALSA_DEVICE')     || 'plughw:0,0';
+    const speakerDevice = req.body?.speakerDevice || getEnvVal('SPEAKER_ALSA_DEVICE') || 'plughw:0,0';
     console.log(`[session/start:${reqId}]   mic=${micDevice}  speaker=${speakerDevice}`);
 
     const result = await startSession({ micDevice, speakerDevice });
@@ -983,7 +1015,7 @@ setupLocalDebug(app, {
     livekitUrl:      lastKnownLivekitUrl,
   }),
 });
-setupConfiguracion(app, { lkSession, ragAuth, requestRoomToken, runCalibration, getLastCalibration });
+setupConfiguracion(app, { lkSession, ragAuth, requestRoomToken, runCalibration, getLastCalibration, getEnvVal });
 
 // Antes esto dependía de "fuser -k", un binario externo (paquete psmisc)
 // que puede no estar instalado en la Pi -- si fallaba, reintentaba en
@@ -1067,6 +1099,11 @@ httpServer.listen(PORT, () => {
   // Va ANTES de calibrar — la calibración tiene que medir con el mismo gain
   // de ALSA que se va a usar después, si no el piso medido no vale.
   if (process.platform === 'linux') {
+    // Antes de tocar gain o calibrar — si no hay tarjeta ALSA elegida
+    // todavía, la busca sola (ver autoDetectAlsaDevices arriba) para que
+    // calibración y el resto del arranque ya usen el dispositivo correcto.
+    autoDetectAlsaDevices();
+
     console.log('[boot] Maximizando gain de captura ALSA…');
     boostCaptureGain();
 
