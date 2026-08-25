@@ -105,6 +105,25 @@ const MicMeter = {
     this._calibratedThresholdDbfs = mic.calibratedThresholdDbfs;
     this._renderChart();
     this._renderStatus(mic);
+    this._renderNumbers(mic, dbfs);
+  },
+
+  // Los mismos 4 valores del gráfico, pero como número — la línea sirve
+  // para ver la tendencia, pero para decidir "¿cuánto margen tengo?" un
+  // número exacto es más rápido de leer que estimar contra el eje Y.
+  _renderNumbers(mic, dbfs) {
+    const kv = document.getElementById('kv-sound-numbers');
+    if (!kv) return;
+    const fmt = v => (v === null || v === undefined || isNaN(v)) ? '—' : `${v.toFixed(1)} dBFS`;
+    const eff = mic.effectiveThresholdDbfs;
+    const margin = (eff !== null && eff !== undefined && !isNaN(eff)) ? dbfs - eff : null;
+    kv.innerHTML = kvRows([
+      ['Nivel actual',       fmt(dbfs)],
+      ['Piso ambiente',      fmt(mic.ambientFloorDbfs)],
+      ['Umbral calibrado',   fmt(mic.calibratedThresholdDbfs)],
+      ['Umbral efectivo',    fmt(mic.effectiveThresholdDbfs)],
+      ['Margen al umbral',   margin === null ? '—' : `${margin >= 0 ? '+' : ''}${margin.toFixed(1)} dB${margin >= 0 ? ' (por encima → hablando)' : ' (por debajo → silencio)'}`],
+    ]);
   },
 
   // "¿Qué está pasando AHORA?" — prioriza señales que sirven para MEDIR el
