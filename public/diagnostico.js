@@ -107,14 +107,13 @@ const MicMeter = {
     this._renderStatus(mic);
   },
 
-  // "¿Qué está pasando AHORA?" — dos partes SIEMPRE mostradas juntas:
-  // (1) qué detecta el gate ahora mismo (hablando/sensando/silencio) — esto
-  // es lo mismo que mueve el LED (lib/mic-speech-gate.js + lib/leds.js), y
-  // vale haya sesión o no: el gate corre igual en el monitor idle. (2) qué
-  // pasa con eso — solo si hay una sesión LiveKit a la que mandarle algo,
-  // el gate decide si lo que sale es tu voz real o silencio atenuado (ver
-  // _publishMic en lib/livekit-session.js); sin sesión, el gate solo mueve
-  // el LED, no hay nada a lo que transmitir.
+  // "¿Qué está pasando AHORA?" — prioriza señales que sirven para MEDIR el
+  // entorno, no cualquier parpadeo interno del gate. "Sensando" (isSensing,
+  // ~100-250ms, cualquier muestra que roza el umbral) se sacó de acá: dura
+  // demasiado poco y no dice nada real del cuarto. En cambio, si el umbral
+  // EFECTIVO subió por encima del calibrado (ver mic-speech-gate.js) SÍ es
+  // una señal real de "el ambiente está más ruidoso que cuando calibraste"
+  // — eso es justo lo que sirve para decidir si conviene recalibrar.
   _renderStatus(mic) {
     const el = document.getElementById('sound-status-pill');
     if (!el) return;
@@ -125,17 +124,24 @@ const MicMeter = {
       return;
     }
 
-    const detect = mic.gateOpen ? '🎙 Hablando' : mic.sensing ? '👂 Sensando' : '🤫 Silencio';
+    const rise = (mic.effectiveThresholdDbfs != null && mic.calibratedThresholdDbfs != null)
+      ? mic.effectiveThresholdDbfs - mic.calibratedThresholdDbfs
+      : 0;
+    const noisyEnv = rise > 2; // >2dB por encima de lo calibrado — el piso ambiente ya lo empujó
+
+    const detect = mic.gateOpen
+      ? '🎙 Hablando'
+      : noisyEnv ? `🔊 Ambiente ruidoso (+${rise.toFixed(1)}dB)` : '🤫 Silencio';
+
     let cls, tx;
     if (!mic.sessionActive) {
-      cls = mic.gateOpen ? 'live' : mic.sensing ? 'sensing' : 'muted';
+      cls = mic.gateOpen ? 'live' : noisyEnv ? 'warn' : 'muted';
       tx = 'sin sesión';
     } else if (mic.gateOpen) {
       cls = 'live'; tx = '→ LiveKit';
-    } else if (mic.sensing) {
-      cls = 'sensing'; tx = 'sin enviar';
     } else {
-      cls = 'muted'; tx = 'atenuado';
+      cls = noisyEnv ? 'warn' : 'muted';
+      tx = 'atenuado';
     }
 
     el.className = `pill dot ${cls}`;
