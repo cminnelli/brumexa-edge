@@ -15,9 +15,18 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css?v=21" />
   <style>
-    .sound-legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 8px 0 4px; font-size: 11px; color: var(--text2); }
-    .sound-legend span { display: inline-flex; align-items: center; gap: 5px; }
-    .sound-legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+    .sound-kpis { display: flex; gap: 10px; margin-bottom: 12px; }
+    .stat-tile {
+      flex: 1; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 14px;
+    }
+    .stat-tile__label {
+      font-size: 10.5px; font-weight: 600; color: var(--text2);
+      text-transform: uppercase; letter-spacing: .04em; margin-bottom: 3px;
+    }
+    .stat-tile__value { font-size: 26px; font-weight: 600; color: var(--text); line-height: 1.1; font-variant-numeric: proportional-nums; }
+    .stat-tile__unit  { font-size: 12px; font-weight: 500; color: var(--text2); margin-left: 4px; }
+    .stat-tile__sub   { font-size: 10.5px; color: var(--text2); margin-top: 3px; min-height: 13px; }
     .calib-history-row { display: flex; align-items: flex-end; gap: 2px; height: 46px; }
     .calib-history-bar { flex: 1; min-width: 3px; border-radius: 2px 2px 0 0; background: var(--accent); opacity: .55; }
     .calib-history-bar:hover { opacity: 1; }
@@ -144,20 +153,30 @@
       </div>
     </div>
 
-    <div id="sound-status-pill" class="pill dot muted" style="margin-bottom:10px">Consultando…</div>
+    <div id="sound-status-pill" class="pill dot muted" style="margin-bottom:12px">Consultando…</div>
 
-    <div class="kv" id="kv-sound-numbers" style="margin-bottom:10px"></div>
+    <div class="sound-kpis">
+      <div class="stat-tile">
+        <div class="stat-tile__label">Nivel actual</div>
+        <div class="stat-tile__value"><span id="stat-level-num">—</span><span class="stat-tile__unit">dBFS</span></div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-tile__label">Margen al umbral</div>
+        <div class="stat-tile__value"><span id="stat-margin-num">—</span><span class="stat-tile__unit">dB</span></div>
+        <div class="stat-tile__sub" id="stat-margin-sub">&nbsp;</div>
+      </div>
+    </div>
 
     <div id="sound-chart-wrap" style="overflow-x:auto"></div>
-    <div class="sound-legend" id="sound-legend"></div>
-    <p class="field-hint">Últimos ~30s en vivo. Franja violeta clara = "sensando" (por ahí es algo); franja ámbar = confirmado, hablando de verdad.</p>
 
-    <details class="tech-details" style="margin-top:6px">
-      <summary>¿Qué diferencia hay entre las 3 líneas/umbrales?</summary>
+    <details class="tech-details" style="margin-top:8px">
+      <summary>¿Cómo se lee el gráfico?</summary>
       <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px; font-size:12.5px; color:var(--text2)">
-        <div><strong style="color:var(--text)">Umbral calibrado</strong> — el número fijo que quedó de la última calibración (o que moviste a mano en Configuración). No se mueve solo; solo cambia si recalibrás o ajustás el slider.</div>
-        <div><strong style="color:var(--text)">Piso ambiente (en vivo)</strong> — el nivel de ruido REAL del cuarto ahora mismo, medido en todo momento con un promedio lento (tarda 25-75s en asentarse). Sigue el ambiente real, no lo que calibraste hace rato.</div>
-        <div><strong style="color:var(--text)">Umbral efectivo (en vivo)</strong> — el que se usa DE VERDAD en este instante para decidir "¿es tu voz o es ruido?". Es <code>máximo(umbral calibrado, piso ambiente + margen)</code>: normalmente es igual al calibrado, pero si el ambiente se pone más ruidoso que cuando calibraste (ej. arrancó una impresora), sube solo por encima — así no hace falta recalibrar cada vez que cambia el ruido de fondo.</div>
+        <div><strong style="color:var(--accent)">Línea llena de color</strong> — tu nivel real, en vivo.</div>
+        <div><strong style="color:var(--text2)">Línea punteada gris</strong> — umbral calibrado, fijo (solo cambia si recalibrás).</div>
+        <div><strong style="color:var(--text)">Línea gris sólida</strong> — umbral efectivo: <code>máximo(calibrado, piso ambiente + margen)</code>. Es el que decide de verdad ahora — sube solo si el cuarto se pone más ruidoso que cuando calibraste.</div>
+        <div><strong style="color:var(--text2)">Línea gris fina punteada (abajo)</strong> — piso ambiente real del cuarto, sin margen.</div>
+        <div>Franja <strong style="color:#c98a2e">ámbar</strong> = confirmado, hablando de verdad y (si hay sesión) mandándose a LiveKit.</div>
       </div>
     </details>
 

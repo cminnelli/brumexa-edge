@@ -108,22 +108,29 @@ const MicMeter = {
     this._renderNumbers(mic, dbfs);
   },
 
-  // Los mismos 4 valores del gráfico, pero como número — la línea sirve
-  // para ver la tendencia, pero para decidir "¿cuánto margen tengo?" un
-  // número exacto es más rápido de leer que estimar contra el eje Y.
+  // Los únicos 2 números que quedan como texto (todo lo demás —
+  // piso/calibrado/efectivo — vive DENTRO del gráfico como línea+label, sin
+  // repetirlo acá también). "Nivel actual" es la magnitud; "Margen al
+  // umbral" es la que responde "¿cuánto me falta/sobra para disparar?".
   _renderNumbers(mic, dbfs) {
-    const kv = document.getElementById('kv-sound-numbers');
-    if (!kv) return;
-    const fmt = v => (v === null || v === undefined || isNaN(v)) ? '—' : `${v.toFixed(1)} dBFS`;
+    const numEl = document.getElementById('stat-level-num');
+    const marEl = document.getElementById('stat-margin-num');
+    const subEl = document.getElementById('stat-margin-sub');
+    if (!numEl || !marEl) return;
+
+    numEl.textContent = isNaN(dbfs) ? '—' : dbfs.toFixed(1);
+
     const eff = mic.effectiveThresholdDbfs;
     const margin = (eff !== null && eff !== undefined && !isNaN(eff)) ? dbfs - eff : null;
-    kv.innerHTML = kvRows([
-      ['Nivel actual',       fmt(dbfs)],
-      ['Piso ambiente',      fmt(mic.ambientFloorDbfs)],
-      ['Umbral calibrado',   fmt(mic.calibratedThresholdDbfs)],
-      ['Umbral efectivo',    fmt(mic.effectiveThresholdDbfs)],
-      ['Margen al umbral',   margin === null ? '—' : `${margin >= 0 ? '+' : ''}${margin.toFixed(1)} dB${margin >= 0 ? ' (por encima → hablando)' : ' (por debajo → silencio)'}`],
-    ]);
+    if (margin === null) {
+      marEl.textContent = '—';
+      marEl.style.color = '';
+      subEl.textContent = '';
+    } else {
+      marEl.textContent = `${margin >= 0 ? '+' : ''}${margin.toFixed(1)}`;
+      marEl.style.color = margin >= 0 ? 'var(--danger)' : '';
+      subEl.textContent = margin >= 0 ? '↑ por encima — hablando' : '↓ por debajo — silencio';
+    }
   },
 
   // "¿Qué está pasando AHORA?" — prioriza señales que sirven para MEDIR el
@@ -167,15 +174,18 @@ const MicMeter = {
     el.textContent = `${detect} · ${tx}`;
   },
 
-  // ── Gráfico: dBFS en vivo + umbral calibrado (fijo) + umbral efectivo
-  // (sube solo si el ambiente está más ruidoso que al calibrar) + franjas de
-  // fondo marcando "sensando" (violeta) y "hablando confirmado" (ámbar) —
-  // SVG a mano (mismo criterio que el sparkline de calibración en
-  // /configuracion), sin ninguna librería de gráficos, no hace falta.
+  // ── Gráfico: una sola línea con la voz (el hilo del que se trata todo:
+  // acento de marca, la más gruesa) + 3 líneas de contexto en tonos grises
+  // (calibrado/efectivo/piso ambiente — nunca compiten en color con la
+  // principal) + franja ámbar marcando cuándo se confirmó "hablando". Cada
+  // línea de contexto lleva su propio label pegado a la punta derecha en vez
+  // de una leyenda aparte — así el gráfico se explica solo. SVG a mano
+  // (mismo criterio que el sparkline de calibración en /configuracion), sin
+  // ninguna librería de gráficos, no hace falta.
   MAX_SAMPLES: 150, // ~30s a 200ms/muestra
   Y_MIN: -60,
   Y_MAX: 0,
-  CHART_W: 640, CHART_H: 130, PAD_L: 34, PAD_R: 6, PAD_T: 6, PAD_B: 6,
+  CHART_W: 640, CHART_H: 156, PAD_L: 30, PAD_R: 4, PAD_T: 12, PAD_B: 6,
   _history: [],
   _calibratedThresholdDbfs: null,
 
@@ -203,49 +213,70 @@ const MicMeter = {
     const hist = this._history, n = hist.length;
     if (!n) { wrap.innerHTML = '<p class="field-hint">Esperando datos…</p>'; return; }
 
+    // Franja: solo lo confirmado (gateOpen) — "sensando" dura ~100-250ms y
+    // no aporta nada para leer el gráfico, ver comentario en _renderStatus.
     const step = n > 1 ? (this.CHART_W - this.PAD_L - this.PAD_R) / (n - 1) : (this.CHART_W - this.PAD_L - this.PAD_R);
     let bands = '';
     for (let i = 0; i < n; i++) {
-      const s = hist[i];
-      if (!s.gateOpen && !s.sensing) continue;
+      if (!hist[i].gateOpen) continue;
       const x = this._xFor(i, n) - step / 2;
-      const color = s.gateOpen ? 'rgba(224,160,50,0.30)' : 'rgba(140,110,230,0.22)';
-      bands += `<rect x="${x.toFixed(1)}" y="${this.PAD_T}" width="${(step + 0.6).toFixed(1)}" height="${this.CHART_H - this.PAD_T - this.PAD_B}" fill="${color}" />`;
+      bands += `<rect x="${x.toFixed(1)}" y="${this.PAD_T}" width="${(step + 0.6).toFixed(1)}" height="${this.CHART_H - this.PAD_T - this.PAD_B}" fill="rgba(224,160,50,0.26)" />`;
     }
 
+    // Gridlines cada 10dB — hairline, sin protagonismo, para ubicar valores
+    // sin necesitar leer un número aparte.
     let grid = '';
-    for (const db of [0, -20, -40, -60]) {
+    for (let db = this.Y_MIN; db <= this.Y_MAX; db += 10) {
       const y = this._yFor(db);
       grid += `<line x1="${this.PAD_L}" y1="${y.toFixed(1)}" x2="${this.CHART_W - this.PAD_R}" y2="${y.toFixed(1)}" stroke="var(--border)" stroke-width="1" />`;
-      grid += `<text x="2" y="${(y + 3).toFixed(1)}" font-size="9" fill="var(--text2)">${db}</text>`;
+      grid += `<text x="1" y="${(y + 3).toFixed(1)}" font-size="8.5" fill="var(--text2)">${db}</text>`;
     }
 
-    const dbfsLine   = this._points(s => s.dbfs);
-    const ambLine    = this._points(s => s.ambientFloorDbfs);
-    const effLine    = this._points(s => s.effectiveThresholdDbfs);
-    const calibY     = this._calibratedThresholdDbfs != null ? this._yFor(this._calibratedThresholdDbfs) : null;
+    const lastSample = hist[n - 1];
+    const dbfsLine = this._points(s => s.dbfs);
+    const ambLine  = this._points(s => s.ambientFloorDbfs);
+    const effLine  = this._points(s => s.effectiveThresholdDbfs);
+    const calibY   = this._calibratedThresholdDbfs != null ? this._yFor(this._calibratedThresholdDbfs) : null;
+    const effY     = (lastSample.effectiveThresholdDbfs != null && !isNaN(lastSample.effectiveThresholdDbfs))
+      ? this._yFor(lastSample.effectiveThresholdDbfs) : null;
+
+    // Labels pegados a la punta derecha de cada línea gris — si calibrado y
+    // efectivo están tan cerca que se pisarían, un solo label combinado en
+    // vez de superponerlos (ver "cuando los end-labels colisionan" en la
+    // guía de gráficos).
+    const labelX = this.CHART_W - this.PAD_R - 3;
+    let refLabels = '';
+    if (calibY !== null && effY !== null && Math.abs(calibY - effY) < 9) {
+      refLabels += `<text x="${labelX}" y="${(Math.min(calibY, effY) - 4).toFixed(1)}" font-size="9" text-anchor="end" fill="var(--text)">calibrado = efectivo</text>`;
+    } else {
+      if (calibY !== null) refLabels += `<text x="${labelX}" y="${(calibY - 4).toFixed(1)}" font-size="9" text-anchor="end" fill="var(--text2)">calibrado</text>`;
+      if (effY   !== null) refLabels += `<text x="${labelX}" y="${(effY - 4).toFixed(1)}" font-size="9" text-anchor="end" fill="var(--text)">efectivo</text>`;
+    }
+    if (lastSample.ambientFloorDbfs != null && !isNaN(lastSample.ambientFloorDbfs)) {
+      const ambY = this._yFor(lastSample.ambientFloorDbfs);
+      refLabels += `<text x="${labelX}" y="${(ambY - 4).toFixed(1)}" font-size="8.5" text-anchor="end" fill="var(--text2)" opacity="0.75">piso ambiente</text>`;
+    }
+
+    // Punta viva: dónde está el nivel AHORA, marcado sobre la propia línea
+    // (mismo valor que el stat-tile de arriba, pero en contexto de la
+    // tendencia) — anillo en el color de fondo para que se lea limpio si
+    // cruza otra línea.
+    const lastX  = this._xFor(n - 1, n);
+    const lastY  = this._yFor(lastSample.dbfs);
+    const endDot = `<circle cx="${lastX.toFixed(1)}" cy="${lastY.toFixed(1)}" r="4" fill="var(--accent)" stroke="var(--bg)" stroke-width="2" />`;
 
     wrap.innerHTML = `
       <svg width="100%" height="${this.CHART_H}" viewBox="0 0 ${this.CHART_W} ${this.CHART_H}" style="display:block; min-width:420px; background:var(--bg); border-radius:8px">
         ${bands}
         ${grid}
-        ${calibY !== null ? `<line x1="${this.PAD_L}" y1="${calibY.toFixed(1)}" x2="${this.CHART_W - this.PAD_R}" y2="${calibY.toFixed(1)}" stroke="var(--text2)" stroke-width="1" stroke-dasharray="4,3" />` : ''}
-        ${ambLine ? `<polyline points="${ambLine}" fill="none" stroke="var(--text2)" stroke-width="1" stroke-dasharray="1,2" opacity="0.8" />` : ''}
-        ${effLine ? `<polyline points="${effLine}" fill="none" stroke="#3dc7e0" stroke-width="1.3" />` : ''}
-        <polyline points="${dbfsLine}" fill="none" stroke="var(--accent)" stroke-width="1.6" />
+        ${ambLine ? `<polyline points="${ambLine}" fill="none" stroke="var(--text2)" stroke-width="1" stroke-dasharray="1,2.5" opacity="0.7" />` : ''}
+        ${calibY !== null ? `<line x1="${this.PAD_L}" y1="${calibY.toFixed(1)}" x2="${this.CHART_W - this.PAD_R}" y2="${calibY.toFixed(1)}" stroke="var(--text2)" stroke-width="1.2" stroke-dasharray="4,3" />` : ''}
+        ${effLine ? `<polyline points="${effLine}" fill="none" stroke="var(--text)" stroke-width="1.2" opacity="0.8" />` : ''}
+        <polyline points="${dbfsLine}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+        ${endDot}
+        ${refLabels}
       </svg>
     `;
-
-    const legend = document.getElementById('sound-legend');
-    if (legend) {
-      legend.innerHTML = `
-        <span><i style="background:var(--accent)"></i>Nivel real (dBFS)</span>
-        <span><i style="background:#3dc7e0"></i>Umbral efectivo (en vivo)</span>
-        <span><i style="background:var(--text2)"></i>Piso ambiente / umbral calibrado</span>
-        <span><i style="background:rgba(224,160,50,0.7)"></i>Hablando confirmado</span>
-        <span><i style="background:rgba(140,110,230,0.6)"></i>Sensando</span>
-      `;
-    }
   },
 };
 
