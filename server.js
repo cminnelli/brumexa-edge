@@ -1197,9 +1197,8 @@ httpServer.listen(PORT, () => {
 
   // Si estamos en Linux y no hay WiFi configurado → activar AP + LEDs rojo
   if (process.platform === 'linux') {
-    autoStartAP().then(() => {
-      const { getStatus } = require('./lib/wifi');
-      if (!getStatus().connectedSSID) leds.brumexaError();
+    autoStartAP().then(async () => {
+      if (!(await getWifiStatusAsync()).connectedSSID) leds.brumexaError();
     });
     // Monitor continuo — a diferencia del chequeo de arriba (una sola vez al
     // boot), esto detecta caídas de señal/conexión que pasan después.
