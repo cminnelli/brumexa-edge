@@ -53,6 +53,16 @@
       background: var(--surface2); border-radius: var(--r-sm); padding: 8px 10px;
     }
     .update-log__line { white-space: pre-wrap; word-break: break-word; }
+
+    /* ── Aviso de "hay cambios locales" — antes era flow-note+texto+botón
+         sueltos uno debajo del otro, se sentía como una lista de errores.
+         Una sola caja con borde de alerta agrupa todo el mensaje. */
+    .update-warn {
+      margin-top: 8px; padding: 10px 12px; border-radius: var(--r-sm);
+      border: 1px solid rgba(224,160,50,.35); background: rgba(224,160,50,.08);
+    }
+    .update-warn__title { font-size: 13px; font-weight: 600; color: var(--warn); }
+    .update-warn__text  { font-size: 12px; color: var(--text2); margin: 6px 0 10px; }
   </style>
 </head>
 <body>
@@ -308,11 +318,14 @@
           <div class="card-section-desc">Trae los últimos cambios del código (equivalente a "git pull") y reinicia el servidor solo si hubo novedades</div>
         </div>
       </div>
-      <div class="kv" id="kv-version" style="margin-bottom:10px"></div>
-      <button class="btn-connect" id="btn-update" style="width:auto; padding:9px 20px">⬇️ Buscar actualizaciones</button>
-      <button class="btn-ghost" id="btn-restart" style="width:auto; padding:9px 20px; margin-left:8px">🔄 Reiniciar Brumexa</button>
-      <p class="field-hint" style="margin-top:8px">Reiniciar no toca el código ni la configuración — solo apaga y prende el proceso. Útil si algo se traba y no hace falta actualizar nada.</p>
-      <div id="update-result" style="margin-top:10px"></div>
+      <div class="field-group-label">Versión instalada</div>
+      <div class="kv" id="kv-version" style="margin-bottom:14px"></div>
+
+      <div class="field">
+        <button class="btn-connect" id="btn-update" style="width:auto; padding:9px 20px">⬇️ Buscar actualizaciones</button>
+        <p class="field-hint">Trae los últimos cambios del código y reinicia el servidor solo si hubo novedades.</p>
+      </div>
+      <div id="update-result"></div>
       <!-- Log en vivo del proceso — se llena solo mientras "Actualizar" está
            en curso (clonar, instalar, etc. tarda ~1-2min sin esto, sin
            ningún indicio de que sigue vivo). Reusa /ws/logs (el mismo
@@ -322,6 +335,13 @@
       <div id="update-progress" class="update-progress" style="display:none">
         <div class="update-progress__bar-track"><div class="update-progress__bar"></div></div>
         <div id="update-log" class="update-log"></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="field" style="margin-bottom:0">
+        <button class="btn-ghost" id="btn-restart" style="width:auto; padding:9px 20px">🔄 Reiniciar Brumexa</button>
+        <p class="field-hint">No toca el código ni la configuración — solo apaga y prende el proceso. Útil si algo se traba y no hace falta actualizar nada.</p>
       </div>
     </div>
   </div>
@@ -851,15 +871,20 @@
       result.innerHTML = `<div class="flow-note ok">✔ Actualizado — reiniciando el servidor…</div>${techDetails(data.output)}`;
       pollServerBack(result, btn, '⬇️ Buscar actualizaciones');
     } else if (data.reason === 'local-changes') {
-      // Alguien tocó un archivo a mano en la Pi y eso choca con la
-      // actualización. Ofrecemos guardarlo aparte (git stash — no se
-      // pierde, queda recuperable) en vez de mostrar el error de git.
+      // La causa más común NO es que alguien haya editado código a mano —
+      // es algo que el propio dispositivo generó (una grabación de prueba,
+      // un archivo de historial) que quedó sin declarar como "ignorado"
+      // para git en alguna versión vieja. De cualquier forma que haya
+      // pasado, "guardar aparte" (git stash) no borra nada: queda
+      // recuperable, y la actualización sigue.
       _stopUpdateLog();
       result.innerHTML = `
-        <div class="flow-note bad">⚠ ${esc(data.error)}</div>
-        <p class="field-hint" style="margin:6px 0">Podemos guardar esos cambios aparte (no se borran) y traer la actualización igual.</p>
-        <button class="btn-ghost" id="btn-stash-retry" type="button">Guardar cambios aparte y actualizar</button>
-        ${techDetails(data.output)}
+        <div class="update-warn">
+          <div class="update-warn__title">⚠ Hay archivos sin guardar en el código de este equipo</div>
+          <p class="update-warn__text">Lo más probable es que sea algo que generó el propio dispositivo (una grabación de prueba, un log), no algo que hayas tocado vos. Podemos guardarlo aparte — no se borra, queda recuperable — y traer la actualización igual.</p>
+          <button class="btn-connect" id="btn-stash-retry" type="button" style="width:auto; padding:8px 16px">Guardar aparte y actualizar</button>
+          ${techDetails(data.output)}
+        </div>
       `;
       document.getElementById('btn-stash-retry').addEventListener('click', stashAndRetry);
       btn.disabled = false;
