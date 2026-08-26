@@ -254,8 +254,8 @@
         <label class="field-label" for="inp-silence-timeout">Corte automático por silencio</label>
         <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
           <div class="gain-row" style="grid-template-columns:1fr 55px">
-            <input type="range" id="inp-silence-timeout" class="gain-slider" min="0" max="120" step="5" value="10" />
-            <span class="gain-val" id="val-silence-timeout">10 s</span>
+            <input type="range" id="inp-silence-timeout" class="gain-slider" min="0" max="120" step="5" value="20" />
+            <span class="gain-val" id="val-silence-timeout">20 s</span>
           </div>
         </div>
         <p class="field-hint">Si nadie habla (ni vos ni el agente) durante este tiempo, la sesión se desconecta sola. Arrastrá del todo a la izquierda (0s) para desactivarlo.</p>
@@ -581,7 +581,7 @@
       setLiveSliderField('inp-mic-gain',     'val-mic-gain',     cfg.micGain,     4,     v => `${parseFloat(v).toFixed(1)}x`);
       setLiveSliderField('inp-speaker-gain', 'val-speaker-gain', cfg.speakerGain, 3,     v => `${parseFloat(v).toFixed(1)}x`);
       setLiveSliderField('inp-talk-threshold', 'val-talk-threshold', cfg.talkThreshold, -25, v => `${v} dBFS`);
-      setLiveSliderField('inp-silence-timeout', 'val-silence-timeout', (parseInt(cfg.silenceTimeoutMs, 10) || 10000) / 1000, 10, v => `${v} s`);
+      setLiveSliderField('inp-silence-timeout', 'val-silence-timeout', (parseInt(cfg.silenceTimeoutMs, 10) || 20000) / 1000, 20, v => `${v} s`);
       setLiveSliderField('inp-led-breathe',  'val-led-breathe',  cfg.ledBreathePeriodMs, 1900, v => `${v} ms`);
       setLiveSliderField('inp-led-hangover', 'val-led-hangover', cfg.ledHangoverMs,      2000, v => `${v} ms`);
       setLiveSliderField('inp-mic-gate-attenuation', 'val-mic-gate-attenuation', cfg.micGateAttenuationDb, -90, v => `${v} dB`);
