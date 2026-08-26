@@ -999,16 +999,32 @@ const GuidedDiag = {
     const notVoiceCeiling = floor + 6;
     const voiceFloorSafe  = voiceAvg - 3;
 
-    if (notVoiceCeiling >= voiceFloorSafe) {
+    // Caso realmente sin salida: la voz medida ni siquiera superó el piso
+    // de fondo — acá no hay ningún criterio razonable (ni el punto medio
+    // tiene sentido, caería del lado del ruido). Este sí se bloquea.
+    if (voiceAvg <= floor) {
       return {
         ok: false,
-        why: `Tu voz (~${voiceAvg.toFixed(1)}dBFS de promedio) está muy pegada al piso de fondo (~${notVoiceCeiling.toFixed(1)}dBFS) — no hay un hueco seguro para fijar un umbral acá. Probá hablar más cerca del mic, subir la ganancia en Configuración, o reducir el ruido del ambiente.`,
+        why: `Tu voz medida (~${voiceAvg.toFixed(1)}dBFS) no llegó a superar el piso de fondo (~${floor.toFixed(1)}dBFS) — repetí la prueba hablando bien cerca del mic.`,
       };
     }
 
-    const raw = (notVoiceCeiling + voiceFloorSafe) / 2;
+    // Con hueco seguro: punto medio entre "techo de lo que no es voz" y
+    // "piso de lo que sí es voz" (con los márgenes de siempre). Sin hueco
+    // pero la voz sigue siendo más fuerte que el piso (caso real: alguien
+    // habla siempre así de cerca/flojo, decirle "no hay nada" no ayuda) —
+    // mejor esfuerzo: punto medio DIRECTO entre piso y voz, sin los
+    // márgenes de seguridad, marcado como "riesgoso" y con la
+    // recomendación explícita de repetir la prueba con más separación en
+    // vez de negarse a proponer un número.
+    const hasGap = notVoiceCeiling < voiceFloorSafe;
+    const raw = hasGap ? (notVoiceCeiling + voiceFloorSafe) / 2 : (floor + voiceAvg) / 2;
     const value = Math.round(Math.max(-45, Math.min(-12, raw)) * 10) / 10;
-    return { ok: true, value, floor, voiceAvg };
+    return {
+      ok: true, value, floor, voiceAvg,
+      risky: !hasGap,
+      riskyWhy: hasGap ? null : `Tu voz (~${voiceAvg.toFixed(1)}dBFS) está pegada al piso de fondo (~${floor.toFixed(1)}dBFS) — este es el mejor punto medio posible, pero con poco margen: puede fallar más seguido de lo normal (perderse el inicio de alguna palabra, o confundir ruido con voz). Te conviene repetir la prueba hablando más cerca del mic o con más ganancia, y volver a calibrar cuando tengas más margen.`,
+    };
   },
 
   async _applyThreshold(value) {
@@ -1059,10 +1075,10 @@ const GuidedDiag = {
     const suggestion = this._computeThreshold(r);
     const suggestionHtml = suggestion.ok
       ? `
-        <div class="guided-suggestion">
-          <div class="guided-suggestion__label">Umbral propuesto</div>
+        <div class="guided-suggestion${suggestion.risky ? ' risky' : ''}">
+          <div class="guided-suggestion__label">Umbral propuesto${suggestion.risky ? ' — poco margen' : ''}</div>
           <div class="guided-suggestion__value">${suggestion.value} dBFS</div>
-          <div class="guided-suggestion__why">Deja margen entre tu voz (~${suggestion.voiceAvg.toFixed(1)}dBFS) y el piso de fondo.</div>
+          <div class="guided-suggestion__why">${suggestion.risky ? esc(suggestion.riskyWhy) : `Deja margen entre tu voz (~${suggestion.voiceAvg.toFixed(1)}dBFS) y el piso de fondo.`}</div>
           <button class="btn-connect" id="btn-guided-apply" type="button" style="width:100%">${ICON_CHECK} Aplicar y guardar</button>
           <div id="guided-apply-result" style="margin-top:8px"></div>
         </div>

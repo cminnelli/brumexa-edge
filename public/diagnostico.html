@@ -129,6 +129,11 @@
     .guided-suggestion__value { font-size: 26px; font-weight: 600; color: var(--text); margin: 4px 0; font-variant-numeric: proportional-nums; }
     .guided-suggestion__why { font-size: 12px; color: var(--text2); margin-bottom: 10px; }
     .guided-suggestion.blocked .guided-suggestion__why { color: var(--warn); }
+    /* "risky" — SÍ propone un número (a diferencia de "blocked"), pero con
+       poco margen — borde punteado ámbar en vez del sólido normal, para
+       distinguirlo sin ser tan alarmante como el bloqueo total. */
+    .guided-suggestion.risky { border: 1px dashed var(--warn); background: rgba(224,160,50,.08); }
+    .guided-suggestion.risky .guided-suggestion__why { color: var(--warn); }
     .guided-note-check {
       display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text2);
       margin-bottom: 10px; cursor: pointer;
