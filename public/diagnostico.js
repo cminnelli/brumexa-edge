@@ -57,36 +57,45 @@ const MicMeter = {
   // cinco veces por segundo terminaban trabando el dispositivo entero
   // mientras esta página estuviera abierta. /diag/mic-level solo lee una
   // variable en memoria, no spawnea nada.
+  //
+  // La card de "Micrófono — nivel en vivo" (barra VU suelta) se sacó por
+  // redundante con Panorama de sonido, que muestra lo mismo con más
+  // contexto (piso/umbral/margen). Pero este mismo tick sigue siendo dueño
+  // de Summary.set('mic', ...) (la fila de "Resultado general") Y de
+  // alimentar el historial del gráfico de Panorama — así que NO corta
+  // temprano si no encuentra la barra vieja, solo se salta escribirle a
+  // esos elementos si no existen.
   async _tick() {
     const bar    = document.getElementById('mic-vu-bar');
     const dbEl   = document.getElementById('mic-vu-db');
     const noteEl = document.getElementById('mic-vu-note');
-    if (!bar) return;
 
     let mic;
     try {
       mic = await fetch('/diag/mic-level', { cache: 'no-store' }).then(r => r.json());
 
-      const level = Math.max(0, Math.min(1, mic.level || 0));
-      const db    = mic.peak > 0 ? (20 * Math.log10(mic.peak / 32767)).toFixed(1) : '-∞';
-      const color = level < 0.5 ? '#3dba76' : level < 0.8 ? '#e0a032' : '#e05555';
-      bar.style.width      = `${Math.round(level * 100)}%`;
-      bar.style.background = color;
-      dbEl.textContent     = `${db} dBFS`;
+      if (bar) {
+        const level = Math.max(0, Math.min(1, mic.level || 0));
+        const db    = mic.peak > 0 ? (20 * Math.log10(mic.peak / 32767)).toFixed(1) : '-∞';
+        const color = level < 0.5 ? '#3dba76' : level < 0.8 ? '#e0a032' : '#e05555';
+        bar.style.width      = `${Math.round(level * 100)}%`;
+        bar.style.background = color;
+        dbEl.textContent     = `${db} dBFS`;
+      }
 
       const ageMs   = mic.updatedAt ? Date.now() - mic.updatedAt : Infinity;
       const flowing = ageMs < 1500;
       if (!mic.monitorActive && !flowing) {
-        noteEl.textContent = 'El monitor de mic no está corriendo ahora mismo (¿mic desactivado en Configuración, sesión activa capturando el device, o este server no está corriendo en la Raspberry?).';
+        if (noteEl) noteEl.textContent = 'El monitor de mic no está corriendo ahora mismo (¿mic desactivado en Configuración, sesión activa capturando el device, o este server no está corriendo en la Raspberry?).';
         Summary.set('mic', 'warn', 'Monitor inactivo');
       } else {
-        noteEl.textContent = flowing
+        if (noteEl) noteEl.textContent = flowing
           ? 'Recibiendo audio en vivo — hablá cerca del mic para ver la barra moverse.'
           : 'Monitor activo, esperando la primera lectura…';
         Summary.set('mic', flowing ? 'ok' : 'warn', flowing ? 'Recibiendo audio' : 'Activo, sin señal reciente');
       }
     } catch (e) {
-      noteEl.textContent = `Error consultando el estado: ${e.message}`;
+      if (noteEl) noteEl.textContent = `Error consultando el estado: ${e.message}`;
       Summary.set('mic', 'error', 'Sin respuesta del servidor');
       return;
     }
@@ -297,20 +306,35 @@ const MicMeter = {
 };
 
 // ============================================================
-// PARLANTE — mismo endpoint que ya usaba Configuración
+// PARLANTE — mismo endpoint que ya usaba Configuración. Toggle: si ya
+// está sonando, tocar el botón de nuevo corta el tono en vez de esperar
+// a que termine solo (antes se dejaba correr entero, "muy molesto").
 // ============================================================
+let _speakerPlaying = false;
 async function runSpeakerTest() {
   const btn    = document.getElementById('btn-speaker-test');
   const result = document.getElementById('speaker-test-result');
-  btn.disabled = true;
-  btn.textContent = '🔊 Reproduciendo…';
+
+  if (_speakerPlaying) {
+    // Ya está sonando — este click corta el tono. Optimista: bajamos el
+    // estado ya mismo, la respuesta del server solo confirma.
+    _speakerPlaying = false;
+    btn.textContent = '🔊 Probar parlante (tono 1kHz)';
+    try { await fetch('/configuracion/speaker-test', { method: 'POST' }); } catch {}
+    return;
+  }
+
+  _speakerPlaying = true;
+  btn.textContent = '⏹ Detener';
   result.innerHTML = '';
   try {
     const res  = await fetch('/configuracion/speaker-test', { method: 'POST' });
     const data = await res.json();
     if (data.ok) {
-      result.innerHTML = `<div class="pill ok">✅ ${esc(data.note || 'Tono reproducido')}</div>`;
-      Summary.set('speaker', 'ok', 'Tono reproducido');
+      if (!data.stopped) {
+        result.innerHTML = `<div class="pill ok">✅ ${esc(data.note || 'Tono reproducido')}</div>`;
+        Summary.set('speaker', 'ok', 'Tono reproducido');
+      }
     } else {
       result.innerHTML = `<div class="pill bad">⚠ Error: ${esc(data.error || data.output || 'desconocido')}</div>`;
       Summary.set('speaker', 'error', data.error || 'Falló');
@@ -319,7 +343,7 @@ async function runSpeakerTest() {
     result.innerHTML = `<div class="pill bad">⚠ Error: ${esc(e.message)}</div>`;
     Summary.set('speaker', 'error', 'Sin respuesta del servidor');
   } finally {
-    btn.disabled = false;
+    _speakerPlaying = false;
     btn.textContent = '🔊 Probar parlante (tono 1kHz)';
   }
 }
@@ -408,10 +432,13 @@ const LedsDiag = {
         Summary.set('leds', 'error', 'Falló al configurar');
         return;
       }
-      const rootWarn = d.isRoot === false ? ' ⚠ no corre como root' : '';
+      // El aviso de "no corre como root" se sacó — es defensivo (por si
+      // alguna vez alguien lo necesita), pero acá ws281x ya está
+      // "configured" (funcionando de verdad), así que en la práctica no
+      // hace falta root en este setup y el aviso solo generaba dudas.
       kv.innerHTML = kvRows([
         ['Estado', `✅ OK — v${d.packageVersion}`],
-        ['LEDs', `${d.numLeds} en GPIO ${d.gpioPin}${rootWarn}`],
+        ['LEDs', `${d.numLeds} en GPIO ${d.gpioPin}`],
       ]);
       Summary.set('leds', 'ok', `OK — ${d.numLeds} LEDs`);
     } catch (e) {
@@ -664,13 +691,27 @@ const Recorder = {
       if (!res.ok) { this._finishPlay(); alert(`Error: ${res.error}`); return; }
 
       let ticks = 0;
+      let failStreak = 0;
       this._playPoll = setInterval(async () => {
         ticks++;
         if (ticks > 2250) { this._finishPlay(); return; }
         try {
           const { playing } = await fetch('/recordings/play-status').then(r => r.json());
+          failStreak = 0;
           if (!playing) this._finishPlay();
-        } catch { this._finishPlay(); }
+        } catch {
+          // Un solo pedido que falla (hipo de red/servidor) no alcanza para
+          // decir "terminó" — antes un solo fallo bajaba el ícono a ▶ ya
+          // mismo mientras el aplay seguía sonando de verdad en el server,
+          // dejando la UI mostrando "parado" con el audio todavía andando.
+          // Recién a la 3ra falla seguida (~2.4s sin poder confirmar nada)
+          // asumimos que se cortó, y esta vez si pedimos que pare de verdad.
+          failStreak++;
+          if (failStreak >= 3) {
+            try { await fetch('/recordings/stop-play', { method: 'POST' }); } catch {}
+            this._finishPlay();
+          }
+        }
       }, 800);
     } catch (e) {
       this._finishPlay();

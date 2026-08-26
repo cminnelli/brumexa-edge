@@ -572,7 +572,13 @@ app.post('/recordings/play', express.json(), async (req, res) => {
   }
 
   _playResult = null;
-  const proc  = spawn('aplay', ['-D', playDevice, '-v', filePath]);
+  // Sin -v: el meter verboso de aplay imprime seguido por stderr, y cada
+  // línea pasa por console.log → lib/log-stream.js la retransmite por
+  // /ws/logs a todo el que esté escuchando — puro ruido acá (no se usa
+  // para nada), y en la Pi contribuye a que el server tarde en responder
+  // otros pedidos HTTP en simultáneo. stderr real (errores de device, etc.)
+  // se sigue capturando igual sin -v.
+  const proc  = spawn('aplay', ['-D', playDevice, filePath]);
   _playProc   = proc;
   console.log(`[play] ▶ aplay PID ${proc.pid} -D ${playDevice} ${safeName}`);
 

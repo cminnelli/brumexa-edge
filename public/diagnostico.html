@@ -229,22 +229,6 @@
     <div id="diag-result" style="margin-top:8px"></div>
   </div>
 
-  <!-- § Micrófono — nivel en vivo -->
-  <div class="card">
-    <div class="card-section-hdr">
-      <span class="card-section-icon"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 19v3"/><path d="M8 22h8"/></svg></span>
-      <div>
-        <div class="card-section-title">Micrófono</div>
-        <div class="card-section-desc">Nivel de señal en vivo — el mismo dato que ya usa el dispositivo para detectar tu voz</div>
-      </div>
-    </div>
-    <div class="vu-bar-wrap">
-      <div id="mic-vu-bar" class="vu-bar"></div>
-      <span id="mic-vu-db" class="vu-db">— dBFS</span>
-    </div>
-    <p class="field-hint" id="mic-vu-note">Consultando…</p>
-  </div>
-
   <!-- § Panorama de sonido — simple por default: un comentario de lo que
        pasa + el gráfico. Todo lo técnico (piso ambiente, umbral calibrado
        vs. el que se usa ahora) vive escondido atrás del ícono ⓘ, en un
@@ -370,24 +354,26 @@
     </div>
     <div class="kv" id="kv-leds-diag"></div>
 
-    <div class="divider"></div>
-
-    <div class="field-group-label">Laboratorio de color</div>
-    <div class="leds-lab__swatch" id="leds-lab-swatch" style="margin-bottom:0.75rem"></div>
-    <div class="leds-lab__row" style="margin-bottom:0.75rem">
-      <label for="leds-lab-hue">Tono</label>
-      <input type="range" id="leds-lab-hue" min="0" max="359" step="1" value="255" class="leds-lab__slider leds-lab__slider--hue">
-    </div>
-    <div class="leds-lab__row" style="margin-bottom:0.75rem">
-      <label for="leds-lab-sat">Saturación</label>
-      <input type="range" id="leds-lab-sat" min="0" max="100" step="1" value="100" class="leds-lab__slider">
-    </div>
-    <div class="leds-lab__row" style="margin-bottom:0.75rem">
-      <label for="leds-lab-val">Brillo</label>
-      <input type="range" id="leds-lab-val" min="5" max="100" step="1" value="100" class="leds-lab__slider">
-    </div>
-    <button class="btn-ghost" id="btn-leds-lab-exit" type="button">Salir del laboratorio (volver al color normal)</button>
-    <div id="leds-lab-result" style="margin-top:8px"></div>
+    <details class="tech-details" style="margin-top:10px">
+      <summary>Laboratorio de color</summary>
+      <div style="margin-top:0.75rem">
+        <div class="leds-lab__swatch" id="leds-lab-swatch" style="margin-bottom:0.75rem"></div>
+        <div class="leds-lab__row" style="margin-bottom:0.75rem">
+          <label for="leds-lab-hue">Tono</label>
+          <input type="range" id="leds-lab-hue" min="0" max="359" step="1" value="255" class="leds-lab__slider leds-lab__slider--hue">
+        </div>
+        <div class="leds-lab__row" style="margin-bottom:0.75rem">
+          <label for="leds-lab-sat">Saturación</label>
+          <input type="range" id="leds-lab-sat" min="0" max="100" step="1" value="100" class="leds-lab__slider">
+        </div>
+        <div class="leds-lab__row" style="margin-bottom:0.75rem">
+          <label for="leds-lab-val">Brillo</label>
+          <input type="range" id="leds-lab-val" min="5" max="100" step="1" value="100" class="leds-lab__slider">
+        </div>
+        <button class="btn-ghost" id="btn-leds-lab-exit" type="button">Salir del laboratorio (volver al color normal)</button>
+        <div id="leds-lab-result" style="margin-top:8px"></div>
+      </div>
+    </details>
   </div>
 
   <!-- § Grabaciones -->
