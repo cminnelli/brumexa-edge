@@ -159,16 +159,20 @@ const MicMeter = {
       : 0;
     const thresholdRising = rise > 2;
 
+    // "conectado a LiveKit" = mic.sessionActive (sesión real, ver server.js
+    // /diag/mic-level). "Mandando audio" = ADEMÁS mic.gateOpen — por debajo
+    // del umbral el stream sigue técnicamente abierto pero se manda
+    // atenuado (~-90dB, silencio real) a LiveKit, ver _publishMic.
     let cls, text;
     if (mic.gateOpen) {
       cls = 'live';
-      text = mic.sessionActive ? '🎙️ Te está escuchando y mandando tu voz' : '🎙️ Te está escuchando (sin sesión activa)';
+      text = mic.sessionActive ? '🎙️ Conectado a LiveKit — mandando tu voz' : '🎙️ Te está escuchando (sin conexión a LiveKit)';
     } else if (thresholdRising) {
       cls = 'warn';
       text = `📈 El umbral subió +${rise.toFixed(1)}dB desde la calibración`;
     } else {
       cls = 'muted';
-      text = mic.sessionActive ? 'Todo tranquilo, esperando que hables' : 'Todo tranquilo — sin sesión activa';
+      text = mic.sessionActive ? '🔗 Conectado a LiveKit — esperando que hables' : 'Todo tranquilo — sin conexión a LiveKit';
     }
 
     el.className = `sound-alert ${cls}`;
