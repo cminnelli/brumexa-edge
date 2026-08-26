@@ -874,10 +874,15 @@ const GuidedDiag = {
   SAMPLE_MS: 150,
   _results: {},
   _running: false,
+  _unusualEnvironment: false,
 
   async start() {
     this._results = {};
     this._running = true;
+    // Se lee ACÁ, antes de arrancar — la pantalla de intro (con el
+    // checkbox) se pisa con la del primer paso enseguida, así que si no se
+    // guarda ahora el valor se pierde para cuando arma el reporte final.
+    this._unusualEnvironment = document.getElementById('chk-guided-unusual')?.checked ?? false;
     for (const step of this.STEPS) {
       if (!this._running) return; // se canceló (cerraron el dialog en el medio)
       await this._prep(step);
@@ -1042,10 +1047,6 @@ const GuidedDiag = {
           <div class="guided-suggestion__label">Umbral propuesto</div>
           <div class="guided-suggestion__value">${suggestion.value} dBFS</div>
           <div class="guided-suggestion__why">Deja margen entre tu voz (~${suggestion.voiceAvg.toFixed(1)}dBFS) y el piso de fondo.</div>
-          <label class="guided-note-check">
-            <input type="checkbox" id="chk-guided-unusual" />
-            Ambiente ruidoso o inusual ahora (evento, obra, etc.)
-          </label>
           <button class="btn-connect" id="btn-guided-apply" type="button" style="width:100%">✅ Aplicar y guardar</button>
           <div id="guided-apply-result" style="margin-top:8px"></div>
         </div>
@@ -1077,7 +1078,10 @@ const GuidedDiag = {
         // Best-effort — el wizard aplica vía /setup/config (no pasa por
         // runCalibration()), así que sin esto nunca quedaba una fila en el
         // historial. Si esto falla no aborta nada, el umbral ya se aplicó.
-        const unusual = document.getElementById('chk-guided-unusual')?.checked ?? false;
+        // this._unusualEnvironment: se preguntó al ARRANCAR el wizard (ver
+        // start()), no acá — para cuando estás en el reporte final esa
+        // pantalla con el checkbox ya no existe más en el DOM.
+        const unusual = this._unusualEnvironment;
         try {
           await fetch('/diag/calibration-history', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
