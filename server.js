@@ -12,26 +12,23 @@ setupLogStream();
 
 // ─── Monitor de bloqueo del event loop ──────────────────────────────────────
 // Instrumentación para cazar en vivo el "se tilda la respiración" reportado
-// en producción — hasta ahora solo se pudo diagnosticar por sospecha (dos
-// execSync bloqueantes encontrados y arreglados así, a ciegas). Esto mide
-// cuánto tarda de más cada tick de un timer de referencia (200ms
-// esperados) — si el event loop se bloqueó por algo síncrono en el medio
-// (los timers de audio/LEDs tampoco pueden tickear en ese lapso), el
-// próximo tick de ESTE timer también llega tarde, así que lo mismo que
-// congela la respiración necesariamente atrasa esto — y avisa con la
-// duración exacta y la hora, para cruzarlo contra qué requests estaban
-// llegando en ese momento (ver el log de requests más abajo). Umbral de
-// 150ms: los ticks de animación son de 16ms, cualquier atraso de ese
-// tamaño ya se nota a simple vista en los LEDs.
+// en producción. Primera versión (umbral 150ms sobre un timer de 200ms) NO
+// encontró nada incluso con el mic desactivado del todo (se descartó WiFi,
+// audio/DMA, undervoltage) — pero 150ms era un umbral demasiado generoso:
+// el render de los LEDs tickea cada 16ms, así que un bloqueo de apenas
+// 40-80ms YA se nota como un salto/tildón a simple vista, y esa versión no
+// lo hubiera atrapado. Ahora el timer de referencia usa el MISMO intervalo
+// que el render de LEDs (16ms) y el umbral baja a 30ms — mucho más
+// sensible, para no dejar pasar bloqueos cortos que igual se ven.
 let _eventLoopLastTick = Date.now();
 setInterval(() => {
   const now   = Date.now();
-  const drift = now - _eventLoopLastTick - 200;
+  const drift = now - _eventLoopLastTick - 16;
   _eventLoopLastTick = now;
-  if (drift > 150) {
+  if (drift > 30) {
     console.warn(`[event-loop] ⚠ se atrasó ${drift}ms respecto de lo esperado — algo bloqueó el hilo principal un rato`);
   }
-}, 200);
+}, 16);
 
 const http    = require('http');
 const express = require('express');
@@ -1094,7 +1091,7 @@ setupLocalDebug(app, {
     livekitUrl:      lastKnownLivekitUrl,
   }),
 });
-setupConfiguracion(app, { lkSession, ragAuth, requestRoomToken, runCalibration, getLastCalibration, getEnvVal });
+setupConfiguracion(app, { lkSession, ragAuth, requestRoomToken, runCalibration, getLastCalibration, getEnvVal, leds, startMicMonitor, stopMicMonitor });
 
 // Antes esto dependía de "fuser -k", un binario externo (paquete psmisc)
 // que puede no estar instalado en la Pi -- si fallaba, reintentaba en
