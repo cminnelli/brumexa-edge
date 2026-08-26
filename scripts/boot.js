@@ -64,10 +64,21 @@ function checkServerUp() {
     sock.end();
     stopped = true;
     clearInterval(_poll);
-    // server.js ya está escuchando y va a llamar a leds.init() de un momento
-    // a otro — soltamos el GPIO saliendo, no hace falta apagar los LEDs a
-    // mano (server.js va a pisar el estado apenas arranque su propia
-    // respiración, así que no hay corte visible).
+    // server.js ya está escuchando y va a llamar a su PROPIO leds.init() de
+    // un momento a otro — mismo GPIO/DMA, pero desde un proceso de Node
+    // DISTINTO. Antes se salía con process.exit(0) directo, sin soltar el
+    // recurso de verdad (ws281x.reset(), que hace leds.cleanup()) — un
+    // "no hace falta, server.js va a pisar el estado visual igual" que
+    // confundía "se ve bien" con "el DMA quedó bien liberado". Si el driver
+    // nativo no libera ese canal DMA prolijamente antes de que el OTRO
+    // proceso lo vuelva a configurar, el hardware puede quedar en un estado
+    // raro que se manifiesta como glitches intermitentes más adelante, no
+    // necesariamente en el momento — coincide con el patrón reportado
+    // ("tarda en aparecer, sin relación con nada que se esté haciendo").
+    // El brevísimo cuadro negro que esto agrega antes de salir es un costo
+    // aceptable frente a arrancar con el DMA en un estado potencialmente
+    // inconsistente durante toda la sesión.
+    leds.cleanup();
     process.exit(0);
   });
 
@@ -85,3 +96,9 @@ const _poll = setInterval(() => {
   }
   checkServerUp();
 }, POLL_MS);
+
+// Si systemd corta este proceso por otra vía (stop/restart del servicio,
+// no el handoff normal de arriba) — mismo motivo: soltar el DMA prolijo
+// en vez de dejar que el proceso muera sin avisarle al driver nativo.
+process.on('SIGTERM', () => { leds.cleanup(); process.exit(0); });
+process.on('SIGINT',  () => { leds.cleanup(); process.exit(0); });
