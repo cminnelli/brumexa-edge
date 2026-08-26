@@ -1077,10 +1077,28 @@ app.post('/session/speaker-gain', express.json(), (req, res) => {
 // ─── POST /session/talk-threshold — umbral (dBFS) de voz, conectado a AMBOS: ─
 // el texto del log en consola ("empezó/dejó de hablar") Y el LED (corta el
 // breathing y pasa a "hablando"). Un solo umbral, un solo slider.
+//
+// También persiste en .env (MIC_TALK_THRESHOLD_DBFS) — antes solo aplicaba
+// en vivo (en memoria) y nunca se guardaba, así que cualquier reinicio del
+// server (una actualización, "Reiniciar Brumexa", o el propio proceso
+// cayéndose) volvía al valor viejo guardado — se sentía como "cambio el
+// umbral y no me actualiza nada", cuando en realidad SÍ se aplicaba, solo
+// que no sobrevivía. Mismo campo que ya persiste /setup/config/live.
 app.post('/session/talk-threshold', express.json(), (req, res) => {
   const t = parseFloat(req.body?.threshold);
   if (isNaN(t)) return res.status(400).json({ ok: false, error: 'threshold inválido' });
   const ok = lkSession.setTalkThreshold(t) && leds.setSpeakThresholdDbfs(t);
+  if (ok) {
+    try {
+      const envFile = path.join(__dirname, '.env');
+      let content = '';
+      try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
+      content = setEnvLine(content, 'MIC_TALK_THRESHOLD_DBFS', t.toFixed(1));
+      require('fs').writeFileSync(envFile, content, 'utf8');
+    } catch (e) {
+      console.warn('[session] no se pudo persistir talk-threshold en .env:', e.message);
+    }
+  }
   res.json({ ok, threshold: lkSession.getTalkThreshold(), ledThreshold: leds.getSpeakThresholdDbfs() });
 });
 
