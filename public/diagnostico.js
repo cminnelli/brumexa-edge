@@ -850,6 +850,22 @@ const SensitivityControls = {
   },
 };
 
+// Íconos de línea (mismo criterio que el resto de la plataforma — stroke,
+// sin relleno, currentColor — ver .card-section-icon svg en style.css) para
+// el wizard, en vez de emoji: silueta consistente con el resto de
+// /diagnostico y con brillo/color propio en vez de depender de cómo cada
+// SO dibuja el emoji.
+const ICON_MUTE     = '<svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
+const ICON_MIC       = '<svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 19v3"/><path d="M8 22h8"/></svg>';
+const ICON_ZAP       = '<svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>';
+const ICON_VOLUME_LO = '<svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
+const ICON_CHECK     = '<svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+const ICON_WARN      = '<svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+const ICON_INFO      = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
+const ICON_SPARKLES  = '<svg viewBox="0 0 24 24"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>';
+const ICON_PLAY      = '<svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+const ICON_REPEAT    = '<svg viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>';
+
 // ============================================================
 // CALIBRACIÓN GUIADA — wizard de pasos cronometrados que termina definiendo
 // un umbral, no solo diagnosticando. Mide con el mismo /diag/mic-level que
@@ -864,11 +880,11 @@ const SensitivityControls = {
 // ============================================================
 const GuidedDiag = {
   STEPS: [
-    { key: 'silence1', title: 'Silencio',           instruction: 'No digas nada — medimos el ambiente tal cual está ahora.',        durationMs: 3000, icon: '🤫' },
-    { key: 'speak',    title: 'Hablá normal',        instruction: 'Decí algo con tu tono habitual, como si le hablaras a Brumexa.',  durationMs: 4000, icon: '🎙️' },
-    { key: 'silence2', title: 'Silencio de nuevo',   instruction: 'Dejá de hablar y esperá.',                                       durationMs: 3000, icon: '🤫' },
-    { key: 'noise',    title: 'Ruido corto',         instruction: 'Un aplauso o un golpe seco en la mesa — algo breve, no sostenido.', durationMs: 2500, icon: '👏' },
-    { key: 'whisper',  title: 'Susurro',             instruction: 'Hablá bien bajito, casi susurrando.',                            durationMs: 3000, icon: '🤏' },
+    { key: 'silence1', title: 'Silencio',           instruction: 'No digas nada — medimos el ambiente tal cual está ahora.',        durationMs: 3000, icon: ICON_MUTE },
+    { key: 'speak',    title: 'Hablá normal',        instruction: 'Decí algo con tu tono habitual, como si le hablaras a Brumexa.',  durationMs: 4000, icon: ICON_MIC },
+    { key: 'silence2', title: 'Silencio de nuevo',   instruction: 'Dejá de hablar y esperá.',                                       durationMs: 3000, icon: ICON_MUTE },
+    { key: 'noise',    title: 'Ruido corto',         instruction: 'Un aplauso o un golpe seco en la mesa — algo breve, no sostenido.', durationMs: 2500, icon: ICON_ZAP },
+    { key: 'whisper',  title: 'Susurro',             instruction: 'Hablá bien bajito, casi susurrando.',                            durationMs: 3000, icon: ICON_VOLUME_LO },
   ],
   PREP_MS: 3000,
   SAMPLE_MS: 150,
@@ -1017,25 +1033,25 @@ const GuidedDiag = {
     const lines = [];
 
     if (r.silence1?.avgDbfs != null) {
-      lines.push(['ℹ️', `Piso de ruido ahora: ${r.silence1.avgDbfs.toFixed(1)} dBFS`]);
+      lines.push(['info', `Piso de ruido ahora: ${r.silence1.avgDbfs.toFixed(1)} dBFS`]);
     }
     if (r.speak?.voiceDetected) {
-      lines.push(['✅', `Reaccionó a tu voz${r.speak.openedAtMs != null ? ` — tardó ~${r.speak.openedAtMs}ms en confirmarlo` : ''}`]);
+      lines.push(['ok', `Reaccionó a tu voz${r.speak.openedAtMs != null ? ` — tardó ~${r.speak.openedAtMs}ms en confirmarlo` : ''}`]);
     } else {
-      lines.push(['⚠️', 'No detectó que estabas hablando en este paso']);
+      lines.push(['warn', 'No detectó que estabas hablando en este paso']);
     }
     if (r.silence2) {
       lines.push(!r.silence2.voiceActiveAtEnd
-        ? ['✅', 'Volvió a silencio correctamente después de hablar']
-        : ['⚠️', 'Seguía "escuchando" al terminar este paso — puede ser normal si hablaste hasta el final']);
+        ? ['ok', 'Volvió a silencio correctamente después de hablar']
+        : ['warn', 'Seguía "escuchando" al terminar este paso — puede ser normal si hablaste hasta el final']);
     }
     if (r.noise) {
       lines.push(!r.noise.voiceDetected
-        ? ['✅', 'Ignoró el ruido corto — no lo confundió con voz']
-        : ['ℹ️', 'El ruido corto activó el gate — pero un solo golpe no es representativo de todos los ruidos posibles, así que esto es solo informativo y no cambia el umbral propuesto']);
+        ? ['ok', 'Ignoró el ruido corto — no lo confundió con voz']
+        : ['info', 'El ruido corto activó el gate — pero un solo golpe no es representativo de todos los ruidos posibles, así que esto es solo informativo y no cambia el umbral propuesto']);
     }
     if (r.whisper) {
-      lines.push(['ℹ️', r.whisper.voiceDetected
+      lines.push(['info', r.whisper.voiceDetected
         ? 'También detecta susurros bien bajitos'
         : 'No detectó el susurro — no es necesariamente un problema, los susurros son borde a propósito']);
     }
@@ -1047,7 +1063,7 @@ const GuidedDiag = {
           <div class="guided-suggestion__label">Umbral propuesto</div>
           <div class="guided-suggestion__value">${suggestion.value} dBFS</div>
           <div class="guided-suggestion__why">Deja margen entre tu voz (~${suggestion.voiceAvg.toFixed(1)}dBFS) y el piso de fondo.</div>
-          <button class="btn-connect" id="btn-guided-apply" type="button" style="width:100%">✅ Aplicar y guardar</button>
+          <button class="btn-connect" id="btn-guided-apply" type="button" style="width:100%">${ICON_CHECK} Aplicar y guardar</button>
           <div id="guided-apply-result" style="margin-top:8px"></div>
         </div>
       `
@@ -1058,13 +1074,14 @@ const GuidedDiag = {
         </div>
       `;
 
+    const lineIcon = { ok: ICON_CHECK, warn: ICON_WARN, info: ICON_INFO };
     body.innerHTML = `
       <div class="guided-report">
         ${suggestionHtml}
         <div class="guided-report__lines">
-          ${lines.map(([icon, text]) => `<div class="guided-report__line"><span>${icon}</span><span>${esc(text)}</span></div>`).join('')}
+          ${lines.map(([type, text]) => `<div class="guided-report__line guided-report__line--${type}"><span class="guided-report__line-icon">${lineIcon[type]}</span><span>${esc(text)}</span></div>`).join('')}
         </div>
-        <button class="btn-ghost" id="btn-guided-restart" type="button" style="margin-top:14px; width:100%">🔁 Repetir</button>
+        <button class="btn-ghost" id="btn-guided-restart" type="button" style="margin-top:14px; width:100%">${ICON_REPEAT} Repetir</button>
       </div>
     `;
 
@@ -1093,7 +1110,7 @@ const GuidedDiag = {
         ? '<div class="flow-note ok">✔ Umbral aplicado y guardado</div>'
         : '<div class="flow-note bad">✘ No se pudo aplicar — probá de nuevo</div>';
       btn.disabled = false;
-      btn.textContent = '✅ Aplicar y guardar';
+      btn.innerHTML = `${ICON_CHECK} Aplicar y guardar`;
       // Breve pausa para que se alcance a leer la confirmación antes de
       // cerrar solo — si falló, se queda abierto para que puedas reintentar.
       if (ok) setTimeout(() => document.getElementById('guided-diag-dialog')?.close(), 900);
