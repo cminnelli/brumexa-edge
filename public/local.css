@@ -83,6 +83,11 @@ body {
   gap: 7px;
 }
 .card-title .ic { font-size: 15px; filter: none; }
+.card-title .ic svg {
+  width: 16px; height: 16px; display: block;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round;
+}
 
 /* ── Status chip (barra superior de refresh) ── */
 .status-chip {

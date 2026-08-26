@@ -282,6 +282,15 @@ body {
   line-height: 1;
   flex-shrink: 0;
   margin-top: 1px;
+  color: var(--text2);
+}
+/* Íconos de línea minimalistas — monocromo, heredan --text2 (o lo que
+   pinte el contenedor), sin relleno de color propio. Mismo tamaño en
+   card-section-icon (cards principales) y .ic (tarjetas chicas de /local). */
+.card-section-icon svg, .ic svg {
+  width: 18px; height: 18px; display: block;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round;
 }
 .card-section-title {
   font-family: var(--font-display);
