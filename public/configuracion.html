@@ -215,16 +215,6 @@
         <p class="field-hint">Con esto activado, mientras no detecta tu voz (ver umbral arriba) no publica el ruido de fondo — solo manda audio real cuando confirma que estás hablando. Desactivalo solo si necesitás diagnosticar algo puntual: sin esto, TODO el ruido ambiente se manda siempre al agente.</p>
       </div>
       <div class="field">
-        <label class="field-label" for="inp-mic-gate-attenuation">Cuánto se atenúa el ruido de fondo</label>
-        <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
-          <div class="gain-row" style="grid-template-columns:1fr 65px">
-            <input type="range" id="inp-mic-gate-attenuation" class="gain-slider" min="-90" max="0" step="1" value="-90" />
-            <span class="gain-val" id="val-mic-gate-attenuation">-90 dB</span>
-          </div>
-        </div>
-        <p class="field-hint">-90 dB es prácticamente silencio total. Si alguna vez preferís que se siga mandando algo (más tenue) en vez de silencio puro, subí este valor.</p>
-      </div>
-      <div class="field">
         <label class="field-label" for="inp-mic-preroll">Colchón antes de abrir el gate</label>
         <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
           <div class="gain-row" style="grid-template-columns:1fr 65px">
@@ -622,7 +612,6 @@
       setLiveSliderField('inp-silence-timeout', 'val-silence-timeout', (parseInt(cfg.silenceTimeoutMs, 10) || 20000) / 1000, 20, v => `${v} s`);
       setLiveSliderField('inp-led-breathe',  'val-led-breathe',  cfg.ledBreathePeriodMs, 1900, v => `${v} ms`);
       setLiveSliderField('inp-led-hangover', 'val-led-hangover', cfg.ledHangoverMs,      1100, v => `${v} ms`);
-      setLiveSliderField('inp-mic-gate-attenuation', 'val-mic-gate-attenuation', cfg.micGateAttenuationDb, -90, v => `${v} dB`);
       setLiveSliderField('inp-mic-preroll',          'val-mic-preroll',          cfg.micPrerollMs,         500, v => `${v} ms`);
       document.getElementById('inp-mic-gate-enabled').checked = cfg.micGateEnabled !== 'false';
 
@@ -954,8 +943,7 @@
   wireLiveSlider('inp-silence-timeout', 'val-silence-timeout', v => `${v} s`, v => ({ silenceTimeoutMs: Math.round(parseFloat(v) * 1000) }));
   wireLiveSlider('inp-led-breathe',   'val-led-breathe',   v => `${v} ms`, v => ({ ledBreathePeriodMs: v }));
   wireLiveSlider('inp-led-hangover',  'val-led-hangover',  v => `${v} ms`, v => ({ ledHangoverMs: v }));
-  wireLiveSlider('inp-mic-gate-attenuation', 'val-mic-gate-attenuation', v => `${v} dB`, v => ({ micGateAttenuationDb: v }));
-  wireLiveSlider('inp-mic-preroll',          'val-mic-preroll',          v => `${v} ms`, v => ({ micPrerollMs: v }));
+  wireLiveSlider('inp-mic-preroll',   'val-mic-preroll',   v => `${v} ms`, v => ({ micPrerollMs: v }));
 
   document.getElementById('inp-mic-gate-enabled').addEventListener('change', async (e) => {
     try {
