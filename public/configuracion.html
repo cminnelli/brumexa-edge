@@ -798,7 +798,7 @@
         banner = '<div class="pill ok" style="margin-top:8px">✔ Estás al día — no hay actualizaciones pendientes</div>';
         if (btnUpdate) btnUpdate.style.display = 'none';
       } else {
-        rows.push(['Versión disponible', data.remoteHash ? esc(data.remoteHash) : '(nueva)']);
+        rows.push(['Versión disponible', data.remoteSubject ? `${esc(data.remoteSubject)} (${esc(data.remoteHash)})` : (data.remoteHash ? esc(data.remoteHash) : '(nueva)')]);
         banner = '<div class="pill warn" style="margin-top:8px">⬇️ Hay una actualización disponible — tocá "Buscar actualizaciones" para traerla</div>';
         if (btnUpdate) btnUpdate.style.display = '';
       }
