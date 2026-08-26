@@ -32,6 +32,27 @@
       font-size: 11.5px; font-weight: 600; color: var(--text); margin: 6px 0 8px;
     }
     .custom-color-card .leds-lab__swatch { height: 40px; border-radius: 0.5rem; }
+
+    /* ── Log en vivo de "Actualizar" — barra indeterminada (no sabemos el
+         % real, solo que sigue vivo) + panel chico de texto monoespaciado. */
+    .update-progress { margin-top: 10px; }
+    .update-progress__bar-track {
+      height: 4px; border-radius: 2px; background: var(--surface2); overflow: hidden; margin-bottom: 8px;
+    }
+    .update-progress__bar {
+      height: 100%; width: 40%; border-radius: 2px; background: var(--accent);
+      animation: update-progress-slide 1.1s ease-in-out infinite;
+    }
+    @keyframes update-progress-slide {
+      0%   { transform: translateX(-100%); }
+      100% { transform: translateX(250%); }
+    }
+    .update-log {
+      max-height: 140px; overflow-y: auto; font-family: var(--font-mono, monospace);
+      font-size: 11px; line-height: 1.5; color: var(--text2);
+      background: var(--surface2); border-radius: var(--r-sm); padding: 8px 10px;
+    }
+    .update-log__line { white-space: pre-wrap; word-break: break-word; }
   </style>
 </head>
 <body>
@@ -287,6 +308,16 @@
       <button class="btn-ghost" id="btn-restart" style="width:auto; padding:9px 20px; margin-left:8px">🔄 Reiniciar Brumexa</button>
       <p class="field-hint" style="margin-top:8px">Reiniciar no toca el código ni la configuración — solo apaga y prende el proceso. Útil si algo se traba y no hace falta actualizar nada.</p>
       <div id="update-result" style="margin-top:10px"></div>
+      <!-- Log en vivo del proceso — se llena solo mientras "Actualizar" está
+           en curso (clonar, instalar, etc. tarda ~1-2min sin esto, sin
+           ningún indicio de que sigue vivo). Reusa /ws/logs (el mismo
+           WebSocket de /logs) filtrando las líneas "[configuracion]
+           update:" que el server ya loguea en cada paso — no hace falta
+           ningún mecanismo nuevo del lado del server. -->
+      <div id="update-progress" class="update-progress" style="display:none">
+        <div class="update-progress__bar-track"><div class="update-progress__bar"></div></div>
+        <div id="update-log" class="update-log"></div>
+      </div>
     </div>
   </div>
 
@@ -750,16 +781,55 @@
     return `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:11px;color:var(--muted)">Ver detalle técnico</summary><pre style="white-space:pre-wrap;font-size:11px;color:var(--muted);margin-top:6px">${esc(output)}</pre></details>`;
   }
 
+  // Log en vivo del proceso de actualización (clonar/instalar/swap tarda
+  // ~1-2min sin ningún indicio de que sigue vivo) — reusa /ws/logs, el
+  // mismo WebSocket de /logs (ver lib/log-stream.js), filtrando solo las
+  // líneas "[configuracion] update: ..." que server.js/lib/configuracion.js
+  // ya loguean en cada paso. No hace falta ningún mecanismo nuevo del lado
+  // del server, esas líneas ya salían por consola antes de esto.
+  let _updateLogWs = null;
+  function _startUpdateLog() {
+    const wrap = document.getElementById('update-progress');
+    const log  = document.getElementById('update-log');
+    if (!wrap || !log) return;
+    log.innerHTML = '';
+    wrap.style.display = '';
+    try {
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      _updateLogWs = new WebSocket(`${protocol}//${location.host}/ws/logs`);
+      _updateLogWs.onmessage = (e) => {
+        let entry;
+        try { entry = JSON.parse(e.data); } catch { return; }
+        if (!entry.text || !entry.text.startsWith('[configuracion] update:')) return;
+        const line = document.createElement('div');
+        line.className = 'update-log__line';
+        line.textContent = entry.text.replace('[configuracion] update: ', '');
+        log.appendChild(line);
+        log.scrollTop = log.scrollHeight;
+      };
+    } catch {}
+  }
+  // No se llama en el caso de éxito (reiniciando) — el log se ve mientras
+  // dura el reinicio y el WS se corta solo cuando el proceso viejo termina;
+  // el próximo click de "Actualizar" lo limpia y arranca de nuevo.
+  function _stopUpdateLog() {
+    if (_updateLogWs) { try { _updateLogWs.close(); } catch {} _updateLogWs = null; }
+    const wrap = document.getElementById('update-progress');
+    if (wrap) wrap.style.display = 'none';
+  }
+
   async function runUpdate() {
     const btn    = document.getElementById('btn-update');
     const result = document.getElementById('update-result');
     btn.disabled = true;
     btn.textContent = '⬇️ Buscando…';
     result.innerHTML = '';
+    _startUpdateLog();
     let data;
     try {
       data = await fetch('/configuracion/update', { method: 'POST' }).then(r => r.json());
     } catch (e) {
+      _stopUpdateLog();
       result.innerHTML = `<div class="flow-note bad">✘ No se pudo conectar con el servidor: ${esc(e.message)}</div>`;
       btn.disabled = false;
       btn.textContent = '⬇️ Buscar actualizaciones';
@@ -767,6 +837,7 @@
     }
 
     if (data.ok && data.upToDate) {
+      _stopUpdateLog();
       result.innerHTML = '<div class="flow-note ok">✔ Ya estás en la última versión — nada para traer.</div>';
       btn.disabled = false;
       btn.textContent = '⬇️ Buscar actualizaciones';
@@ -778,6 +849,7 @@
       // Alguien tocó un archivo a mano en la Pi y eso choca con la
       // actualización. Ofrecemos guardarlo aparte (git stash — no se
       // pierde, queda recuperable) en vez de mostrar el error de git.
+      _stopUpdateLog();
       result.innerHTML = `
         <div class="flow-note bad">⚠ ${esc(data.error)}</div>
         <p class="field-hint" style="margin:6px 0">Podemos guardar esos cambios aparte (no se borran) y traer la actualización igual.</p>
@@ -788,6 +860,7 @@
       btn.disabled = false;
       btn.textContent = '⬇️ Buscar actualizaciones';
     } else {
+      _stopUpdateLog();
       result.innerHTML = `<div class="flow-note bad">✘ ${esc(data.error || 'No se pudo actualizar')}</div>${techDetails(data.output)}`;
       btn.disabled = false;
       btn.textContent = '⬇️ Buscar actualizaciones';
@@ -840,19 +913,23 @@
     const result = document.getElementById('update-result');
     btn.disabled = true;
     btn.textContent = 'Guardando y actualizando…';
+    _startUpdateLog();
     let data;
     try {
       data = await fetch('/configuracion/update/stash-and-retry', { method: 'POST' }).then(r => r.json());
     } catch (e) {
+      _stopUpdateLog();
       result.innerHTML = `<div class="flow-note bad">✘ No se pudo conectar con el servidor: ${esc(e.message)}</div>`;
       return;
     }
     if (data.ok && data.upToDate) {
+      _stopUpdateLog();
       result.innerHTML = '<div class="flow-note ok">✔ Cambios guardados aparte — ya estabas en la última versión.</div>';
     } else if (data.ok) {
       result.innerHTML = `<div class="flow-note ok">✔ Cambios guardados aparte y actualizado — reiniciando el servidor…</div>${techDetails(data.output)}`;
       pollServerBack(result, document.getElementById('btn-update'), '⬇️ Buscar actualizaciones');
     } else {
+      _stopUpdateLog();
       result.innerHTML = `<div class="flow-note bad">✘ ${esc(data.error || 'No se pudo actualizar')}</div>${techDetails(data.output)}`;
     }
   }
