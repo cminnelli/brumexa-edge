@@ -207,24 +207,36 @@
     </div>
 
     <div id="sound-chart-wrap" style="overflow-x:auto"></div>
+
+    <div class="divider" style="margin:14px 0"></div>
+
+    <div class="field-group-label" style="margin-top:0">Sensibilidad</div>
+    <div class="field">
+      <label class="field-label" for="inp-talk-threshold">Umbral de la voz</label>
+      <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
+        <div class="gain-row" style="grid-template-columns:1fr 65px">
+          <input type="range" id="inp-talk-threshold" class="gain-slider" min="-50" max="-15" step="1" value="-25" />
+          <span class="gain-val" id="val-talk-threshold">-25 dBFS</span>
+        </div>
+      </div>
+      <p class="field-hint">Más a la izquierda = más sensible — mirá la línea "se activa acá" del gráfico moverse mientras ajustás.</p>
+    </div>
+    <button class="btn-ghost" id="btn-recalibrate" type="button">🎚️ Recalibrar ahora (8s de silencio)</button>
+    <div id="calibration-result" style="margin-top:8px"></div>
   </div>
 
-  <!-- Popup de detalles técnicos — cerrado por default, se abre con el ⓘ -->
+  <!-- Popup de detalles técnicos — cerrado por default, se abre con el ⓘ.
+       Un solo kv chico, nombres que dejan claro qué es "ahora" (en vivo) y
+       qué es "fijo" (de la última calibración) — antes había 2 bloques
+       separados con valores parecidos pero mal distinguidos. -->
   <dialog id="sound-details-dialog" class="sound-dialog">
     <div class="sound-dialog__hdr">
       <div class="sound-dialog__title">Detalles técnicos</div>
       <button class="sound-dialog__close" id="btn-sound-details-close" type="button" aria-label="Cerrar">✕</button>
     </div>
     <div class="sound-dialog__body">
-      <p class="field-hint" style="margin:0 0 12px">Esto es lo que usa el dispositivo por dentro para decidir si estás hablando o es ruido — no hace falta entenderlo para usar Brumexa, es para quien quiere afinar la sensibilidad.</p>
       <div class="kv" id="kv-sound-details"></div>
-
-      <div class="divider" style="margin:14px 0"></div>
-
-      <div class="field-group-label">Calibración</div>
-      <div class="kv" id="kv-calibration-diag"></div>
-      <div id="calibration-history-wrap" style="margin-top:10px"></div>
-      <p class="field-hint">Para recalibrar o ajustar la sensibilidad a mano, ver <a href="/configuracion" style="color:var(--accent)">Configuración → Sonido</a>.</p>
+      <div id="calibration-history-wrap" style="margin-top:12px"></div>
     </div>
   </dialog>
 

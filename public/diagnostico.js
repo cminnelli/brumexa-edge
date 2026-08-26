@@ -137,7 +137,7 @@ const MicMeter = {
   // Un comentario en una sola frase, en criollo — no un panel de estado. Los
   // números/nombres técnicos (piso ambiente, umbral calibrado/efectivo)
   // quedan afuera de acá a propósito: viven en el popup de detalles (ver
-  // _renderDetails), esto es solo "¿qué está pasando, en criollo?".
+  // CalibrationPanorama.load), esto es solo "¿qué está pasando, en criollo?".
   _renderStatus(mic) {
     const el = document.getElementById('sound-alert');
     if (!el) return;
@@ -175,7 +175,7 @@ const MicMeter = {
   // "se activa acá" (el umbral que se usa AHORA, gris, sin nombre técnico) —
   // más la franja ámbar de "hablando confirmado". Todo lo demás (piso
   // ambiente, calibrado vs. efectivo) se sacó del gráfico — vive en el popup
-  // de detalles (ver _renderDetails), no acá.
+  // de detalles (ver CalibrationPanorama.load), no acá.
   //
   // Ventana más larga (60s en vez de 30s) + redibujado más espaciado
   // (RENDER_INTERVAL_MS, no cada muestra) + suavizado (_smoothedDbfs) =
@@ -262,7 +262,7 @@ const MicMeter = {
     const effY = (lastSample.effectiveThresholdDbfs != null && !isNaN(lastSample.effectiveThresholdDbfs))
       ? this._yFor(lastSample.effectiveThresholdDbfs) : null;
     const effLabel = effY !== null
-      ? `<text x="${this.CHART_W - this.PAD_R - 3}" y="${(effY - 5).toFixed(1)}" font-size="10" text-anchor="end" fill="var(--text2)">se activa acá</text>`
+      ? `<text x="${this.CHART_W - this.PAD_R - 3}" y="${(effY - 5).toFixed(1)}" font-size="10" text-anchor="end" fill="var(--text2)">se activa acá (${lastSample.effectiveThresholdDbfs.toFixed(1)}dB)</text>`
       : '';
 
     wrap.innerHTML = `
@@ -286,20 +286,6 @@ const MicMeter = {
     return out.join(' ');
   },
 
-  // Popup de detalles técnicos — se rellena solo al abrirlo (no hace falta
-  // que esté en vivo mientras está cerrado). Acá SÍ van los nombres/números
-  // técnicos que se sacaron del gráfico y del comentario simple.
-  _renderDetails() {
-    const kv = document.getElementById('kv-sound-details');
-    if (!kv || !this._lastMic) return;
-    const mic = this._lastMic;
-    const fmt = v => (v === null || v === undefined || isNaN(v)) ? '—' : `${v.toFixed(1)} dBFS`;
-    kv.innerHTML = kvRows([
-      ['Ruido de fondo del cuarto', fmt(mic.ambientFloorDbfs)],
-      ['Umbral de la calibración',  fmt(mic.calibratedThresholdDbfs)],
-      ['Umbral que se usa ahora',   fmt(mic.effectiveThresholdDbfs)],
-    ]);
-  },
 };
 
 // ============================================================
@@ -708,26 +694,37 @@ const Recorder = {
 // entre distintos días/ambientes, no solo la última corrida.
 // ============================================================
 const CalibrationPanorama = {
+  // Un solo kv, nombres que dejan claro qué es EN VIVO (se mueve solo) y
+  // qué es FIJO (de la última calibración) — antes esto vivía repartido en
+  // 2 bloques (uno de /diag/mic-level, otro de /configuracion/status) con
+  // valores parecidos pero mal distinguidos ("Ruido de fondo del cuarto" vs
+  // "Piso de ruido medido" eran cosas DISTINTAS con nombres casi iguales).
+  // Se rellena solo al abrir el popup — no hace falta que esté en vivo
+  // mientras nadie lo está mirando.
   async load() {
-    const kv       = document.getElementById('kv-calibration-diag');
+    const kv       = document.getElementById('kv-sound-details');
     const histWrap = document.getElementById('calibration-history-wrap');
     if (!kv) return;
 
+    const mic = MicMeter._lastMic;
+    const fmt = v => (v === null || v === undefined || isNaN(v)) ? '—' : `${v.toFixed(1)} dBFS`;
+
+    let calLine = '—';
     try {
       const status = await fetch('/configuracion/status', { cache: 'no-store' }).then(r => r.json());
       const cal = status.calibration;
-      kv.innerHTML = !cal
-        ? kvRows([['Estado', 'Sin calibrar todavía']])
-        : kvRows([
-            ['Piso de ruido medido', `${cal.noiseFloorDbfs} dBFS`],
-            ['Umbral aplicado',      `${cal.threshold} dBFS`],
-            ['Margen',               `+${cal.marginDb} dB`],
-            ['Cuándo',               new Date(cal.measuredAt).toLocaleString('es-AR')],
-            ['Disparada por',        cal.triggeredBy === 'boot' ? 'Automática (arranque)' : 'Manual'],
-          ]);
-    } catch (e) {
-      kv.innerHTML = kvRows([['Estado', `Error: ${esc(e.message)}`]]);
-    }
+      if (cal) {
+        const when = new Date(cal.measuredAt).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        calLine = `${when} — ${cal.triggeredBy === 'boot' ? 'automática al arrancar' : 'manual'}`;
+      }
+    } catch {}
+
+    kv.innerHTML = kvRows([
+      ['Ruido de fondo (ahora)',  mic ? fmt(mic.ambientFloorDbfs) : '—'],
+      ['Umbral calibrado (fijo)', mic ? fmt(mic.calibratedThresholdDbfs) : '—'],
+      ['Umbral en uso (ahora)',   mic ? fmt(mic.effectiveThresholdDbfs) : '—'],
+      ['Última calibración',      calLine],
+    ]);
 
     try {
       const { runs } = await fetch('/diag/calibration-history', { cache: 'no-store' }).then(r => r.json());
@@ -759,6 +756,90 @@ const CalibrationPanorama = {
 };
 
 // ============================================================
+// SENSIBILIDAD — umbral de la voz + recalibrar, movido acá desde
+// Configuración para que el efecto de cada ajuste se vea al toque en el
+// gráfico de arriba (mismo dato, /diag/mic-level ya lo está sondeando).
+// ============================================================
+const SensitivityControls = {
+  async init() {
+    const slider = document.getElementById('inp-talk-threshold');
+    const label  = document.getElementById('val-talk-threshold');
+    if (!slider) return;
+
+    try {
+      const cfg = await fetch('/setup/config', { cache: 'no-store' }).then(r => r.json());
+      const v = parseFloat(cfg.talkThreshold);
+      slider.value = isNaN(v) ? -25 : v;
+      label.textContent = `${slider.value} dBFS`;
+    } catch {}
+
+    // Aplica en vivo (no persiste en cada arrastre — solo recalibrar
+    // persiste, igual que antes en Configuración).
+    let threshTimer = null;
+    slider.addEventListener('input', (e) => {
+      label.textContent = `${e.target.value} dBFS`;
+      clearTimeout(threshTimer);
+      threshTimer = setTimeout(async () => {
+        try {
+          await fetch('/session/talk-threshold', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ threshold: parseFloat(e.target.value) }),
+          });
+        } catch {}
+      }, 400);
+    });
+
+    document.getElementById('btn-recalibrate')?.addEventListener('click', () => this.recalibrate());
+  },
+
+  async recalibrate() {
+    const btn    = document.getElementById('btn-recalibrate');
+    const result = document.getElementById('calibration-result');
+    const slider = document.getElementById('inp-talk-threshold');
+    const label  = document.getElementById('val-talk-threshold');
+    btn.disabled = true;
+    btn.textContent = '🎚️ Calibrando… quedate en silencio';
+    result.innerHTML = '';
+    try {
+      const res  = await fetch('/configuracion/recalibrate', { method: 'POST' });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'error desconocido');
+      slider.value = data.calibration.threshold;
+      label.textContent = `${data.calibration.threshold} dBFS`;
+      result.innerHTML = '<div class="flow-note ok">✔ Calibración actualizada</div>' + this._sparkline(data.calibration.ticksDbfs, data.calibration.threshold);
+      CalibrationPanorama.load(); // refresca el popup para la próxima vez que se abra
+    } catch (e) {
+      result.innerHTML = `<div class="flow-note bad">✘ ${esc(e.message)}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🎚️ Recalibrar ahora (8s de silencio)';
+    }
+  },
+
+  // Traza de los 8s medidos, con línea punteada en el umbral que resultó —
+  // feedback inmediato de "¿quedó holgado o pegado a lo medido?" justo donde
+  // tocaste "Recalibrar".
+  _sparkline(ticksDbfs, thresholdDbfs) {
+    if (!ticksDbfs || !ticksDbfs.length) return '';
+    const W = 280, H = 56, PAD = 4;
+    const lo = Math.min(...ticksDbfs, thresholdDbfs) - 3;
+    const hi = 0;
+    const x = i => PAD + (i / (ticksDbfs.length - 1 || 1)) * (W - PAD * 2);
+    const y = v => H - PAD - ((v - lo) / (hi - lo || 1)) * (H - PAD * 2);
+    const points = ticksDbfs.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    const ty = y(thresholdDbfs).toFixed(1);
+    return `
+      <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;margin-top:8px;background:var(--bg);border-radius:6px">
+        <line x1="0" y1="${ty}" x2="${W}" y2="${ty}" stroke="var(--warn)" stroke-width="1" stroke-dasharray="4,3" />
+        <polyline points="${points}" fill="none" stroke="var(--accent)" stroke-width="1.5" />
+      </svg>
+      <div class="field-hint" style="margin-top:2px">línea punteada = umbral aplicado (${thresholdDbfs} dBFS) — ${ticksDbfs.length} muestras</div>
+    `;
+  },
+};
+
+// ============================================================
 // INIT
 // ============================================================
 (async function init() {
@@ -772,7 +853,7 @@ const CalibrationPanorama = {
   // lo está mirando).
   const soundDialog = document.getElementById('sound-details-dialog');
   document.getElementById('btn-sound-details')?.addEventListener('click', () => {
-    MicMeter._renderDetails();
+    CalibrationPanorama.load();
     soundDialog?.showModal();
   });
   document.getElementById('btn-sound-details-close')?.addEventListener('click', () => soundDialog?.close());
@@ -792,6 +873,6 @@ const CalibrationPanorama = {
   MicMeter.start();
   LedsDiag.check();
   LedsLab.init();
-  CalibrationPanorama.load();
+  SensitivityControls.init();
   await Recorder.show();
 })();
