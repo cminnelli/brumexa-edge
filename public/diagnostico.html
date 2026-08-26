@@ -75,7 +75,7 @@
     .calib-history-bar { flex: 1; min-width: 3px; border-radius: 2px 2px 0 0; background: var(--accent); opacity: .55; }
     .calib-history-bar:hover { opacity: 1; }
 
-    /* ── Diagnóstico guiado ── */
+    /* ── Calibración guiada ── */
     #guided-diag-dialog { width: min(380px, 90vw); }
     .guided-intro { text-align: center; padding: 6px 0 4px; }
     .guided-step { text-align: center; padding: 10px 0 4px; }
@@ -97,6 +97,15 @@
     .guided-report__lines { display: flex; flex-direction: column; gap: 8px; }
     .guided-report__line { display: flex; gap: 8px; font-size: 13px; color: var(--text); align-items: flex-start; }
     .guided-report__line span:first-child { flex-shrink: 0; }
+
+    .guided-suggestion {
+      border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 14px;
+      background: var(--surface2);
+    }
+    .guided-suggestion__label { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .03em; }
+    .guided-suggestion__value { font-size: 26px; font-weight: 600; color: var(--text); margin: 4px 0; font-variant-numeric: proportional-nums; }
+    .guided-suggestion__why { font-size: 12px; color: var(--text2); margin-bottom: 10px; }
+    .guided-suggestion.blocked .guided-suggestion__why { color: var(--warn); }
   </style>
 </head>
 <body>
@@ -231,7 +240,7 @@
 
     <div id="sound-chart-wrap" style="overflow-x:auto"></div>
 
-    <button class="btn-ghost" id="btn-guided-diag" type="button" style="margin-top:10px">🧪 Diagnóstico guiado</button>
+    <button class="btn-ghost" id="btn-guided-diag" type="button" style="margin-top:10px">🎯 Calibración guiada</button>
 
     <div class="divider" style="margin:14px 0"></div>
 
@@ -265,17 +274,18 @@
     </div>
   </dialog>
 
-  <!-- Diagnóstico guiado — wizard de pasos cronometrados (silencio/hablar/
+  <!-- Calibración guiada — wizard de pasos cronometrados (silencio/hablar/
        ruido/susurro), mide con el mismo /diag/mic-level que ya usa el
-       gráfico, y al final arma una conclusión en criollo. -->
+       gráfico, y al final propone un umbral (con el "por qué") en vez de
+       solo decir si algo anda bien o mal. -->
   <dialog id="guided-diag-dialog" class="sound-dialog">
     <div class="sound-dialog__hdr">
-      <div class="sound-dialog__title">Diagnóstico guiado</div>
+      <div class="sound-dialog__title">Calibración guiada</div>
       <button class="sound-dialog__close" id="btn-guided-close" type="button" aria-label="Cerrar">✕</button>
     </div>
     <div class="sound-dialog__body" id="guided-body">
       <div class="guided-intro">
-        <p class="field-hint" style="margin:0 0 12px">Son 5 pasos cortos (silencio, hablar, silencio, ruido, susurro) — te vamos guiando y al final te decimos si todo se comporta como se espera.</p>
+        <p class="field-hint" style="margin:0 0 12px">Son 5 pasos cortos (silencio, hablar, silencio, ruido, susurro). Con eso medimos tu voz real, el ruido de fondo, y te proponemos un umbral — lo aplicás con un click si te convence.</p>
         <button class="btn-connect" id="btn-guided-start" type="button">▶️ Empezar</button>
       </div>
     </div>

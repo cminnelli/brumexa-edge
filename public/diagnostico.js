@@ -844,13 +844,16 @@ const SensitivityControls = {
 };
 
 // ============================================================
-// DIAGNÓSTICO GUIADO — wizard de pasos cronometrados. Mide con el mismo
-// /diag/mic-level que ya alimenta el gráfico (nada nuevo del lado del
-// server) — cada paso junta muestras durante su ventana y al final se
-// arma una conclusión en criollo: ¿reaccionó a la voz?, ¿ignoró un ruido
-// corto?, ¿volvió a silencio?, etc. No es un test de laboratorio (el
-// timing depende de la reacción real de la persona) — es una forma rápida
-// de notar si algo está MUY fuera de lo esperable.
+// CALIBRACIÓN GUIADA — wizard de pasos cronometrados que termina definiendo
+// un umbral, no solo diagnosticando. Mide con el mismo /diag/mic-level que
+// ya alimenta el gráfico (nada nuevo del lado del server) — cada paso junta
+// muestras durante su ventana. A diferencia de "Recalibrar" (que solo mide
+// silencio + un margen fijo), acá hay 3 señales reales — piso, tu voz de
+// verdad, y un ruido corto de prueba — así que el umbral propuesto queda en
+// el hueco entre "lo que no es tu voz" y "lo que sí es tu voz", en vez de
+// ser una regla ciega. No es un test de laboratorio (el timing depende de
+// la reacción real de la persona) — es una forma rápida de proponer un
+// umbral razonable y detectar si algo está MUY fuera de lo esperable.
 // ============================================================
 const GuidedDiag = {
   STEPS: [
@@ -944,59 +947,122 @@ const GuidedDiag = {
   // Conclusión: cada chequeo es honesto sobre lo que en verdad puede
   // afirmar (ver la discusión sobre "ambiente ruidoso" — no adivina causas
   // que no puede medir, solo reporta lo que pasó en cada paso).
+  // Umbral propuesto — a diferencia de "Recalibrar" (que solo mide silencio
+  // y suma un margen fijo), acá hay 3 señales reales: el piso (silence1),
+  // tu voz real (speak) y un ruido corto de prueba (noise). El umbral tiene
+  // que quedar en el HUECO entre "lo más fuerte que no es tu voz" y "lo más
+  // flojo que SÍ es tu voz" — si ese hueco no existe (tu voz está pegada al
+  // ruido), no hay ningún número seguro para proponer, así que se dice eso
+  // en vez de inventar uno.
+  _computeThreshold(r) {
+    if (!r.silence1 || !r.speak || r.silence1.avgDbfs == null || r.speak.avgDbfs == null) {
+      return { ok: false, why: 'No se juntaron suficientes muestras — repetí la prueba.' };
+    }
+    const floor     = r.silence1.avgDbfs;
+    const noisePeak = r.noise?.peakDbfs ?? null;
+    const voiceAvg  = r.speak.avgDbfs;
+
+    const notVoiceCeiling = Math.max(floor + 6, noisePeak != null ? noisePeak + 2 : -Infinity);
+    const voiceFloorSafe  = voiceAvg - 3;
+
+    if (notVoiceCeiling >= voiceFloorSafe) {
+      const culprit = (noisePeak != null && noisePeak + 2 > floor + 6) ? 'al ruido corto de prueba' : 'al piso de fondo';
+      return {
+        ok: false,
+        why: `Tu voz (~${voiceAvg.toFixed(1)}dBFS de promedio) está muy pegada ${culprit} (~${notVoiceCeiling.toFixed(1)}dBFS) — no hay un hueco seguro para fijar un umbral acá. Probá hablar más cerca del mic, subir la ganancia en Configuración, o reducir el ruido del ambiente.`,
+      };
+    }
+
+    const raw = (notVoiceCeiling + voiceFloorSafe) / 2;
+    const value = Math.round(Math.max(-45, Math.min(-12, raw)) * 10) / 10;
+    return { ok: true, value, floor, voiceAvg, noisePeak };
+  },
+
+  async _applyThreshold(value) {
+    try {
+      const res = await fetch('/setup/config', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ talkThreshold: value }),
+      });
+      if (!res.ok) return false;
+      const slider = document.getElementById('inp-talk-threshold');
+      const label  = document.getElementById('val-talk-threshold');
+      if (slider) slider.value = value;
+      if (label) label.textContent = `${value} dBFS`;
+      return true;
+    } catch { return false; }
+  },
+
   _renderReport() {
     const r = this._results;
     const body = document.getElementById('guided-body');
     if (!body) return;
     const lines = [];
-    let overallOk = true;
 
     if (r.silence1?.avgDbfs != null) {
       lines.push(['ℹ️', `Piso de ruido ahora: ${r.silence1.avgDbfs.toFixed(1)} dBFS`]);
     }
-
     if (r.speak?.gateOpened) {
       lines.push(['✅', `Reaccionó a tu voz${r.speak.openedAtMs != null ? ` — tardó ~${r.speak.openedAtMs}ms en confirmarlo` : ''}`]);
     } else {
-      lines.push(['⚠️', 'No detectó que estabas hablando en este paso — probá hablar más fuerte/cerca, o revisar el umbral']);
-      overallOk = false;
+      lines.push(['⚠️', 'No detectó que estabas hablando en este paso']);
     }
-
     if (r.silence2) {
-      if (!r.silence2.gateOpenAtEnd) {
-        lines.push(['✅', 'Volvió a silencio correctamente después de hablar']);
-      } else {
-        lines.push(['⚠️', 'Seguía "escuchando" al terminar este paso — puede ser normal si hablaste justo hasta el final, si se repite conviene revisar']);
-        overallOk = false;
-      }
+      lines.push(!r.silence2.gateOpenAtEnd
+        ? ['✅', 'Volvió a silencio correctamente después de hablar']
+        : ['⚠️', 'Seguía "escuchando" al terminar este paso — puede ser normal si hablaste hasta el final']);
     }
-
     if (r.noise) {
-      if (!r.noise.gateOpened) {
-        lines.push(['✅', 'Ignoró el ruido corto — no lo confundió con voz']);
-      } else {
-        lines.push(['⚠️', 'El ruido corto activó el gate — puede estar muy sensible, considerá subir el umbral (menos a la izquierda) o recalibrar']);
-        overallOk = false;
-      }
+      lines.push(!r.noise.gateOpened
+        ? ['✅', 'Ignoró el ruido corto — no lo confundió con voz']
+        : ['⚠️', 'El ruido corto activó el gate — el umbral propuesto ya tiene esto en cuenta']);
     }
-
     if (r.whisper) {
       lines.push(['ℹ️', r.whisper.gateOpened
         ? 'También detecta susurros bien bajitos'
         : 'No detectó el susurro — no es necesariamente un problema, los susurros son borde a propósito']);
     }
 
-    const verdict = overallOk ? '✅ Todo dentro de lo esperado' : '⚠️ Encontramos algo para revisar';
+    const suggestion = this._computeThreshold(r);
+    const suggestionHtml = suggestion.ok
+      ? `
+        <div class="guided-suggestion">
+          <div class="guided-suggestion__label">Umbral propuesto</div>
+          <div class="guided-suggestion__value">${suggestion.value} dBFS</div>
+          <div class="guided-suggestion__why">Deja margen entre tu voz (~${suggestion.voiceAvg.toFixed(1)}dBFS) y lo que NO es tu voz${suggestion.noisePeak != null ? ' (piso + el ruido corto de prueba)' : ' (el piso medido)'}.</div>
+          <button class="btn-connect" id="btn-guided-apply" type="button" style="width:100%">✅ Aplicar y guardar</button>
+          <div id="guided-apply-result" style="margin-top:8px"></div>
+        </div>
+      `
+      : `
+        <div class="guided-suggestion blocked">
+          <div class="guided-suggestion__label">Umbral propuesto</div>
+          <div class="guided-suggestion__why">${esc(suggestion.why)}</div>
+        </div>
+      `;
 
     body.innerHTML = `
       <div class="guided-report">
-        <div class="guided-report__verdict ${overallOk ? 'ok' : 'warn'}">${verdict}</div>
+        ${suggestionHtml}
         <div class="guided-report__lines">
           ${lines.map(([icon, text]) => `<div class="guided-report__line"><span>${icon}</span><span>${esc(text)}</span></div>`).join('')}
         </div>
         <button class="btn-ghost" id="btn-guided-restart" type="button" style="margin-top:14px; width:100%">🔁 Repetir</button>
       </div>
     `;
+
+    document.getElementById('btn-guided-apply')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const out = document.getElementById('guided-apply-result');
+      btn.disabled = true;
+      btn.textContent = 'Aplicando…';
+      const ok = await this._applyThreshold(suggestion.value);
+      out.innerHTML = ok
+        ? '<div class="flow-note ok">✔ Umbral aplicado y guardado</div>'
+        : '<div class="flow-note bad">✘ No se pudo aplicar — probá de nuevo</div>';
+      btn.disabled = false;
+      btn.textContent = '✅ Aplicar y guardar';
+    });
     document.getElementById('btn-guided-restart')?.addEventListener('click', () => this.start());
   },
 };
