@@ -447,6 +447,62 @@ const LedsDiag = {
   },
 };
 
+// ============================================================
+// DIAGNÓSTICO EN VIVO DE LEDS — pensado para pedirse EN EL MOMENTO que se
+// ve la respiración rara, sin ir a buscar pm2 logs a mano por SSH.
+// Interpretación (ver comentario de GET /diag/leds/live en server.js):
+//  - msSinceLastChange chico (unos pocos ms) → Node sigue calculando
+//    colores nuevos normalmente. Si aun así SE VE trabado, el problema
+//    está entre Node y la tira física (driver/hardware), no en este código.
+//  - msSinceLastChange grande (cientos de ms+) → Node calculó el MISMO
+//    color un rato largo — bug real de este código, diagnosticable.
+//  - Atrasos en eventLoop.recentStalls → el hilo principal se bloqueó de
+//    verdad en algún momento reciente (mismo aviso que ya sale por consola,
+//    acá con historial).
+// ============================================================
+async function runLedsLiveCheck() {
+  const btn    = document.getElementById('btn-leds-live-check');
+  const result = document.getElementById('leds-live-result');
+  btn.disabled = true;
+  btn.textContent = 'Capturando…';
+  try {
+    const d = await fetch('/diag/leds/live', { cache: 'no-store' }).then(r => r.json());
+    const lines = [];
+
+    if (!d.render.breatheActive) {
+      lines.push(`<div class="pill warn">⚠ La respiración no está activa ahora mismo (puede estar hablando, calibrando, etc.) — probá de nuevo en modo idle.</div>`);
+    } else if (d.render.msSinceLastChange > 200) {
+      lines.push(`<div class="pill bad">✘ Node calculó el MISMO color hace ${(d.render.msSinceLastChange / 1000).toFixed(1)}s — esto sí es un bug real de código, no de la tira.</div>`);
+    } else {
+      lines.push(`<div class="pill ok">✔ Node está calculando colores nuevos con normalidad (último cambio hace ${d.render.msSinceLastChange}ms) — si igual ves la luz trabada, el problema está entre Node y la tira física (driver/hardware), no en este código.</div>`);
+    }
+
+    const stalls = d.eventLoop.recentStalls;
+    if (stalls.length) {
+      const worst = stalls.reduce((a, b) => (a.drift > b.drift ? a : b));
+      lines.push(`<div class="pill bad">✘ El hilo principal se atrasó ${stalls.length} vez(es) en los últimos ~5s — el peor fue ${worst.drift}ms.</div>`);
+    } else {
+      lines.push(`<div class="pill ok">✔ El hilo principal no se atrasó nada en los últimos ~5s.</div>`);
+    }
+
+    const sys = d.system;
+    const throttleFlags = sys.throttled?.flags?.length ? sys.throttled.flags.join(', ') : 'ninguno';
+    const kv = kvRows([
+      ['Temp. CPU', sys.cpuTempC != null ? `${sys.cpuTempC.toFixed(1)}°C` : '—'],
+      ['Undervoltage/throttle', throttleFlags],
+      ['Carga (1/5/15 min)', sys.loadavg.map(n => n.toFixed(2)).join(' / ')],
+      ['Memoria libre', `${sys.freeMemMB} / ${sys.totalMemMB} MB`],
+    ]);
+
+    result.innerHTML = lines.join('') + `<div class="kv" style="margin-top:8px">${kv}</div>`;
+  } catch (e) {
+    result.innerHTML = `<div class="pill bad">⚠ Error: ${esc(e.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Capturar diagnóstico ahora';
+  }
+}
+
 // Laboratorio de color — igual lógica que el modal viejo del Panel, pero
 // inline (esta página ya ES el lugar dedicado a probar cosas, no hace
 // falta un overlay encima de otra pantalla). "Salir del laboratorio"
@@ -1180,6 +1236,7 @@ const GuidedDiag = {
 // ============================================================
 (async function init() {
   document.getElementById('btn-speaker-test')?.addEventListener('click', runSpeakerTest);
+  document.getElementById('btn-leds-live-check')?.addEventListener('click', runLedsLiveCheck);
   document.getElementById('btn-test-connection')?.addEventListener('click', testConnection);
   document.getElementById('btn-rec-start')?.addEventListener('click', () => Recorder.start());
   document.getElementById('btn-rec-stop')?.addEventListener('click', () => Recorder.stop());

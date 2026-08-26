@@ -20,11 +20,19 @@ setupLogStream();
 // lo hubiera atrapado. Ahora el timer de referencia usa el MISMO intervalo
 // que el render de LEDs (16ms) y el umbral baja a 30ms — mucho más
 // sensible, para no dejar pasar bloqueos cortos que igual se ven.
+// Historial (no solo el warn en consola) — GET /diag/leds/live lo expone
+// para que la app se pueda auto-diagnosticar sin ir a buscar pm2 logs a
+// mano. EVENT_LOOP_HISTORY_SIZE 300 ≈ 4.8s de historia normal (a 16ms/tick,
+// sin contar los ticks perdidos durante un bloqueo real).
+const EVENT_LOOP_HISTORY_SIZE = 300;
+const _eventLoopHistory = [];
 let _eventLoopLastTick = Date.now();
 setInterval(() => {
   const now   = Date.now();
   const drift = now - _eventLoopLastTick - 16;
   _eventLoopLastTick = now;
+  _eventLoopHistory.push({ ts: now, drift });
+  if (_eventLoopHistory.length > EVENT_LOOP_HISTORY_SIZE) _eventLoopHistory.shift();
   if (drift > 30) {
     console.warn(`[event-loop] ⚠ se atrasó ${drift}ms respecto de lo esperado — algo bloqueó el hilo principal un rato`);
   }
@@ -42,7 +50,7 @@ const { startRecording, stopRecording, getStatus,
         reserveBrowserFilename, saveBrowserRecording,
         deleteRecording, boostCaptureGain } = require('./lib/recorder');
 const { setupWifi, autoStartAP, startHealthMonitor, getStatus: getWifiStatus, getStatusAsync: getWifiStatusAsync } = require('./lib/wifi');
-const { setupLocalDebug }                              = require('./lib/local-debug');
+const { setupLocalDebug, getSystemInfo }                = require('./lib/local-debug');
 
 // lib/configuracion.js se carga con red de seguridad: si el archivo llegó
 // corrupto (pasó de verdad -- un git pull/fetch interrumpido lo dejó en
@@ -654,6 +662,32 @@ app.get('/diag/audio', (_req, res) => {
 // GET /diag/leds — por qué no prenden los LEDs (paquete faltante, permisos, etc.)
 app.get('/diag/leds', (_req, res) => {
   res.json(leds.getDiagnostics());
+});
+
+// GET /diag/leds/live — auto-diagnóstico del "se tilda la respiración",
+// pensado para pedirse EN EL MOMENTO que se ve algo raro, sin ir a buscar
+// pm2 logs a mano por SSH. Junta tres fuentes en una sola respuesta:
+//  1. Qué le mandó Node de verdad a la tira, tick a tick (leds.js) — si
+//     msSinceLastChange es grande, Node calculó el MISMO color un rato
+//     largo (bug real, diagnosticable); si es chico, Node seguía calculando
+//     bien y lo que se ve trabado es la tira/hardware en sí, no este código.
+//  2. Si el hilo principal de Node se atrasó en algún momento reciente
+//     (mismo detector que ya venía avisando por consola, pero acá con
+//     historial completo, no solo el último aviso).
+//  3. Estado general del sistema (temperatura, throttling, carga de CPU,
+//     memoria) — para cruzar contra el momento del tildado.
+app.get('/diag/leds/live', async (_req, res) => {
+  const system = await getSystemInfo();
+  const eventLoopRecentDrift = _eventLoopHistory.filter(e => e.drift > 15);
+  res.json({
+    render:    leds.getRenderDiagnostics(),
+    eventLoop: {
+      history:      _eventLoopHistory,
+      recentStalls: eventLoopRecentDrift.slice(-20),
+      maxDriftMs:   _eventLoopHistory.reduce((max, e) => Math.max(max, e.drift), 0),
+    },
+    system,
+  });
 });
 
 // POST /diag/leds/test — verde fijo unos segundos para confirmar a ojo que el
