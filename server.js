@@ -744,10 +744,34 @@ app.get('/diag/mic-level', (_req, res) => {
 });
 
 // GET /diag/calibration-history — todas las corridas guardadas (boot +
-// manuales), más viejas primero, para graficar la tendencia del umbral en
-// /diagnostico. Liviano: solo lee un archivo local, nada de shell.
+// manuales + guiadas), más viejas primero, para graficar la tendencia del
+// umbral en /diagnostico. Liviano: solo lee un archivo local, nada de shell.
 app.get('/diag/calibration-history', (_req, res) => {
   res.json({ runs: calibrationHistory.readCalibrationHistory(200) });
+});
+
+// POST /diag/calibration-history — la calibración guiada (wizard) aplica el
+// umbral vía /setup/config (mismo endpoint genérico que el slider manual),
+// que NO pasa por runCalibration() ni por acá — así que, a diferencia de la
+// calibración de boot y "Recalibrar ahora", nunca quedaba una fila en el
+// historial. Esta ruta la agrega aparte, llamada por el wizard justo cuando
+// aplicás. measuredAt lo pone el server (no confiar en la hora del
+// cliente); triggeredBy queda fijo en 'guided' (no lo manda el cliente) para
+// no mezclarlo con los otros dos orígenes por error.
+app.post('/diag/calibration-history', express.json(), (req, res) => {
+  const { threshold, noiseFloorDbfs, unusualEnvironment } = req.body || {};
+  const t = parseFloat(threshold);
+  if (isNaN(t)) return res.status(400).json({ ok: false, error: 'threshold inválido' });
+  const floor = parseFloat(noiseFloorDbfs);
+  calibrationHistory.appendCalibration({
+    measuredAt:     Date.now(),
+    triggeredBy:    'guided',
+    noiseFloorDbfs: isNaN(floor) ? null : Math.round(floor * 10) / 10,
+    threshold:      Math.round(t * 10) / 10,
+    marginDb:       null, // el wizard no usa un margen fijo como boot/manual — no aplica
+    unusualEnvironment: !!unusualEnvironment,
+  });
+  res.json({ ok: true });
 });
 
 function startMicMonitor() {

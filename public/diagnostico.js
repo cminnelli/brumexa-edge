@@ -744,16 +744,19 @@ const CalibrationPanorama = {
 
   _renderHistory(wrap, runs) {
     if (!wrap) return;
-    if (!runs.length) { wrap.innerHTML = '<p class="field-hint">Todavía no hay historial guardado — se va a ir llenando con cada calibración (automática al arrancar o manual).</p>'; return; }
+    if (!runs.length) { wrap.innerHTML = '<p class="field-hint">Todavía no hay historial guardado — se va a ir llenando con cada calibración (automática al arrancar, manual o guiada).</p>'; return; }
 
     const thresholds = runs.map(r => r.threshold);
     const lo = Math.min(...thresholds) - 2;
     const hi = Math.max(...thresholds, -12) + 2;
+    const originLabel = { boot: 'auto', manual: 'manual', guided: 'guiada' };
     const bars = runs.map(r => {
       const pct   = Math.max(4, Math.round(((r.threshold - lo) / (hi - lo || 1)) * 100));
       const date  = new Date(r.measuredAt).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
-      const title = `${date} — umbral ${r.threshold}dBFS (piso ${r.noiseFloorDbfs}dBFS, ${r.triggeredBy === 'boot' ? 'auto' : 'manual'})`;
-      return `<div class="calib-history-bar" style="height:${pct}%" title="${esc(title)}"></div>`;
+      let title = `${date} — umbral ${r.threshold}dBFS (piso ${r.noiseFloorDbfs}dBFS, ${originLabel[r.triggeredBy] || r.triggeredBy})`;
+      if (r.unusualEnvironment) title += ' — ⚠️ marcado como ambiente ruidoso/inusual';
+      const cls = r.unusualEnvironment ? 'calib-history-bar calib-history-bar--unusual' : 'calib-history-bar';
+      return `<div class="${cls}" style="height:${pct}%" title="${esc(title)}"></div>`;
     }).join('');
 
     wrap.innerHTML = `
@@ -1039,6 +1042,10 @@ const GuidedDiag = {
           <div class="guided-suggestion__label">Umbral propuesto</div>
           <div class="guided-suggestion__value">${suggestion.value} dBFS</div>
           <div class="guided-suggestion__why">Deja margen entre tu voz (~${suggestion.voiceAvg.toFixed(1)}dBFS) y el piso de fondo.</div>
+          <label class="guided-note-check">
+            <input type="checkbox" id="chk-guided-unusual" />
+            Ambiente ruidoso o inusual ahora (evento, obra, etc.)
+          </label>
           <button class="btn-connect" id="btn-guided-apply" type="button" style="width:100%">✅ Aplicar y guardar</button>
           <div id="guided-apply-result" style="margin-top:8px"></div>
         </div>
@@ -1066,6 +1073,18 @@ const GuidedDiag = {
       btn.disabled = true;
       btn.textContent = 'Aplicando…';
       const ok = await this._applyThreshold(suggestion.value);
+      if (ok) {
+        // Best-effort — el wizard aplica vía /setup/config (no pasa por
+        // runCalibration()), así que sin esto nunca quedaba una fila en el
+        // historial. Si esto falla no aborta nada, el umbral ya se aplicó.
+        const unusual = document.getElementById('chk-guided-unusual')?.checked ?? false;
+        try {
+          await fetch('/diag/calibration-history', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ threshold: suggestion.value, noiseFloorDbfs: suggestion.floor, unusualEnvironment: unusual }),
+          });
+        } catch {}
+      }
       out.innerHTML = ok
         ? '<div class="flow-note ok">✔ Umbral aplicado y guardado</div>'
         : '<div class="flow-note bad">✘ No se pudo aplicar — probá de nuevo</div>';
