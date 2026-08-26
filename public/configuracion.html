@@ -162,8 +162,8 @@
         <label class="field-label" for="inp-led-hangover">Paciencia con las pausas al hablar</label>
         <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
           <div class="gain-row" style="grid-template-columns:1fr 70px">
-            <input type="range" id="inp-led-hangover" class="gain-slider" min="300" max="6000" step="100" value="700" />
-            <span class="gain-val" id="val-led-hangover">700 ms</span>
+            <input type="range" id="inp-led-hangover" class="gain-slider" min="300" max="6000" step="100" value="1100" />
+            <span class="gain-val" id="val-led-hangover">1100 ms</span>
           </div>
         </div>
         <p class="field-hint">Si te quedás en silencio más de este tiempo (por ejemplo, pensando qué decir), Brumexa asume que terminaste de hablar y los LEDs vuelven a respirar. Más alto = tolera pausas más largas antes de "darte por terminado".</p>
@@ -621,7 +621,7 @@
       setLiveSliderField('inp-speaker-gain', 'val-speaker-gain', cfg.speakerGain, 3,     v => `${parseFloat(v).toFixed(1)}x`);
       setLiveSliderField('inp-silence-timeout', 'val-silence-timeout', (parseInt(cfg.silenceTimeoutMs, 10) || 20000) / 1000, 20, v => `${v} s`);
       setLiveSliderField('inp-led-breathe',  'val-led-breathe',  cfg.ledBreathePeriodMs, 1900, v => `${v} ms`);
-      setLiveSliderField('inp-led-hangover', 'val-led-hangover', cfg.ledHangoverMs,      700, v => `${v} ms`);
+      setLiveSliderField('inp-led-hangover', 'val-led-hangover', cfg.ledHangoverMs,      1100, v => `${v} ms`);
       setLiveSliderField('inp-mic-gate-attenuation', 'val-mic-gate-attenuation', cfg.micGateAttenuationDb, -90, v => `${v} dB`);
       setLiveSliderField('inp-mic-preroll',          'val-mic-preroll',          cfg.micPrerollMs,         500, v => `${v} ms`);
       document.getElementById('inp-mic-gate-enabled').checked = cfg.micGateEnabled !== 'false';
