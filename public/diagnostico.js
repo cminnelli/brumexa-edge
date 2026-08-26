@@ -148,20 +148,24 @@ const MicMeter = {
       return;
     }
 
-    // Ambiente más ruidoso que cuando calibraste — dato del popup, acá solo
-    // se usa para elegir la frase, no se muestra el número.
+    // El umbral efectivo subió por encima del calibrado — SOLO significa
+    // que el piso de sonido detectado viene alto hace un rato (~25-75s de
+    // promedio). No hay forma de saber si es ruido de ambiente o vos
+    // hablando sostenido — el detector no distingue contenido, solo nivel +
+    // tiempo (ver mic-speech-gate.js). Por eso el texto describe el HECHO
+    // medido (el umbral subió) y no adivina una causa.
     const rise = (mic.effectiveThresholdDbfs != null && mic.calibratedThresholdDbfs != null)
       ? mic.effectiveThresholdDbfs - mic.calibratedThresholdDbfs
       : 0;
-    const noisyEnv = rise > 2;
+    const thresholdRising = rise > 2;
 
     let cls, text;
     if (mic.gateOpen) {
       cls = 'live';
       text = mic.sessionActive ? '🎙️ Te está escuchando y mandando tu voz' : '🎙️ Te está escuchando (sin sesión activa)';
-    } else if (noisyEnv) {
+    } else if (thresholdRising) {
       cls = 'warn';
-      text = 'Hay más ruido de lo normal en el ambiente';
+      text = `📈 El umbral subió +${rise.toFixed(1)}dB desde la calibración`;
     } else {
       cls = 'muted';
       text = mic.sessionActive ? 'Todo tranquilo, esperando que hables' : 'Todo tranquilo — sin sesión activa';
