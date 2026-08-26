@@ -74,6 +74,29 @@
     .calib-history-row { display: flex; align-items: flex-end; gap: 2px; height: 46px; }
     .calib-history-bar { flex: 1; min-width: 3px; border-radius: 2px 2px 0 0; background: var(--accent); opacity: .55; }
     .calib-history-bar:hover { opacity: 1; }
+
+    /* ── Diagnóstico guiado ── */
+    #guided-diag-dialog { width: min(380px, 90vw); }
+    .guided-intro { text-align: center; padding: 6px 0 4px; }
+    .guided-step { text-align: center; padding: 10px 0 4px; }
+    .guided-step__icon { font-size: 40px; line-height: 1; margin-bottom: 8px; }
+    .guided-step__title { font-weight: 700; font-size: 15px; color: var(--text); margin-bottom: 6px; }
+    .guided-step__instruction { font-size: 13px; color: var(--text2); min-height: 34px; padding: 0 4px; }
+    .guided-progress-track {
+      height: 6px; border-radius: 3px; background: var(--surface2);
+      margin: 14px 0 8px; overflow: hidden;
+    }
+    .guided-progress-bar { height: 100%; background: var(--accent); border-radius: 3px; transition: width .12s linear; width: 0; }
+    .guided-live { font-size: 12px; color: var(--text2); font-variant-numeric: tabular-nums; min-height: 16px; }
+    .guided-report__verdict {
+      font-weight: 700; font-size: 15px; text-align: center;
+      padding: 10px; border-radius: 10px; margin-bottom: 12px;
+    }
+    .guided-report__verdict.ok   { background: rgba(61,186,118,.14); color: var(--success); }
+    .guided-report__verdict.warn { background: rgba(224,160,50,.14); color: var(--warn); }
+    .guided-report__lines { display: flex; flex-direction: column; gap: 8px; }
+    .guided-report__line { display: flex; gap: 8px; font-size: 13px; color: var(--text); align-items: flex-start; }
+    .guided-report__line span:first-child { flex-shrink: 0; }
   </style>
 </head>
 <body>
@@ -208,6 +231,8 @@
 
     <div id="sound-chart-wrap" style="overflow-x:auto"></div>
 
+    <button class="btn-ghost" id="btn-guided-diag" type="button" style="margin-top:10px">🧪 Diagnóstico guiado</button>
+
     <div class="divider" style="margin:14px 0"></div>
 
     <div class="field-group-label" style="margin-top:0">Sensibilidad</div>
@@ -237,6 +262,22 @@
     <div class="sound-dialog__body">
       <div class="kv" id="kv-sound-details"></div>
       <div id="calibration-history-wrap" style="margin-top:12px"></div>
+    </div>
+  </dialog>
+
+  <!-- Diagnóstico guiado — wizard de pasos cronometrados (silencio/hablar/
+       ruido/susurro), mide con el mismo /diag/mic-level que ya usa el
+       gráfico, y al final arma una conclusión en criollo. -->
+  <dialog id="guided-diag-dialog" class="sound-dialog">
+    <div class="sound-dialog__hdr">
+      <div class="sound-dialog__title">Diagnóstico guiado</div>
+      <button class="sound-dialog__close" id="btn-guided-close" type="button" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="sound-dialog__body" id="guided-body">
+      <div class="guided-intro">
+        <p class="field-hint" style="margin:0 0 12px">Son 5 pasos cortos (silencio, hablar, silencio, ruido, susurro) — te vamos guiando y al final te decimos si todo se comporta como se espera.</p>
+        <button class="btn-connect" id="btn-guided-start" type="button">▶️ Empezar</button>
+      </div>
     </div>
   </dialog>
 

@@ -844,6 +844,164 @@ const SensitivityControls = {
 };
 
 // ============================================================
+// DIAGNÓSTICO GUIADO — wizard de pasos cronometrados. Mide con el mismo
+// /diag/mic-level que ya alimenta el gráfico (nada nuevo del lado del
+// server) — cada paso junta muestras durante su ventana y al final se
+// arma una conclusión en criollo: ¿reaccionó a la voz?, ¿ignoró un ruido
+// corto?, ¿volvió a silencio?, etc. No es un test de laboratorio (el
+// timing depende de la reacción real de la persona) — es una forma rápida
+// de notar si algo está MUY fuera de lo esperable.
+// ============================================================
+const GuidedDiag = {
+  STEPS: [
+    { key: 'silence1', title: 'Silencio',           instruction: 'No digas nada — medimos el ambiente tal cual está ahora.',        durationMs: 3000, icon: '🤫' },
+    { key: 'speak',    title: 'Hablá normal',        instruction: 'Decí algo con tu tono habitual, como si le hablaras a Brumexa.',  durationMs: 4000, icon: '🎙️' },
+    { key: 'silence2', title: 'Silencio de nuevo',   instruction: 'Dejá de hablar y esperá.',                                       durationMs: 3000, icon: '🤫' },
+    { key: 'noise',    title: 'Ruido corto',         instruction: 'Un aplauso o un golpe seco en la mesa — algo breve, no sostenido.', durationMs: 2500, icon: '👏' },
+    { key: 'whisper',  title: 'Susurro',             instruction: 'Hablá bien bajito, casi susurrando.',                            durationMs: 3000, icon: '🤏' },
+  ],
+  PREP_MS: 2000,
+  SAMPLE_MS: 150,
+  _results: {},
+  _running: false,
+
+  async start() {
+    this._results = {};
+    this._running = true;
+    for (const step of this.STEPS) {
+      if (!this._running) return; // se canceló (cerraron el dialog en el medio)
+      await this._prep(step);
+      if (!this._running) return;
+      this._results[step.key] = await this._runStep(step);
+    }
+    if (this._running) this._renderReport();
+  },
+
+  cancel() { this._running = false; },
+
+  async _prep(step) {
+    const body = document.getElementById('guided-body');
+    if (!body) return;
+    let remaining = Math.ceil(this.PREP_MS / 1000);
+    body.innerHTML = this._stepShell(step, `Preparate — arranca en ${remaining}…`);
+    await new Promise((resolve) => {
+      const iv = setInterval(() => {
+        remaining--;
+        if (!this._running) { clearInterval(iv); resolve(); return; }
+        const el = document.getElementById('guided-instruction');
+        if (el) el.textContent = remaining > 0 ? `Preparate — arranca en ${remaining}…` : '¡Ahora!';
+        if (remaining <= 0) { clearInterval(iv); setTimeout(resolve, 300); }
+      }, 1000);
+    });
+  },
+
+  async _runStep(step) {
+    const body = document.getElementById('guided-body');
+    if (body) body.innerHTML = this._stepShell(step, step.instruction);
+    const samples = [];
+    const startedAt = Date.now();
+    let openedAtMs = null;
+
+    await new Promise((resolve) => {
+      const iv = setInterval(async () => {
+        const elapsed = Date.now() - startedAt;
+        const pct = Math.min(100, Math.round((elapsed / step.durationMs) * 100));
+        const bar = document.getElementById('guided-progress');
+        if (bar) bar.style.width = `${pct}%`;
+        try {
+          const mic  = await fetch('/diag/mic-level', { cache: 'no-store' }).then(r => r.json());
+          const dbfs = mic.peak > 0 ? 20 * Math.log10(mic.peak / 32767) : -90;
+          samples.push({ dbfs, gateOpen: !!mic.gateOpen });
+          if (mic.gateOpen && openedAtMs === null) openedAtMs = Date.now() - startedAt;
+          const live = document.getElementById('guided-live');
+          if (live) live.textContent = `${dbfs.toFixed(1)} dBFS${mic.gateOpen ? ' · 🎙️ detectando' : ''}`;
+        } catch {}
+        if (!this._running || elapsed >= step.durationMs) { clearInterval(iv); resolve(); }
+      }, this.SAMPLE_MS);
+    });
+
+    const dbfsValues  = samples.map(s => s.dbfs).filter(v => isFinite(v));
+    const avgDbfs      = dbfsValues.length ? dbfsValues.reduce((a, b) => a + b, 0) / dbfsValues.length : null;
+    const peakDbfs      = dbfsValues.length ? Math.max(...dbfsValues) : null;
+    const gateOpened    = samples.some(s => s.gateOpen);
+    const gateOpenAtEnd = samples.length ? samples[samples.length - 1].gateOpen : false;
+
+    return { avgDbfs, peakDbfs, gateOpened, gateOpenAtEnd, openedAtMs, sampleCount: samples.length };
+  },
+
+  _stepShell(step, instruction) {
+    return `
+      <div class="guided-step">
+        <div class="guided-step__icon">${step.icon}</div>
+        <div class="guided-step__title">${esc(step.title)}</div>
+        <div class="guided-step__instruction" id="guided-instruction">${esc(instruction)}</div>
+        <div class="guided-progress-track"><div class="guided-progress-bar" id="guided-progress"></div></div>
+        <div class="guided-live" id="guided-live">&nbsp;</div>
+      </div>
+    `;
+  },
+
+  // Conclusión: cada chequeo es honesto sobre lo que en verdad puede
+  // afirmar (ver la discusión sobre "ambiente ruidoso" — no adivina causas
+  // que no puede medir, solo reporta lo que pasó en cada paso).
+  _renderReport() {
+    const r = this._results;
+    const body = document.getElementById('guided-body');
+    if (!body) return;
+    const lines = [];
+    let overallOk = true;
+
+    if (r.silence1?.avgDbfs != null) {
+      lines.push(['ℹ️', `Piso de ruido ahora: ${r.silence1.avgDbfs.toFixed(1)} dBFS`]);
+    }
+
+    if (r.speak?.gateOpened) {
+      lines.push(['✅', `Reaccionó a tu voz${r.speak.openedAtMs != null ? ` — tardó ~${r.speak.openedAtMs}ms en confirmarlo` : ''}`]);
+    } else {
+      lines.push(['⚠️', 'No detectó que estabas hablando en este paso — probá hablar más fuerte/cerca, o revisar el umbral']);
+      overallOk = false;
+    }
+
+    if (r.silence2) {
+      if (!r.silence2.gateOpenAtEnd) {
+        lines.push(['✅', 'Volvió a silencio correctamente después de hablar']);
+      } else {
+        lines.push(['⚠️', 'Seguía "escuchando" al terminar este paso — puede ser normal si hablaste justo hasta el final, si se repite conviene revisar']);
+        overallOk = false;
+      }
+    }
+
+    if (r.noise) {
+      if (!r.noise.gateOpened) {
+        lines.push(['✅', 'Ignoró el ruido corto — no lo confundió con voz']);
+      } else {
+        lines.push(['⚠️', 'El ruido corto activó el gate — puede estar muy sensible, considerá subir el umbral (menos a la izquierda) o recalibrar']);
+        overallOk = false;
+      }
+    }
+
+    if (r.whisper) {
+      lines.push(['ℹ️', r.whisper.gateOpened
+        ? 'También detecta susurros bien bajitos'
+        : 'No detectó el susurro — no es necesariamente un problema, los susurros son borde a propósito']);
+    }
+
+    const verdict = overallOk ? '✅ Todo dentro de lo esperado' : '⚠️ Encontramos algo para revisar';
+
+    body.innerHTML = `
+      <div class="guided-report">
+        <div class="guided-report__verdict ${overallOk ? 'ok' : 'warn'}">${verdict}</div>
+        <div class="guided-report__lines">
+          ${lines.map(([icon, text]) => `<div class="guided-report__line"><span>${icon}</span><span>${esc(text)}</span></div>`).join('')}
+        </div>
+        <button class="btn-ghost" id="btn-guided-restart" type="button" style="margin-top:14px; width:100%">🔁 Repetir</button>
+      </div>
+    `;
+    document.getElementById('btn-guided-restart')?.addEventListener('click', () => this.start());
+  },
+};
+
+// ============================================================
 // INIT
 // ============================================================
 (async function init() {
@@ -862,6 +1020,23 @@ const SensitivityControls = {
   });
   document.getElementById('btn-sound-details-close')?.addEventListener('click', () => soundDialog?.close());
   soundDialog?.addEventListener('click', (e) => { if (e.target === soundDialog) soundDialog.close(); }); // click afuera del contenido = cerrar
+
+  // Diagnóstico guiado — mismo patrón de dialog. Al abrir, siempre vuelve a
+  // la pantalla de intro (aunque la última vez haya quedado en el reporte
+  // final) y re-engancha "Empezar" — el contenido de guided-body se
+  // reemplaza dinámicamente durante el wizard, así que el botón original ya
+  // no existe para cuando se vuelve a abrir.
+  const guidedDialog = document.getElementById('guided-diag-dialog');
+  const guidedIntroHtml = document.getElementById('guided-body')?.innerHTML;
+  document.getElementById('btn-guided-diag')?.addEventListener('click', () => {
+    const body = document.getElementById('guided-body');
+    if (body && guidedIntroHtml) body.innerHTML = guidedIntroHtml;
+    document.getElementById('btn-guided-start')?.addEventListener('click', () => GuidedDiag.start());
+    guidedDialog?.showModal();
+  });
+  document.getElementById('btn-guided-close')?.addEventListener('click', () => { GuidedDiag.cancel(); guidedDialog?.close(); });
+  guidedDialog?.addEventListener('click', (e) => { if (e.target === guidedDialog) { GuidedDiag.cancel(); guidedDialog.close(); } });
+  guidedDialog?.addEventListener('cancel', () => GuidedDiag.cancel()); // tecla Esc
 
   // Todo lo que es Linux-only se avisa acá arriba una sola vez, en vez de
   // que cada card lo chequee por separado.
