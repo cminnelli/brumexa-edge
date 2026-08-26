@@ -71,8 +71,17 @@ let lastKnownLivekitUrl = null;
 // ─── App ─────────────────────────────────────────────────────────────────────
 const app = express();
 // ─── Log de cada petición HTTP ────────────────────────────────────────────────
+// Rutas de polling MUY frecuente que no aportan nada al verlas en el log —
+// /diag/mic-level sola son ~5 líneas por segundo mientras /diagnostico está
+// abierto (VU en vivo, cada 200ms), sin ninguna info nueva línea a línea.
+// Cada línea logueada pasa por lib/log-stream.js y se retransmite por
+// WebSocket a quien tenga /logs abierto — a ese volumen es puro ruido (y
+// trabajo de más) sin beneficio real de diagnóstico.
+const NOISY_POLL_PATHS = new Set(['/diag/mic-level']);
 app.use((req, _res, next) => {
-  console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url}`);
+  if (!NOISY_POLL_PATHS.has(req.path)) {
+    console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url}`);
+  }
   next();
 });
 
