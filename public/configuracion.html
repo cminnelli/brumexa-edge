@@ -783,14 +783,24 @@
       // El chequeo usa "git ls-remote" (server.js), no "git fetch" — más
       // seguro (nunca escribe nada en el .git local) pero ya no sabe
       // CUÁNTOS commits hay ni cuál es el último sin traerlos de verdad,
-      // así que acá solo se puede decir "hay algo nuevo", sin detalle.
+      // así que acá solo se puede decir "hay algo nuevo" (y el hash, no el
+      // mensaje del commit), sin más detalle.
       let banner = '';
+      // El botón "Buscar actualizaciones" solo tiene sentido mostrarlo si
+      // hay algo para traer (o no se pudo chequear, por las dudas) — antes
+      // aparecía siempre, aunque ya estuvieras al día, lo que invitaba a
+      // tocarlo "porque sí" sin necesidad.
+      const btnUpdate = document.getElementById('btn-update');
       if (data.behind === null) {
         rows.push(['¿Hay más nuevas?', 'No se pudo chequear (sin red / sin remoto configurado)']);
+        if (btnUpdate) btnUpdate.style.display = '';
       } else if (data.behind === 0) {
         banner = '<div class="pill ok" style="margin-top:8px">✔ Estás al día — no hay actualizaciones pendientes</div>';
+        if (btnUpdate) btnUpdate.style.display = 'none';
       } else {
+        rows.push(['Versión disponible', data.remoteHash ? esc(data.remoteHash) : '(nueva)']);
         banner = '<div class="pill warn" style="margin-top:8px">⬇️ Hay una actualización disponible — tocá "Buscar actualizaciones" para traerla</div>';
+        if (btnUpdate) btnUpdate.style.display = '';
       }
       kv.innerHTML = kvRows(rows) + banner;
     } catch (e) {
