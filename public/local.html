@@ -55,27 +55,10 @@
     <div id="body-bluetooth"></div>
   </div>
 
-  <div class="card span-2" id="card-wifilog">
-    <div class="card-title"><span class="ic">📄</span>Log WiFi (conexión/AP)</div>
-    <pre class="dump" id="dump-wifilog"></pre>
-  </div>
-
-  <div class="card span-2" id="card-serverlog">
-    <div class="card-title"><span class="ic">🗒️</span>Log del servidor (app — PM2)</div>
-    <div class="log-sub">stderr</div>
-    <pre class="dump err" id="dump-serverlog-err"></pre>
-    <div class="log-sub">stdout</div>
-    <pre class="dump" id="dump-serverlog-out"></pre>
-  </div>
-
-  <div class="card span-2" id="card-systemlog">
-    <div class="card-title"><span class="ic">🐧</span>Log del sistema (kernel / Raspberry)</div>
-    <pre class="dump" id="dump-systemlog"></pre>
-  </div>
-
   <div class="refresh-note">
     Se actualiza solo cada 6 segundos —
     <a href="/configuracion" style="color:var(--accent)">⚙️ ir a Configuración para editar credenciales, mic, parlante y forzar pruebas</a>
+    — <a href="/logs" style="color:var(--accent)">🗒️ ver logs en vivo</a>
   </div>
 
 </main>
@@ -309,14 +292,6 @@
       document.getElementById('body-bluetooth').innerHTML = bt.available
         ? `<pre class="dump">Emparejados:\n${esc(bt.paired || '(ninguno)')}\n\nConectados:\n${esc(bt.connected || '(ninguno)')}</pre>`
         : '<div class="section-empty">no disponible en esta plataforma</div>';
-
-      document.getElementById('dump-wifilog').textContent = data.wifiLog || '(sin registros todavía)';
-
-      const serverLog = data.serverLog || {};
-      document.getElementById('dump-serverlog-err').textContent = serverLog.error || '(sin errores)';
-      document.getElementById('dump-serverlog-out').textContent = serverLog.out || '(sin registros)';
-
-      document.getElementById('dump-systemlog').textContent = data.systemLog || '(no disponible — permisos o plataforma)';
     } catch (e) {
       chip.className = 'status-chip error';
       txt.textContent = `Error: ${e.message}`;

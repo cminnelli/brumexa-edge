@@ -22,6 +22,23 @@
       0%   { box-shadow: 0 0 0 3px var(--accent); }
       100% { box-shadow: 0 0 0 3px transparent; }
     }
+
+    /* ── Apariencia: presets rápidos + laboratorio de color por rol ── */
+    .color-preset-row { display: flex; gap: 10px; }
+    .color-preset-chip {
+      width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
+      border: 2px solid var(--border2); padding: 0; flex-shrink: 0;
+      transition: transform .1s, border-color .1s;
+    }
+    .color-preset-chip:hover  { transform: scale(1.08); border-color: var(--accent); }
+    .color-preset-chip:active { transform: scale(0.96); }
+
+    .custom-colors-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px;
+    }
+    .custom-color-card__label {
+      font-size: 12px; font-weight: 600; color: var(--text); margin: 8px 0 10px;
+    }
   </style>
 </head>
 <body>
@@ -101,31 +118,26 @@
   <div class="section-group">
     <div class="section-group-label">Dispositivo</div>
 
-    <!-- § Apariencia — color de la carcasa (único campo que reinicia) -->
+    <!-- § Apariencia — un color propio por parte, mismo laboratorio que
+         /diagnostico (swatch grande + sliders de tono/saturación). Los 4
+         presets de fábrica quedan como punto de partida rápido, un click
+         y quedan cargados en los sliders para seguir ajustando. -->
     <div class="card" id="card-color">
       <div class="card-section-hdr">
         <span class="card-section-icon">🎨</span>
         <div>
           <div class="card-section-title">Apariencia</div>
-          <div class="card-section-desc">Color de la carcasa — cada uno tiene su propia combinación de luces</div>
+          <div class="card-section-desc">Un color para cada parte — se aplica y guarda solo con cada ajuste</div>
         </div>
       </div>
       <input type="hidden" id="inp-brumexa-color" value="negro" />
-      <div class="color-grid" id="color-grid"></div>
-      <div class="color-detail" id="color-detail"></div>
-      <div class="connect-row" style="margin-top:1rem; align-items:center">
-        <button class="btn-connect" id="btn-save-color" style="flex:none; padding:9px 20px">🎨 Guardar color</button>
-        <p class="field-hint" style="margin:0">Tocar una tarjeta ya lo prende en el dispositivo, para que lo veas antes de decidir. "Guardar" lo deja así después de reiniciar.</p>
-      </div>
-      <div id="color-save-result" style="margin-top:10px"></div>
 
-      <details class="tech-details" id="custom-colors-details" style="margin-top:14px">
-        <summary>🎨 Armar mis propios colores (en vez de un preset)</summary>
-        <div style="display:flex; flex-direction:column; gap:0.9rem; margin-top:0.75rem">
-          <p class="field-hint" style="margin:0">Un color propio para cada parte — se aplica y guarda solo con cada ajuste, elige "Personalizado" arriba para volver a verlo.</p>
-          <div id="custom-colors-roles"></div>
-        </div>
-      </details>
+      <div class="field-group-label" style="margin-top:0">Empezar de un preset (opcional)</div>
+      <div class="color-preset-row" id="color-preset-row"></div>
+
+      <div class="divider" style="margin:14px 0"></div>
+
+      <div id="custom-colors-roles" class="custom-colors-grid"></div>
     </div>
 
     <!-- § Ritmo de LEDs — velocidad de la respiración y paciencia con pausas -->
@@ -368,60 +380,21 @@
     _colorSchemes = await fetch('/setup/color-schemes').then(r => r.json());
     return _colorSchemes;
   }
-  function renderColorGrid(selected) {
-    const wrap = document.getElementById('color-grid');
+  // Fila de presets de fábrica — un punto de partida rápido, no la forma
+  // principal de elegir color (esa es CustomColors, un slider por rol, más
+  // abajo). Un click carga esos 4 colores en los sliders y los deja
+  // aplicados/guardados como "Personalizado" — desde ahí se puede seguir
+  // afinando cada uno.
+  function renderPresetRow() {
+    const wrap = document.getElementById('color-preset-row');
     if (!wrap || !_colorSchemes) return;
-    wrap.innerHTML = '';
-    for (const [key, def] of Object.entries(_colorSchemes.colors)) {
-      const dots = _colorSchemes.roles
-        .map(role => `<span class="color-card-dot" style="background:${def.leds[role.key]?.swatch || '#000'}"></span>`)
-        .join('');
-      const card = document.createElement('button');
-      card.type = 'button';
-      card.className = 'color-card' + (key === selected ? ' selected' : '');
-      card.dataset.color = key;
-      card.innerHTML = `
-        <span class="color-card-swatch" style="background:${def.swatch}"></span>
-        <span class="color-card-name">${esc(def.label)}</span>
-        <span class="color-card-dots">${dots}</span>
-      `;
-      card.addEventListener('click', () => {
-        document.getElementById('inp-brumexa-color').value = key;
-        wrap.querySelectorAll('.color-card').forEach(el => el.classList.toggle('selected', el.dataset.color === key));
-        renderColorDetail(key);
-        previewColor(key);
-      });
-      wrap.appendChild(card);
-    }
-  }
-  function renderColorDetail(colorKey) {
-    const wrap = document.getElementById('color-detail');
-    if (!wrap || !_colorSchemes) return;
-    const scheme = _colorSchemes.colors[colorKey];
-    if (!scheme) { wrap.innerHTML = ''; return; }
-    wrap.innerHTML = _colorSchemes.roles.map(role => {
-      const led = scheme.leds[role.key];
-      if (!led) return '';
-      return `<div class="color-detail-row">
-        <span class="color-detail-dot" style="background:${led.swatch}"></span>
-        <span class="color-detail-role">${esc(role.label)}</span>
-        <span class="color-detail-name">${esc(led.name)}</span>
-      </div>`;
-    }).join('');
-  }
-  // Aplica el color YA en el hardware, para ver cómo queda de verdad antes
-  // de decidir "Guardar color" — no toca el .env (eso lo hace btn-save-color).
-  function previewColor(colorKey) {
-    fetch('/diag/leds/preview', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ color: colorKey }),
-    }).catch(() => {});
-  }
-  async function initColorPicker(selected) {
-    await loadColorSchemes();
-    document.getElementById('inp-brumexa-color').value = selected;
-    renderColorGrid(selected);
-    renderColorDetail(selected);
+    wrap.innerHTML = Object.entries(_colorSchemes.colors)
+      .filter(([key]) => key !== 'custom') // "custom" es justo lo que se arma acá, no un punto de partida de sí mismo
+      .map(([key, def]) => `<button type="button" class="color-preset-chip" data-color="${key}" style="background:${def.swatch}" title="${esc(def.label)}"></button>`)
+      .join('');
+    wrap.querySelectorAll('.color-preset-chip').forEach(btn => {
+      btn.addEventListener('click', () => CustomColors.applyPreset(btn.dataset.color));
+    });
   }
 
   // ─── Colores personalizados por rol ──────────────────────────────────────
@@ -437,8 +410,6 @@
     _state: {}, // { roleKey: { hue, sat } } — SIEMPRE en espacio estándar (lo que ve el slider)
     _timer: null,        // debounce del guardado real (persiste + aplica de verdad)
     _previewTimer: null, // debounce del preview plano en vivo (solo hardware, no toca .env)
-    _dirty: false,       // ¿tocaste algo desde que abriste el panel?
-    _previousColorKey: null, // color que estaba activo ANTES de abrir el panel — para volver si no guardás nada
 
     _hsvToRgb(h, s, v) {
       const i = Math.floor(h / 60) % 6;
@@ -480,21 +451,20 @@
         }
       }
 
+      // Mismo estilo que el laboratorio de LEDs de /diagnostico: swatch
+      // grande + slider de tono (gradiente arcoíris fijo) + slider de
+      // saturación (gradiente que sigue al tono elegido).
       wrap.innerHTML = _colorSchemes.roles.map(role => `
-        <div class="field" data-role="${role.key}" style="margin-bottom:0">
-          <label class="field-label" style="display:flex; align-items:center; gap:8px">
-            <span class="custom-color-swatch" id="cc-swatch-${role.key}" style="width:22px;height:22px;border-radius:6px;display:inline-block;border:1px solid var(--border); flex-shrink:0"></span>
-            ${esc(role.label)}
-          </label>
-          <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0; display:flex; flex-direction:column; gap:6px">
-            <div class="gain-row" style="grid-template-columns:1fr 55px">
-              <input type="range" class="gain-slider cc-hue" data-role="${role.key}" min="0" max="359" step="1" />
-              <span class="gain-val cc-hue-val" data-role="${role.key}"></span>
-            </div>
-            <div class="gain-row" style="grid-template-columns:1fr 55px">
-              <input type="range" class="gain-slider cc-sat" data-role="${role.key}" min="0" max="100" step="1" />
-              <span class="gain-val cc-sat-val" data-role="${role.key}"></span>
-            </div>
+        <div class="custom-color-card" data-role="${role.key}">
+          <div class="leds-lab__swatch" id="cc-swatch-${role.key}"></div>
+          <div class="custom-color-card__label">${esc(role.label)}</div>
+          <div class="leds-lab__row" style="margin-bottom:8px">
+            <label>Tono</label>
+            <input type="range" class="leds-lab__slider leds-lab__slider--hue cc-hue" data-role="${role.key}" min="0" max="359" step="1" />
+          </div>
+          <div class="leds-lab__row">
+            <label>Saturación</label>
+            <input type="range" class="leds-lab__slider cc-sat" data-role="${role.key}" min="0" max="100" step="1" />
           </div>
         </div>
       `).join('');
@@ -506,46 +476,40 @@
         satEl.value = Math.round(this._state[role.key].sat * 100);
         const onMove = () => {
           this._state[role.key] = { hue: Number(hueEl.value), sat: Number(satEl.value) / 100 };
-          this._dirty = true;
           this._renderRole(role.key);
-          this._schedulePreview(role.key);  // plano en el hardware YA, sin respirar — para verlo bien
-          this._scheduleSave();             // persistir + aplicar de verdad, con más margen
+          this._schedulePreview(role.key);  // plano en el hardware YA, sin respirar — para verlo bien mientras arrastrás
+          this._scheduleSave();             // 400ms después de soltar: persiste + aplica de verdad y retoma la respiración con el color final
         };
         hueEl.addEventListener('input', onMove);
         satEl.addEventListener('input', onMove);
         this._renderRole(role.key);
       }
+    },
 
-      // Abrir el panel: frena la respiración y muestra un color plano fijo
-      // (el primer rol) para poder ver los colores sin el pulso de brillo
-      // encima. Cerrar: si tocaste algo, guarda YA (sin esperar el debounce)
-      // y queda respirando con lo nuevo; si no tocaste nada, vuelve tal cual
-      // estaba antes de abrir — nada se pierde ni se aplica de más.
-      const details = document.getElementById('custom-colors-details');
-      if (details && !details.dataset.wired) {
-        details.dataset.wired = '1';
-        details.addEventListener('toggle', () => {
-          if (details.open) {
-            this._dirty = false;
-            this._previousColorKey = document.getElementById('inp-brumexa-color').value;
-            const firstRole = _colorSchemes.roles[0]?.key;
-            if (firstRole) this._schedulePreview(firstRole, 0);
-          } else {
-            clearTimeout(this._previewTimer);
-            clearTimeout(this._timer);
-            if (this._dirty) {
-              this._save(); // ya, sin esperar el debounce — deja de respirar apenas cierra
-            } else if (this._previousColorKey) {
-              previewColor(this._previousColorKey); // nada cambió — vuelve a como estaba
-            }
-          }
-        });
+    // Un preset entero cargado en los sliders de una — se guarda y aplica
+    // igual que tocar un slider a mano (mismo _scheduleSave), así queda
+    // como "Personalizado" y se puede seguir afinando cada rol por separado.
+    applyPreset(key) {
+      if (!_colorSchemes.colors[key]) return;
+      const preset = _colorSchemes.colors[key];
+      for (const role of _colorSchemes.roles) {
+        const led = preset.leds[role.key];
+        if (!led || typeof led.hue !== 'number') continue;
+        this._state[role.key] = { hue: this.toStdHue(led.hue), sat: led.sat ?? 1 };
+        this._renderRole(role.key);
+        const hueEl = document.querySelector(`.cc-hue[data-role="${role.key}"]`);
+        const satEl = document.querySelector(`.cc-sat[data-role="${role.key}"]`);
+        if (hueEl) hueEl.value = this._state[role.key].hue;
+        if (satEl) satEl.value = Math.round(this._state[role.key].sat * 100);
       }
+      this._scheduleSave();
     },
 
     // Preview plano en el hardware (para VER el color sin el pulso de la
     // respiración) — reusa /diag/leds/set, el mismo endpoint del laboratorio
-    // de LEDs de /diagnostico. No toca .env, no aplica nada "de verdad".
+    // de LEDs de /diagnostico. No toca .env, no aplica nada "de verdad". Solo
+    // se dispara al tocar un slider — mientras nadie ajusta nada, la
+    // respiración sigue normal.
     _schedulePreview(roleKey, delayMs = 40) {
       clearTimeout(this._previewTimer);
       this._previewTimer = setTimeout(() => {
@@ -562,10 +526,6 @@
       const [r, g, b] = this._hsvToRgb(hue, sat, 1);
       const swatch = document.getElementById(`cc-swatch-${key}`);
       if (swatch) swatch.style.background = this._toCss([r, g, b]);
-      const hueVal = document.querySelector(`.cc-hue-val[data-role="${key}"]`);
-      if (hueVal) hueVal.textContent = `${hue}°`;
-      const satVal = document.querySelector(`.cc-sat-val[data-role="${key}"]`);
-      if (satVal) satVal.textContent = `${Math.round(sat * 100)}%`;
       const satEl = document.querySelector(`.cc-sat[data-role="${key}"]`);
       if (satEl) satEl.style.background = `linear-gradient(to right, ${this._toCss(this._hsvToRgb(hue, 0, 1))}, ${this._toCss(this._hsvToRgb(hue, 1, 1))})`;
     },
@@ -575,6 +535,10 @@
       this._timer = setTimeout(() => this._save(), 400);
     },
 
+    // 400ms después del último ajuste: persiste + aplica de verdad (llama a
+    // setDeviceColor('custom') del lado del server), lo que retoma la
+    // respiración normal mostrando el color final — es lo que "libera" el
+    // preview plano de _schedulePreview sin necesitar un botón de "cerrar".
     async _save() {
       const payload = {};
       for (const [key, { hue, sat }] of Object.entries(this._state)) {
@@ -589,13 +553,7 @@
           body: JSON.stringify({ colors: payload }),
         });
         if (!res.ok) return;
-        // El servidor ya tiene "custom" con estos colores — recargamos
-        // color-schemes para que la tarjeta aparezca/se actualice en el grid.
-        _colorSchemes = null;
-        await loadColorSchemes();
         document.getElementById('inp-brumexa-color').value = 'custom';
-        renderColorGrid('custom');
-        renderColorDetail('custom');
       } catch {}
     },
   };
@@ -603,19 +561,22 @@
   async function loadAll() {
     const chip = document.getElementById('chip-refresh');
     const txt  = document.getElementById('txt-refresh');
+    let cfg = null; // declarado ACÁ afuera a propósito — lo necesita loadAlsaDevices() más abajo, en otro bloque try distinto
     try {
       const [cfgRes, statusRes] = await Promise.all([
         fetch('/setup/config', { cache: 'no-store' }),
         fetch('/configuracion/status', { cache: 'no-store' }),
       ]);
-      const cfg    = await cfgRes.json();
+      cfg = await cfgRes.json();
       const status = await statusRes.json();
 
       document.getElementById('inp-rag-url').value    = cfg.ragApiUrl    || '';
       document.getElementById('inp-device-id').value   = cfg.deviceId     || '';
       document.getElementById('inp-api-key').value      = cfg.apiKey       || '';
       document.getElementById('inp-device-name').value = cfg.deviceName   || '';
-      await initColorPicker(cfg.brumexaColor || 'negro');
+      document.getElementById('inp-brumexa-color').value = cfg.brumexaColor || 'negro';
+      await loadColorSchemes();
+      renderPresetRow();
       await CustomColors.init();
       setLiveSliderField('inp-mic-gain',     'val-mic-gain',     cfg.micGain,     4,     v => `${parseFloat(v).toFixed(1)}x`);
       setLiveSliderField('inp-speaker-gain', 'val-speaker-gain', cfg.speakerGain, 3,     v => `${parseFloat(v).toFixed(1)}x`);
@@ -649,7 +610,6 @@
       const btnRestart = document.getElementById('btn-restart');
       if (cfg2.server?.platform === 'linux') {
         loadVersion();
-        loadAlsaDevices(cfg.alsaMicDevice, cfg.alsaSpeakerDevice);
       } else {
         btnUpdate.disabled = true;
         btnRestart.disabled = true;
@@ -657,6 +617,13 @@
           `<div class="field-hint">No disponible — este server está corriendo en ${esc(cfg2.server?.platform || 'este equipo')}, no en la Raspberry.</div>`;
       }
     } catch {}
+
+    // Dispositivos ALSA: SIEMPRE se intenta cargar, sin depender del chequeo
+    // de plataforma de arriba (ese es solo para "Actualizar Brumexa") — antes
+    // vivía adentro de ese mismo bloque y un error ahí (¡o el bug de scope de
+    // "cfg" que había acá! ver el fix de más arriba) lo dejaba sin correr
+    // nunca, en silencio, sin ningún aviso en pantalla.
+    if (cfg) loadAlsaDevices(cfg.alsaMicDevice, cfg.alsaSpeakerDevice);
   }
 
   // Dispositivos ALSA (mic/parlante) — se usa el mismo par de endpoints que
@@ -666,15 +633,20 @@
   // /setup/config (lo que ya está guardado) para preseleccionar la opción
   // correcta en el <select>.
   async function loadAlsaDevices(currentMic, currentSpeaker) {
-    const micSel = document.getElementById('sel-alsa-mic');
-    const spkSel = document.getElementById('sel-alsa-speaker');
+    const micSel  = document.getElementById('sel-alsa-mic');
+    const spkSel  = document.getElementById('sel-alsa-speaker');
+    const result  = document.getElementById('alsa-device-result');
+    const notices = [];
+
     try {
       const { devices } = await fetch('/audio-devices').then(r => r.json());
       micSel.innerHTML = devices.length
         ? devices.map(d => `<option value="${esc(d.id)}">${esc(d.name)} (${esc(d.id)})</option>`).join('')
         : '<option value="default">default</option>';
-    } catch {
+      if (!devices.length) notices.push('No se encontraron dispositivos de micrófono (arecord -l no devolvió nada) — revisá el hardware por Terminal.');
+    } catch (e) {
       micSel.innerHTML = '<option value="default">default</option>';
+      notices.push(`No se pudo consultar los micrófonos: ${esc(e.message)}`);
     }
     micSel.value = currentMic || 'default';
 
@@ -683,10 +655,18 @@
       spkSel.innerHTML = devices.length
         ? devices.map(d => `<option value="${esc(d.id)}">${esc(d.name)} (${esc(d.id)})</option>`).join('')
         : '<option value="plughw:0,0">plughw:0,0 (default)</option>';
-    } catch {
+      if (!devices.length) notices.push('No se encontraron dispositivos de parlante (aplay -l no devolvió nada) — revisá el hardware por Terminal.');
+    } catch (e) {
       spkSel.innerHTML = '<option value="plughw:0,0">plughw:0,0 (default)</option>';
+      notices.push(`No se pudo consultar los parlantes: ${esc(e.message)}`);
     }
     spkSel.value = currentSpeaker || 'plughw:0,0';
+
+    if (result) {
+      result.innerHTML = notices.length
+        ? notices.map(n => `<div class="flow-note bad">✘ ${n}</div>`).join('')
+        : '';
+    }
   }
 
   function wireAlsaDeviceSave(selectId, bodyKey) {
@@ -899,15 +879,6 @@
     });
   });
 
-  document.getElementById('btn-save-color').addEventListener('click', () => {
-    saveFields({
-      brumexaColor: document.getElementById('inp-brumexa-color').value,
-    }, {
-      btn:    document.getElementById('btn-save-color'),
-      result: document.getElementById('color-save-result'),
-      okMsg:  'Guardado y aplicado, sin reiniciar',
-    });
-  });
 
   // ─── Sliders "en vivo": arrastrás y ya se aplica, sin botón "Guardar" ────
   // setLiveSliderField() solo pone el valor inicial (al cargar la página).

@@ -1194,6 +1194,23 @@ httpServer.listen(PORT, () => {
 
   if (DEVICE_CONFIGURED) ragAuth.initAuth();
 
+  // Chime de arranque — un aviso cortito (~0.85s) de que Brumexa terminó de
+  // levantar el proceso. Se dispara ACÁ, lo antes posible, porque la
+  // calibración de boot (más abajo) recién empieza su countdown de blinks
+  // después de esto — así el chime siempre termina bastante antes de que
+  // arranque la ventana de silencio que mide el piso de ruido, sin
+  // solaparse ni ensuciar la medición.
+  if (process.platform === 'linux') {
+    try {
+      const chimePath   = path.join(__dirname, 'public', 'sounds', 'boot-chime.wav');
+      const chimeDevice = getEnvVal('SPEAKER_ALSA_DEVICE') || 'plughw:0,0';
+      const chimeProc = spawn('aplay', ['-D', chimeDevice, '-q', chimePath]);
+      chimeProc.on('error', e => console.warn('[boot] no se pudo reproducir el chime de arranque:', e.message));
+    } catch (e) {
+      console.warn('[boot] chime de arranque:', e.message);
+    }
+  }
+
   leds.init();  // arranca respiracion automaticamente
 
   // En Linux: maximizar el gain de captura ALSA (Capture/Mic/ADC → 100% cap)
