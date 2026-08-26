@@ -183,7 +183,7 @@ const MicMeter = {
   // Los DATOS se siguen juntando cada 200ms igual (el pill/stat-tiles no
   // pierden reactividad) — solo el DIBUJO del gráfico va más despacio.
   MAX_SAMPLES: 300, // ~60s a 200ms/muestra
-  RENDER_INTERVAL_MS: 400,
+  RENDER_INTERVAL_MS: 200, // igual al ritmo de los datos (MicMeter._tick, cada 200ms) — redibuja en cada muestra nueva, lo más rápido que tiene sentido
   SMOOTH_WINDOW: 3,
   Y_MIN: -60,
   Y_MAX: 0,

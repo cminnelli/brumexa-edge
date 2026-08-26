@@ -807,51 +807,6 @@ function stopMicMonitor() {
   return Promise.race([gone, new Promise(r => setTimeout(r, 800))]);
 }
 
-// ─── Respiración de fondo — desde que termina de arrancar (después de la
-// calibración de boot, para no ensuciar la medición de silencio) hasta que
-// se aprieta "Conectar". aplay no tiene loop nativo, así que se re-spawnea
-// el mismo archivo apenas termina un ciclo — sin gap perceptible porque el
-// WAV ya arranca y termina en silencio real (ver public/sounds/
-// breathing-loop.wav, generado con fade a 0 en los bordes a propósito).
-// No vuelve a arrancar sola después de que termina una sesión — solo se usa
-// en el arranque y alrededor de cualquier calibración (boot o manual).
-let _breathingProc   = null;
-let _breathingWanted = false;
-
-function startBreathingLoop() {
-  if (process.platform !== 'linux') return;
-  if (lkSession.isActive()) return; // no compite por el speaker con una sesión real
-  _breathingWanted = true;
-  if (_breathingProc) return; // ya está corriendo
-  const device = getEnvVal('SPEAKER_ALSA_DEVICE') || 'plughw:0,0';
-  const file   = path.join(__dirname, 'public', 'sounds', 'breathing-loop.wav');
-  const spawnOne = () => {
-    if (!_breathingWanted) { _breathingProc = null; return; }
-    const proc = spawn('aplay', ['-D', device, '-q', file]);
-    _breathingProc = proc;
-    proc.on('error', e => {
-      console.warn('[boot] respiración de fondo — aplay falló, no reintenta:', e.message);
-      _breathingWanted = false;
-      _breathingProc = null;
-    });
-    proc.on('close', () => {
-      if (_breathingProc === proc) _breathingProc = null;
-      if (_breathingWanted) spawnOne();
-    });
-  };
-  spawnOne();
-  console.log('[boot] respiración de fondo iniciada — hasta que arranque una sesión');
-}
-
-function stopBreathingLoop() {
-  if (!_breathingWanted && !_breathingProc) return;
-  _breathingWanted = false;
-  if (_breathingProc) {
-    try { _breathingProc.kill('SIGTERM'); } catch {}
-    _breathingProc = null;
-  }
-}
-
 // ─── Calibración de ruido ambiente ───────────────────────────────────────────
 // Margen sobre el tramo más silencioso medido (ver lib/mic-calibration.js).
 // Clamps para que un ambiente rarísimo (ruidoso o insólitamente silencioso)
@@ -883,11 +838,6 @@ async function runCalibration(triggeredBy = 'manual') {
   if (process.platform !== 'linux') throw new Error('Calibración solo disponible en Linux');
   if (lkSession.isActive()) throw new Error('Hay una sesión activa — no se puede calibrar ahora');
 
-  // Frenar la respiración de fondo — mide un tramo de SILENCIO real, no
-  // puede estar sonando algo por el parlante mientras tanto (se retoma al
-  // final, éxito o error, ver los dos startBreathingLoop() más abajo).
-  stopBreathingLoop();
-
   await stopMicMonitor();
   leds.calibrating();  // 3 blinks + respiración blanca sostenida
   await new Promise(r => setTimeout(r, leds.CALIBRATION_COUNTDOWN_MS));
@@ -903,7 +853,6 @@ async function runCalibration(triggeredBy = 'manual') {
   } catch (err) {
     leds.calibrationDone(false);
     startMicMonitor();
-    startBreathingLoop();
     throw err;
   }
 
@@ -956,7 +905,6 @@ async function runCalibration(triggeredBy = 'manual') {
 
   leds.calibrationDone(true);
   startMicMonitor();
-  startBreathingLoop();
   return _lastCalibration;
 }
 
@@ -968,11 +916,6 @@ async function startSession({ micDevice, speakerDevice }) {
     err.sessionActive = true;
     throw err;
   }
-
-  // "Conectar" apretado — la respiración de fondo (ver startBreathingLoop)
-  // termina acá. No vuelve a arrancar sola al desconectar; solo con el
-  // próximo arranque del proceso o alrededor de una recalibración manual.
-  stopBreathingLoop();
 
   // Frenar el monitor de mic ambiente ANTES de mostrar el cometa: si sigue
   // vivo durante el pedido de token (red, puede tardar), cualquier ruido
