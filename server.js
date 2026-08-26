@@ -261,7 +261,7 @@ app.get('/setup/custom-colors', (_req, res) => {
 });
 
 // POST /setup/custom-colors — guarda un set de colores personalizados (uno
-// por rol: respiracion/voz/agente/calibracion) y lo deja activo YA, sin
+// por rol — ver colorSchemes.roles en lib/color-schemes.json) y lo deja activo YA, sin
 // reiniciar. Ruta aparte de /setup/config porque el shape es distinto
 // (objeto anidado, no un string plano) y porque "guardar" y "aplicar" acá
 // son la misma acción — no tiene sentido persistir colores sin aplicarlos.

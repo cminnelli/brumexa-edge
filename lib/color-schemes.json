@@ -3,7 +3,8 @@
     { "key": "respiracion", "label": "Respiración (en espera)" },
     { "key": "voz",         "label": "Tu voz" },
     { "key": "agente",      "label": "Voz del agente" },
-    { "key": "calibracion", "label": "Calibración" }
+    { "key": "calibracion", "label": "Calibración" },
+    { "key": "loading",     "label": "Cargando / conectando" }
   ],
   "colors": {
     "purpura": {
@@ -13,7 +14,8 @@
         "respiracion": { "hue": 270, "sat": 1,    "swatch": "#8000ff", "name": "Violeta" },
         "voz":         { "hue": 40,  "sat": 1,    "swatch": "#ff5500", "name": "Ámbar" },
         "agente":      { "hue": 290, "sat": 1,    "swatch": "#2b00ff", "name": "Índigo" },
-        "calibracion": { "hue": null, "sat": 0,   "swatch": "#ffffff", "name": "Blanco" }
+        "calibracion": { "hue": null, "sat": 0,   "swatch": "#ffffff", "name": "Blanco" },
+        "loading":     { "hue": 200, "sat": 1,    "swatch": "#00aaff", "name": "Cian" }
       }
     },
     "verde": {
@@ -23,7 +25,8 @@
         "respiracion": { "hue": 150, "sat": 1,    "swatch": "#00ff80", "name": "Esmeralda" },
         "voz":         { "hue": 40,  "sat": 1,    "swatch": "#ff5500", "name": "Ámbar" },
         "agente":      { "hue": 100, "sat": 1,    "swatch": "#aaff00", "name": "Lima" },
-        "calibracion": { "hue": null, "sat": 0,   "swatch": "#ffffff", "name": "Blanco" }
+        "calibracion": { "hue": null, "sat": 0,   "swatch": "#ffffff", "name": "Blanco" },
+        "loading":     { "hue": 200, "sat": 1,    "swatch": "#00aaff", "name": "Cian" }
       }
     },
     "negro": {
@@ -33,7 +36,8 @@
         "respiracion": { "hue": 234, "sat": 1,    "swatch": "#00e5ff", "name": "Cian" },
         "voz":         { "hue": 40,  "sat": 1,    "swatch": "#ff5500", "name": "Ámbar" },
         "agente":      { "hue": 120, "sat": 1,    "swatch": "#00ffff", "name": "Cian" },
-        "calibracion": { "hue": null, "sat": 0,   "swatch": "#ffffff", "name": "Blanco" }
+        "calibracion": { "hue": null, "sat": 0,   "swatch": "#ffffff", "name": "Blanco" },
+        "loading":     { "hue": 200, "sat": 1,    "swatch": "#00aaff", "name": "Cian" }
       }
     },
     "blanco": {
@@ -43,7 +47,8 @@
         "respiracion": { "hue": 234, "sat": 0.18, "swatch": "#d1faff", "name": "Celeste pálido" },
         "voz":         { "hue": 40,  "sat": 1,    "swatch": "#ff5500", "name": "Ámbar" },
         "agente":      { "hue": 190, "sat": 1,    "swatch": "#002aff", "name": "Azul" },
-        "calibracion": { "hue": null, "sat": 0,   "swatch": "#ffffff", "name": "Blanco" }
+        "calibracion": { "hue": null, "sat": 0,   "swatch": "#ffffff", "name": "Blanco" },
+        "loading":     { "hue": 200, "sat": 1,    "swatch": "#00aaff", "name": "Cian" }
       }
     }
   },
