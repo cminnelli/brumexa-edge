@@ -141,6 +141,7 @@
 <header class="site-header">
   <div class="site-header__inner">
     <div class="site-header__brand">
+      <svg class="brand-mark" viewBox="0 0 24 24"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z"/></svg>
       <span class="brand-name">Brumexa</span>
     </div>
     <nav class="tab-nav">
@@ -150,7 +151,9 @@
       <a class="tab-btn active" href="/diagnostico">Diagnóstico</a>
       <a class="tab-btn" href="/logs">Logs</a>
     </nav>
-    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambiar tema" title="Cambiar tema"></button>
+    <div class="site-header__actions">
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambiar tema" title="Cambiar tema"></button>
+    </div>
   </div>
 </header>
 
@@ -172,7 +175,7 @@
     </div>
     <div class="dbg-rows">
       <div class="dbg-row">
-        <span class="dbg-icon">🔗</span>
+        <span class="dbg-icon"><svg viewBox="0 0 24 24"><path d="M10.5 13.5a5 5 0 0 0 7 0l2.5-2.5a5 5 0 0 0-7-7l-1 1"/><path d="M13.5 10.5a5 5 0 0 0-7 0L4 13a5 5 0 0 0 7 7l1-1"/></svg></span>
         <div class="dbg-body">
           <div class="dbg-label">Conexión</div>
           <div class="dbg-val" id="sum-conn-val">Sin probar</div>
@@ -180,7 +183,7 @@
         <span class="dbg-dot idle" id="sum-conn-dot"></span>
       </div>
       <div class="dbg-row">
-        <span class="dbg-icon">🎤</span>
+        <span class="dbg-icon"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 19v3"/><path d="M8 22h8"/></svg></span>
         <div class="dbg-body">
           <div class="dbg-label">Micrófono</div>
           <div class="dbg-val" id="sum-mic-val">Verificando…</div>
@@ -188,7 +191,7 @@
         <span class="dbg-dot idle" id="sum-mic-dot"></span>
       </div>
       <div class="dbg-row">
-        <span class="dbg-icon">🔈</span>
+        <span class="dbg-icon"><svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></span>
         <div class="dbg-body">
           <div class="dbg-label">Parlante</div>
           <div class="dbg-val" id="sum-speaker-val">Sin probar</div>
@@ -196,7 +199,7 @@
         <span class="dbg-dot idle" id="sum-speaker-dot"></span>
       </div>
       <div class="dbg-row">
-        <span class="dbg-icon">💡</span>
+        <span class="dbg-icon"><svg viewBox="0 0 24 24"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.5.4.8 1 .8 1.6v.5h5.4v-.5c0-.6.3-1.2.8-1.6A6 6 0 0 0 12 3Z"/></svg></span>
         <div class="dbg-body">
           <div class="dbg-label">LEDs</div>
           <div class="dbg-val" id="sum-leds-val">Verificando…</div>
@@ -271,6 +274,17 @@
     <div class="divider" style="margin:14px 0"></div>
 
     <div class="field-group-label" style="margin-top:0">Sensibilidad</div>
+
+    <!-- Calibración guiada primero (más precisa, mide tu voz real) y
+         destacada — el umbral que deja (o el que ajustás a mano abajo) y
+         Recalibrar rápido quedan debajo, las tres juntas acá porque son
+         las formas de fijar/ajustar el mismo umbral. -->
+    <button class="btn-connect" id="btn-guided-diag" type="button" style="width:100%">
+      <svg viewBox="0 0 24 24"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
+      Calibración guiada
+    </button>
+    <p class="field-hint" style="margin:6px 0 12px">Mide tu voz real y el ruido de fondo — la forma más precisa de fijar el umbral.</p>
+
     <div class="field">
       <label class="field-label" for="inp-talk-threshold">Umbral de la voz</label>
       <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
@@ -282,14 +296,6 @@
       <p class="field-hint">Más a la izquierda = más sensible — mirá la línea "se activa acá" del gráfico moverse mientras ajustás.</p>
     </div>
 
-    <!-- Calibración guiada primero (más precisa, mide tu voz real) y
-         destacada — Recalibrar rápido queda como opción secundaria abajo,
-         las dos juntas acá porque son las dos formas de fijar el umbral. -->
-    <button class="btn-connect" id="btn-guided-diag" type="button" style="width:100%">
-      <svg viewBox="0 0 24 24"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
-      Calibración guiada
-    </button>
-    <p class="field-hint" style="margin:6px 0 12px">Mide tu voz real y el ruido de fondo — la forma más precisa de fijar el umbral.</p>
     <button class="btn-ghost" id="btn-recalibrate" type="button">
       <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
       Recalibrar rápido (8s de silencio)

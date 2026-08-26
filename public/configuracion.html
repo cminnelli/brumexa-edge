@@ -60,6 +60,7 @@
 <header class="site-header">
   <div class="site-header__inner">
     <div class="site-header__brand">
+      <svg class="brand-mark" viewBox="0 0 24 24"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z"/></svg>
       <span class="brand-name">Brumexa</span>
     </div>
     <nav class="tab-nav">
@@ -69,8 +70,13 @@
       <a class="tab-btn" href="/diagnostico">Diagnóstico</a>
       <a class="tab-btn" href="/logs">Logs</a>
     </nav>
-    <button id="btn-update-header" class="btn-ghost" type="button" style="flex-shrink:0; padding:6px 12px; font-size:12px" title="Ir a Actualizar Brumexa y buscar novedades ya">⬇️ Actualizar</button>
-    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambiar tema" title="Cambiar tema"></button>
+    <div class="site-header__actions">
+      <button id="btn-update-header" class="btn-ghost" type="button" style="flex-shrink:0; padding:6px 12px; font-size:12px" title="Ir a Actualizar Brumexa y buscar novedades ya">
+        <svg viewBox="0 0 24 24" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M12 4v11"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg>
+        Actualizar
+      </button>
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambiar tema" title="Cambiar tema"></button>
+    </div>
   </div>
 </header>
 
