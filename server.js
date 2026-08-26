@@ -44,7 +44,7 @@ const { startRecording, stopRecording, getStatus,
         listRecordings, RECORDINGS_DIR,
         reserveBrowserFilename, saveBrowserRecording,
         deleteRecording, boostCaptureGain } = require('./lib/recorder');
-const { setupWifi, autoStartAP, startHealthMonitor, getStatus: getWifiStatus } = require('./lib/wifi');
+const { setupWifi, autoStartAP, startHealthMonitor, getStatus: getWifiStatus, getStatusAsync: getWifiStatusAsync } = require('./lib/wifi');
 const { setupLocalDebug }                              = require('./lib/local-debug');
 
 // lib/configuracion.js se carga con red de seguridad: si el archivo llegó
@@ -1084,7 +1084,7 @@ const httpServer = http.createServer(app);
 setupAudio(app, httpServer, { '/ws/logs': handleLogsWsConnection });
 setupWifi(app);
 setupLocalDebug(app, {
-  getWifiStatus: getWifiStatus,
+  getWifiStatus: getWifiStatusAsync,
   lkSession,
   getMicLevel: () => ({ ..._micLevel, monitorActive: !!_micMonitor }),
   getRecorderStatus: getStatus,
