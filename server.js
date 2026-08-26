@@ -48,10 +48,11 @@ try {
 const { session: lkSession }                           = require('./lib/livekit-session');
 const micGate                                          = require('./lib/mic-speech-gate');
 const calibrationHistory                               = require('./lib/calibration-history');
+const { createCalibrationRunner }                      = require('./lib/calibration');
 const leds                                             = require('./lib/leds');
 const ragAuth                                          = require('./lib/rag-auth');
 const { requestRoomToken, setCredentials: setTokenCredentials } = require('./lib/rag-token');
-const { measureNoiseFloor, POP_SETTLE_MS: MIC_MONITOR_WARMUP_MS } = require('./lib/mic-calibration');
+const { POP_SETTLE_MS: MIC_MONITOR_WARMUP_MS }         = require('./lib/mic-calibration');
 
 const {
   PORT = 3000,
@@ -834,105 +835,17 @@ function stopMicMonitor() {
 }
 
 // ─── Calibración de ruido ambiente ───────────────────────────────────────────
-// Margen sobre el tramo más silencioso medido (ver lib/mic-calibration.js).
-// Clamps para que un ambiente rarísimo (ruidoso o insólitamente silencioso)
-// no empuje el umbral fuera de un rango razonable.
-// Ventana subida de 4s a 8s: con más datos, la búsqueda del tramo contiguo
-// más silencioso (lib/mic-calibration.js) tiene más chances de encontrar un
-// tramo realmente representativo del ambiente, no solo un instante de
-// suerte.
-// Margen bajado de 10 a 7dB — con 10dB, en un ambiente medido real la voz
-// quedaba apenas ~1dB por encima del umbral resultante (log real: piso
-// -42dBFS → umbral -32dBFS, voz hablando a -31dBFS), tan pegado que
-// cualquier variación normal de volumen dentro de una frase caía por debajo
-// y disparaba entradas/salidas de "hablando" en vez de una sola detección
-// sostenida. El colchón contra ruido puntual sigue estando — lo dan
-// ONSET_MIN_STREAK (~300ms sostenidos para declarar inicio) y el hangover
-// (~400ms de gracia antes de declarar fin) en lib/leds.js, no dependen solo
-// de este margen.
-const CALIBRATION_MARGIN_DB   = 7;
-const CALIBRATION_DURATION_MS = 8000;
-const CALIBRATION_MIN_DBFS    = -45;
-const CALIBRATION_MAX_DBFS    = -12;
-
-// Último resultado — lo lee /configuracion/status para mostrarlo en el panel.
-let _lastCalibration = null;
-function getLastCalibration() { return _lastCalibration; }
-
-// triggeredBy: 'boot' (automático al arrancar) | 'manual' (botón en /configuracion)
-async function runCalibration(triggeredBy = 'manual') {
-  if (process.platform !== 'linux') throw new Error('Calibración solo disponible en Linux');
-  if (lkSession.isActive()) throw new Error('Hay una sesión activa — no se puede calibrar ahora');
-
-  await stopMicMonitor();
-  leds.calibrating();  // 3 blinks + respiración blanca sostenida
-  await new Promise(r => setTimeout(r, leds.CALIBRATION_COUNTDOWN_MS));
-
-  const device = getEnvVal('MIC_ALSA_DEVICE') || 'plughw:0,0';
-  let result;
-  try {
-    result = await measureNoiseFloor({
-      device,
-      durationMs: CALIBRATION_DURATION_MS,
-      gain: lkSession.getMicGain(),
-    });
-  } catch (err) {
-    leds.calibrationDone(false);
-    startMicMonitor();
-    throw err;
-  }
-
-  const rawThreshold = result.noiseFloorDbfs + CALIBRATION_MARGIN_DB;
-  // Redondeado a 1 decimal ACÁ, antes de aplicarlo — si no, el float con
-  // toda su precisión (ej. -27.053576989202497) se cuela a los logs de
-  // lk-session/leds, que loguean lo que reciben tal cual.
-  const threshold = Math.round(Math.min(CALIBRATION_MAX_DBFS, Math.max(CALIBRATION_MIN_DBFS, rawThreshold)) * 10) / 10;
-
-  lkSession.setTalkThreshold(threshold);
-  leds.setSpeakThresholdDbfs(threshold);
-
-  // Persistir para el próximo arranque — mismo patrón que /setup/config/live.
-  try {
-    const envFile = path.join(__dirname, '.env');
-    let content = '';
-    try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
-    content = setEnvLine(content, 'MIC_TALK_THRESHOLD_DBFS', threshold.toFixed(1));
-    require('fs').writeFileSync(envFile, content, 'utf8');
-  } catch (err) {
-    console.warn('[calibration] no se pudo persistir en .env:', err.message);
-  }
-
-  _lastCalibration = {
-    noiseFloorDbfs: Math.round(result.noiseFloorDbfs * 10) / 10,
-    threshold:      Math.round(threshold * 10) / 10,
-    marginDb:       CALIBRATION_MARGIN_DB,
-    durationMs:     CALIBRATION_DURATION_MS,
-    sampleCount:    result.ticks.length,
-    measuredAt:     Date.now(),
-    triggeredBy,
-    // Serie completa (no solo el resumen) — para el sparkline en /configuracion.
-    // Solo se guarda la última corrida, se pisa en la próxima (igual que el resto de este objeto).
-    ticksDbfs: result.ticksDbfs.map(v => Math.round(v * 10) / 10),
-  };
-
-  console.log(`[calibration] piso=${result.noiseFloorDbfs.toFixed(1)}dBFS → umbral=${threshold.toFixed(1)}dBFS (margen ${CALIBRATION_MARGIN_DB}dB, ${triggeredBy})`);
-
-  // Historial en disco (logs/calibration-history.jsonl) — a diferencia de
-  // _lastCalibration (se pisa acá arriba en cada corrida), esto se acumula.
-  // Sin ticksDbfs (la serie completa): eso es solo para el sparkline de la
-  // corrida MÁS RECIENTE, no hace falta guardarlo para cada una del historial.
-  calibrationHistory.appendCalibration({
-    measuredAt:     _lastCalibration.measuredAt,
-    triggeredBy:    _lastCalibration.triggeredBy,
-    noiseFloorDbfs: _lastCalibration.noiseFloorDbfs,
-    threshold:      _lastCalibration.threshold,
-    marginDb:       _lastCalibration.marginDb,
-  });
-
-  leds.calibrationDone(true);
-  startMicMonitor();
-  return _lastCalibration;
-}
+// La orquestación (medir + aplicar + persistir + LEDs + historial) vive en
+// lib/calibration.js — acá solo se instancia con sus dependencias (mismo
+// patrón que ya usa setupConfiguracion() más abajo). runCalibration/
+// getLastCalibration/runBootCalibrationIfNeeded quedan como variables
+// normales de este archivo, así el resto de server.js (y lib/configuracion.js,
+// que las recibe inyectadas) no tiene que cambiar cómo las usa.
+const { runCalibration, getLastCalibration, runBootCalibrationIfNeeded } = createCalibrationRunner({
+  lkSession, leds, getEnvVal, setEnvLine,
+  envFile: path.join(__dirname, '.env'),
+  startMicMonitor, stopMicMonitor,
+});
 
 // ─── startSession(): la misma lógica que corría inline en POST /session/start,
 // separada para más claridad — hoy la usa solo esa ruta HTTP ────────────────
@@ -1241,23 +1154,10 @@ httpServer.listen(PORT, () => {
     console.log('[boot] Maximizando gain de captura ALSA…');
     boostCaptureGain();
 
-    // Solo calibra ciego (silencio + margen fijo) si TODAVÍA no hay ningún
-    // umbral guardado — antes esto corría SIEMPRE, así que un umbral más
-    // preciso (fijado a mano o con la calibración guiada) quedaba pisado
-    // por una medición ciega en el próximo reinicio, auto-update incluido.
-    // Reportado como "no persiste" — en realidad sí se guardaba bien en
-    // .env, el problema era que el boot lo volvía a pisar cada vez que
-    // arrancaba de nuevo. Ahora respeta lo que ya haya, y solo mide solo
-    // (blinks blancos + 4s de silencio asumido) la primera vez que este
-    // dispositivo arranca sin ningún umbral todavía. runCalibration() ya
-    // arranca el monitor de mic idle al final — si se salta, hay que
-    // arrancarlo acá para no perder ese paso.
-    if (process.env.MIC_TALK_THRESHOLD_DBFS) {
-      console.log(`[calibration] ya hay un umbral guardado (${process.env.MIC_TALK_THRESHOLD_DBFS}dBFS) — no se recalibra solo al arrancar`);
-      startMicMonitor();
-    } else {
-      runCalibration('boot').catch(err => console.warn('[calibration] boot falló:', err.message));
-    }
+    // Mide ciego (blinks + 4s de silencio asumido) SOLO si es la primera
+    // vez que este dispositivo arranca sin ningún umbral guardado — ver el
+    // comentario grande en lib/calibration.js (runBootCalibrationIfNeeded).
+    runBootCalibrationIfNeeded();
   }
 
   // Si estamos en Linux y no hay WiFi configurado → activar AP + LEDs rojo
