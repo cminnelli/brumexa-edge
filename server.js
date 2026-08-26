@@ -344,13 +344,13 @@ function setEnvLine(src, key, value) {
 // distinto, no conectado) no hace nada — el resto del código sigue con el
 // fallback de siempre (plughw:0,0) y el desplegable manual de Configuración
 // sigue disponible para corregirlo a mano.
-function autoDetectAlsaDevices() {
+async function autoDetectAlsaDevices() {
   const hasMic     = !!getEnvVal('MIC_ALSA_DEVICE');
   const hasSpeaker = !!getEnvVal('SPEAKER_ALSA_DEVICE');
   if (hasMic && hasSpeaker) return;
 
-  const micId     = hasMic     ? null : findHatDevice(listAlsaDevices());
-  const speakerId = hasSpeaker ? null : findHatDevice(listAlsaPlaybackDevices());
+  const micId     = hasMic     ? null : findHatDevice(await listAlsaDevices());
+  const speakerId = hasSpeaker ? null : findHatDevice(await listAlsaPlaybackDevices());
   if (!micId && !speakerId) return;
 
   const envFile = path.join(__dirname, '.env');
@@ -1160,7 +1160,7 @@ httpServer.on('error', err => {
   setTimeout(() => httpServer.listen(PORT), 1000);
 });
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, async () => {
   console.log(`\n  Brumexa-Edge corriendo en → http://localhost:${PORT}`);
   console.log(`  RAG API                 → ${process.env.RAG_API_URL || 'http://localhost:4000'}`);
   console.log(`  Device                  → ${DEVICE_CONFIGURED ? `✔ ${process.env.BRUMEXA_DEVICE_ID}` : '(no configurado)'}`);
@@ -1184,7 +1184,11 @@ httpServer.listen(PORT, () => {
     // Antes de tocar gain o calibrar — si no hay tarjeta ALSA elegida
     // todavía, la busca sola (ver autoDetectAlsaDevices arriba) para que
     // calibración y el resto del arranque ya usen el dispositivo correcto.
-    autoDetectAlsaDevices();
+    // await de verdad (no fire-and-forget): autoDetectAlsaDevices ahora es
+    // async (arecord/aplay via exec, no execSync) — boostCaptureGain() de
+    // abajo necesita que la tarjeta ya esté resuelta en .env ANTES de
+    // correr, si no actuaría sobre el dispositivo viejo/default.
+    await autoDetectAlsaDevices();
 
     console.log('[boot] Maximizando gain de captura ALSA…');
     boostCaptureGain();
