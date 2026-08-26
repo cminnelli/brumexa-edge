@@ -151,17 +151,15 @@ body {
 .theme-toggle:hover { background: var(--surface2); border-color: var(--border2); color: var(--accent); }
 .theme-toggle svg { display: block; }
 
-/* Tab nav — pill segmentado; la pestaña activa usa texto en acento sobre
-   fondo claro (no relleno sólido) para no competir con los botones de
-   acción, que son los únicos elementos en violeta sólido de la página. */
+/* Tab nav — antes era una píldora gris (fondo + borde alrededor de todo el
+   grupo) que competía visualmente con el resto del header. Ahora cada link
+   es su propio elemento suelto, sin cápsula exterior: la pestaña activa se
+   marca con el texto en acento + un subrayado fino, más liviano y
+   "tecnológico" que un fondo sólido. */
 .tab-nav {
   display: flex;
   gap: 2px;
   justify-self: center;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 3px;
 }
 
 /* Extras a la derecha del header (toggle de tema + a veces un atajo como
@@ -174,24 +172,32 @@ body {
   justify-self: end;
 }
 .tab-btn {
-  padding: 6px 18px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px 8px;
   border: none;
-  border-radius: 999px;
+  border-bottom: 2px solid transparent;
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
   background: transparent;
   color: var(--text2);
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   letter-spacing: 0.01em;
   cursor: pointer;
-  transition: background var(--tr), color var(--tr), box-shadow var(--tr);
+  transition: background var(--tr), color var(--tr), border-color var(--tr);
   white-space: nowrap;
+}
+.tab-btn svg {
+  width: 14px; height: 14px; flex-shrink: 0;
+  stroke: currentColor; fill: none; stroke-width: 1.75;
+  stroke-linecap: round; stroke-linejoin: round;
 }
 .tab-btn:hover:not(.active) { color: var(--text); background: var(--surface2); }
 .tab-btn.active {
-  background: var(--surface);
   color: var(--accent);
   font-weight: 700;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-bottom-color: var(--accent);
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1487,3 +1493,21 @@ body {
   background: linear-gradient(to right,
     #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
 }
+
+/* Variante chica para meter el mismo laboratorio DENTRO de una card normal
+   (Diagnóstico → LEDs) en vez del panel modal flotante de arriba — mismo
+   swatch/slider, pero mucho más compacto: label al lado en vez de arriba,
+   thumb y barra más finos. Antes esto se mostraba tal cual con las medidas
+   del modal (swatch de 90px, sliders de 10px con thumb de 18px) adentro de
+   una card chica y se sentía enorme/pesado comparado con el resto. */
+.leds-lab-inline .leds-lab__swatch { height: 44px; border-radius: 0.5rem; margin-bottom: 0.65rem; }
+.leds-lab-inline .leds-lab__row {
+  flex-direction: row; align-items: center; gap: 10px;
+  margin-bottom: 0.5rem;
+}
+.leds-lab-inline .leds-lab__row label {
+  width: 64px; flex-shrink: 0; font-size: 10.5px;
+}
+.leds-lab-inline .leds-lab__slider { height: 6px; }
+.leds-lab-inline .leds-lab__slider::-webkit-slider-thumb { width: 14px; height: 14px; }
+.leds-lab-inline .leds-lab__slider::-moz-range-thumb { width: 14px; height: 14px; }

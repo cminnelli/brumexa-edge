@@ -150,10 +150,10 @@
     </div>
     <nav class="tab-nav">
       <a class="tab-btn" href="/">Panel</a>
-      <a class="tab-btn" id="nav-terminal" href="/terminal">Terminal Pi</a>
-      <a class="tab-btn" href="/configuracion">Configuracion</a>
+      <a class="tab-btn" href="/configuracion"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>Configuración</a>
       <a class="tab-btn active" href="/diagnostico">Diagnóstico</a>
       <a class="tab-btn" href="/logs">Logs</a>
+      <a class="tab-btn" id="nav-terminal" href="/terminal">Terminal Pi</a>
     </nav>
     <div class="site-header__actions">
       <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambiar tema" title="Cambiar tema"></button>
@@ -354,26 +354,24 @@
     </div>
     <div class="kv" id="kv-leds-diag"></div>
 
-    <details class="tech-details" style="margin-top:10px">
-      <summary>Laboratorio de color</summary>
-      <div style="margin-top:0.75rem">
-        <div class="leds-lab__swatch" id="leds-lab-swatch" style="margin-bottom:0.75rem"></div>
-        <div class="leds-lab__row" style="margin-bottom:0.75rem">
-          <label for="leds-lab-hue">Tono</label>
-          <input type="range" id="leds-lab-hue" min="0" max="359" step="1" value="255" class="leds-lab__slider leds-lab__slider--hue">
-        </div>
-        <div class="leds-lab__row" style="margin-bottom:0.75rem">
-          <label for="leds-lab-sat">Saturación</label>
-          <input type="range" id="leds-lab-sat" min="0" max="100" step="1" value="100" class="leds-lab__slider">
-        </div>
-        <div class="leds-lab__row" style="margin-bottom:0.75rem">
-          <label for="leds-lab-val">Brillo</label>
-          <input type="range" id="leds-lab-val" min="5" max="100" step="1" value="100" class="leds-lab__slider">
-        </div>
-        <button class="btn-ghost" id="btn-leds-lab-exit" type="button">Salir del laboratorio (volver al color normal)</button>
-        <div id="leds-lab-result" style="margin-top:8px"></div>
+    <div class="field-group-label" style="margin-top:14px">Laboratorio de color</div>
+    <div class="leds-lab-inline">
+      <div class="leds-lab__swatch" id="leds-lab-swatch"></div>
+      <div class="leds-lab__row">
+        <label for="leds-lab-hue">Tono</label>
+        <input type="range" id="leds-lab-hue" min="0" max="359" step="1" value="255" class="leds-lab__slider leds-lab__slider--hue">
       </div>
-    </details>
+      <div class="leds-lab__row">
+        <label for="leds-lab-sat">Saturación</label>
+        <input type="range" id="leds-lab-sat" min="0" max="100" step="1" value="100" class="leds-lab__slider">
+      </div>
+      <div class="leds-lab__row">
+        <label for="leds-lab-val">Brillo</label>
+        <input type="range" id="leds-lab-val" min="5" max="100" step="1" value="100" class="leds-lab__slider">
+      </div>
+      <button class="btn-ghost" id="btn-leds-lab-exit" type="button" style="margin-top:2px; padding:6px 14px; font-size:11.5px">Volver al color normal</button>
+      <div id="leds-lab-result" style="margin-top:8px"></div>
+    </div>
   </div>
 
   <!-- § Grabaciones -->
