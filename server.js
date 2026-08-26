@@ -247,7 +247,7 @@ app.get('/setup/config', (_req, res) => {
     // Ritmo de los LEDS — ver lib/leds.js (setBreathePeriodMs, setHangoverMs,
     // setOnsetDurationMs, setOffsetDurationMs) para el porqué de cada uno.
     ledBreathePeriodMs: getVal('LED_BREATHE_PERIOD_MS') || '1900',
-    ledHangoverMs:      getVal('LED_HANGOVER_MS')       || '2000',
+    ledHangoverMs:      getVal('LED_HANGOVER_MS')       || '700',
     ledOnsetMs:         getVal('LED_ONSET_MS')          || '536',
     ledOffsetMs:        getVal('LED_OFFSET_MS')         || '965',
     alsaMicDevice:      getVal('MIC_ALSA_DEVICE')     || 'default',
