@@ -1241,12 +1241,23 @@ httpServer.listen(PORT, () => {
     console.log('[boot] Maximizando gain de captura ALSA…');
     boostCaptureGain();
 
-    // Calibra el umbral de voz contra el ruido ambiente real de este boot
-    // (blinks blancos + 4s de silencio asumido) y recién después arranca el
-    // monitor de mic idle — runCalibration() se encarga de eso al final,
-    // con o sin error. No se espera (fire-and-forget) porque no bloquea nada
-    // más del arranque: el server ya está escuchando en este punto.
-    runCalibration('boot').catch(err => console.warn('[calibration] boot falló:', err.message));
+    // Solo calibra ciego (silencio + margen fijo) si TODAVÍA no hay ningún
+    // umbral guardado — antes esto corría SIEMPRE, así que un umbral más
+    // preciso (fijado a mano o con la calibración guiada) quedaba pisado
+    // por una medición ciega en el próximo reinicio, auto-update incluido.
+    // Reportado como "no persiste" — en realidad sí se guardaba bien en
+    // .env, el problema era que el boot lo volvía a pisar cada vez que
+    // arrancaba de nuevo. Ahora respeta lo que ya haya, y solo mide solo
+    // (blinks blancos + 4s de silencio asumido) la primera vez que este
+    // dispositivo arranca sin ningún umbral todavía. runCalibration() ya
+    // arranca el monitor de mic idle al final — si se salta, hay que
+    // arrancarlo acá para no perder ese paso.
+    if (process.env.MIC_TALK_THRESHOLD_DBFS) {
+      console.log(`[calibration] ya hay un umbral guardado (${process.env.MIC_TALK_THRESHOLD_DBFS}dBFS) — no se recalibra solo al arrancar`);
+      startMicMonitor();
+    } else {
+      runCalibration('boot').catch(err => console.warn('[calibration] boot falló:', err.message));
+    }
   }
 
   // Si estamos en Linux y no hay WiFi configurado → activar AP + LEDs rojo
