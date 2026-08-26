@@ -183,11 +183,11 @@ const MicMeter = {
   // Los DATOS se siguen juntando cada 200ms igual (el pill/stat-tiles no
   // pierden reactividad) — solo el DIBUJO del gráfico va más despacio.
   MAX_SAMPLES: 300, // ~60s a 200ms/muestra
-  RENDER_INTERVAL_MS: 700,
+  RENDER_INTERVAL_MS: 400,
   SMOOTH_WINDOW: 3,
   Y_MIN: -60,
   Y_MAX: 0,
-  CHART_W: 640, CHART_H: 190, PAD_L: 6, PAD_R: 4, PAD_T: 16, PAD_B: 6,
+  CHART_W: 640, CHART_H: 190, PAD_L: 28, PAD_R: 4, PAD_T: 16, PAD_B: 6,
   _history: [],
   _calibratedThresholdDbfs: null,
   _lastMic: null,
@@ -241,12 +241,13 @@ const MicMeter = {
       bands += `<rect x="${x.toFixed(1)}" y="${this.PAD_T}" width="${(step + 0.6).toFixed(1)}" height="${this.CHART_H - this.PAD_T - this.PAD_B}" fill="rgba(224,160,50,0.22)" />`;
     }
 
-    // 2 gridlines nomás, sin números — solo para tener una referencia visual
-    // de escala, sin agregar más texto para leer.
+    // Gridlines cada 10dB, con número — para leer el valor directo del eje
+    // sin tener que estimar.
     let grid = '';
-    for (const db of [-20, -40]) {
+    for (let db = this.Y_MIN; db <= this.Y_MAX; db += 10) {
       const y = this._yFor(db);
       grid += `<line x1="${this.PAD_L}" y1="${y.toFixed(1)}" x2="${this.CHART_W - this.PAD_R}" y2="${y.toFixed(1)}" stroke="var(--border)" stroke-width="1" />`;
+      grid += `<text x="2" y="${(y + 3).toFixed(1)}" font-size="9" fill="var(--text2)">${db}</text>`;
     }
 
     const smoothed = this._smoothedDbfs();
