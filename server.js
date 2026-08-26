@@ -10,6 +10,29 @@ require('dotenv').config();
 const { setupLogStream, handleLogsWsConnection } = require('./lib/log-stream');
 setupLogStream();
 
+// ─── Monitor de bloqueo del event loop ──────────────────────────────────────
+// Instrumentación para cazar en vivo el "se tilda la respiración" reportado
+// en producción — hasta ahora solo se pudo diagnosticar por sospecha (dos
+// execSync bloqueantes encontrados y arreglados así, a ciegas). Esto mide
+// cuánto tarda de más cada tick de un timer de referencia (200ms
+// esperados) — si el event loop se bloqueó por algo síncrono en el medio
+// (los timers de audio/LEDs tampoco pueden tickear en ese lapso), el
+// próximo tick de ESTE timer también llega tarde, así que lo mismo que
+// congela la respiración necesariamente atrasa esto — y avisa con la
+// duración exacta y la hora, para cruzarlo contra qué requests estaban
+// llegando en ese momento (ver el log de requests más abajo). Umbral de
+// 150ms: los ticks de animación son de 16ms, cualquier atraso de ese
+// tamaño ya se nota a simple vista en los LEDs.
+let _eventLoopLastTick = Date.now();
+setInterval(() => {
+  const now   = Date.now();
+  const drift = now - _eventLoopLastTick - 200;
+  _eventLoopLastTick = now;
+  if (drift > 150) {
+    console.warn(`[event-loop] ⚠ se atrasó ${drift}ms respecto de lo esperado — algo bloqueó el hilo principal un rato`);
+  }
+}, 200);
+
 const http    = require('http');
 const express = require('express');
 const path    = require('path');
