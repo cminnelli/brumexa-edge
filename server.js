@@ -49,6 +49,14 @@ const { session: lkSession }                           = require('./lib/livekit-
 const micGate                                          = require('./lib/mic-speech-gate');
 const calibrationHistory                               = require('./lib/calibration-history');
 const leds                                             = require('./lib/leds');
+// Lo antes posible — antes de armar WiFi/audio/rutas, antes incluso de que
+// el HTTP server esté escuchando. Antes esto corría recién dentro del
+// callback de httpServer.listen(), al final de TODO el arranque — entre
+// enchufar y ver el primer signo de vida en la tira pasaba todo ese tiempo
+// de setup (WiFi, audio, rutas) sin ningún feedback visual. Ahora es lo
+// primero que corre después de este require, así que el cometa ámbar de
+// booting() arranca apenas Node llega a esta línea.
+leds.init();
 const ragAuth                                          = require('./lib/rag-auth');
 const { requestRoomToken, setCredentials: setTokenCredentials } = require('./lib/rag-token');
 const { measureNoiseFloor, POP_SETTLE_MS: MIC_MONITOR_WARMUP_MS } = require('./lib/mic-calibration');
@@ -1196,7 +1204,8 @@ httpServer.listen(PORT, () => {
 
   if (DEVICE_CONFIGURED) ragAuth.initAuth();
 
-  leds.init();  // arranca respiracion automaticamente
+  // leds.init() ya corrió arriba, apenas se cargó el módulo — ver comentario
+  // en el require de lib/leds.
 
   // En Linux: maximizar el gain de captura ALSA (Capture/Mic/ADC → 100% cap)
   // Así el mic anda aunque no se haya abierto nunca la UI de grabación.
