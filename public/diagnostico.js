@@ -863,7 +863,7 @@ const GuidedDiag = {
     { key: 'noise',    title: 'Ruido corto',         instruction: 'Un aplauso o un golpe seco en la mesa — algo breve, no sostenido.', durationMs: 2500, icon: '👏' },
     { key: 'whisper',  title: 'Susurro',             instruction: 'Hablá bien bajito, casi susurrando.',                            durationMs: 3000, icon: '🤏' },
   ],
-  PREP_MS: 2000,
+  PREP_MS: 3000,
   SAMPLE_MS: 150,
   _results: {},
   _running: false,
