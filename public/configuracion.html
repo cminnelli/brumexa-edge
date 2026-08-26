@@ -735,22 +735,17 @@
         ['Versión instalada', `${esc(data.subject)} (${data.hash})`],
         ['Última actualización', `${new Date(data.date).toLocaleString()} (${ageLabel(new Date(data.date).getTime())})`],
       ];
+      // El chequeo usa "git ls-remote" (server.js), no "git fetch" — más
+      // seguro (nunca escribe nada en el .git local) pero ya no sabe
+      // CUÁNTOS commits hay ni cuál es el último sin traerlos de verdad,
+      // así que acá solo se puede decir "hay algo nuevo", sin detalle.
       let banner = '';
       if (data.behind === null) {
         rows.push(['¿Hay más nuevas?', 'No se pudo chequear (sin red / sin remoto configurado)']);
       } else if (data.behind === 0) {
         banner = '<div class="pill ok" style="margin-top:8px">✔ Estás al día — no hay actualizaciones pendientes</div>';
       } else {
-        // Además de CUÁNTAS hay, mostrar A CUÁL te deja "Buscar
-        // actualizaciones" si lo tocás — data.remote es el último commit
-        // del lado del repo remoto (no necesariamente el que vas a terminar
-        // corriendo si hay más de 1 pendiente y algún día se cambia a traer
-        // de a una, pero hoy "Buscar actualizaciones" siempre trae TODO lo
-        // pendiente de un saque, así que es exactamente la que vas a tener).
-        if (data.remote) {
-          rows.push(['Se va a instalar', `${esc(data.remote.subject)} (${data.remote.hash})`]);
-        }
-        banner = `<div class="pill warn" style="margin-top:8px">⬇️ Hay ${data.behind} actualización${data.behind === 1 ? '' : 'es'} disponible${data.behind === 1 ? '' : 's'} — tocá "Buscar actualizaciones" para traerla${data.behind === 1 ? '' : 's'}</div>`;
+        banner = '<div class="pill warn" style="margin-top:8px">⬇️ Hay una actualización disponible — tocá "Buscar actualizaciones" para traerla</div>';
       }
       kv.innerHTML = kvRows(rows) + banner;
     } catch (e) {
