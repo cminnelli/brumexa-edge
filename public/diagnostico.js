@@ -948,44 +948,39 @@ const GuidedDiag = {
   // afirmar (ver la discusión sobre "ambiente ruidoso" — no adivina causas
   // que no puede medir, solo reporta lo que pasó en cada paso).
   // Umbral propuesto — a diferencia de "Recalibrar" (que solo mide silencio
-  // y suma un margen fijo), acá hay 3 señales reales: el piso (silence1),
-  // tu voz real (speak) y un ruido corto de prueba (noise). El umbral tiene
-  // que quedar en el HUECO entre "lo más fuerte que no es tu voz" y "lo más
-  // flojo que SÍ es tu voz" — si ese hueco no existe (tu voz está pegada al
-  // ruido), no hay ningún número seguro para proponer, así que se dice eso
-  // en vez de inventar uno.
+  // y suma un margen fijo), acá se mide además tu voz real (speak). El
+  // umbral queda en el HUECO entre "el piso" y "lo más flojo que SÍ es tu
+  // voz" — si ese hueco no existe (tu voz está pegada al piso), no hay
+  // ningún número seguro para proponer, así que se dice eso en vez de
+  // inventar uno.
+  //
+  // El ruido corto de prueba (paso "noise") YA NO participa de esta cuenta
+  // — es un solo golpe, a la fuerza que decidiste hacerlo ese día, así que
+  // ni fuerte ni flojo dice gran cosa sobre qué tan fuerte puede ser un
+  // ruido real del taller (usuario: "no sé si es representativo, porque
+  // ruidos puede haber más fuertes más tranqui"). Además, lo que de verdad
+  // filtra un golpe corto es la DURACIÓN (~300ms sostenidos, ONSET_MIN_
+  // STREAK), no el volumen — así que ese resultado queda solo como dato
+  // informativo en el reporte, nunca bloqueando la aceptación del umbral.
   _computeThreshold(r) {
     if (!r.silence1 || !r.speak || r.silence1.avgDbfs == null || r.speak.avgDbfs == null) {
       return { ok: false, why: 'No se juntaron suficientes muestras — repetí la prueba.' };
     }
-    const floor     = r.silence1.avgDbfs;
-    const noisePeak = r.noise?.peakDbfs ?? null;
-    const voiceAvg  = r.speak.avgDbfs;
-
-    // El piso de silencio SIEMPRE es el techo real a superar (es sostenido,
-    // el promedio de 25-75s lo sigue). El ruido corto de prueba (aplauso/
-    // golpe) es a propósito BREVE — el filtro de ~300ms sostenidos
-    // (ONSET_MIN_STREAK) ya lo descarta casi sin importar el umbral exacto,
-    // así que su pico NO cuenta como techo salvo que el propio test haya
-    // demostrado que SÍ logró fallar el gate (r.noise.gateOpened === true)
-    // — ahí sí es una señal real de que hace falta más margen, no antes.
-    const noiseFooledGate = r.noise?.gateOpened === true;
-    const notVoiceCeiling = noiseFooledGate && noisePeak != null
-      ? Math.max(floor + 6, noisePeak + 2)
-      : floor + 6;
+    const floor          = r.silence1.avgDbfs;
+    const voiceAvg        = r.speak.avgDbfs;
+    const notVoiceCeiling = floor + 6;
     const voiceFloorSafe  = voiceAvg - 3;
 
     if (notVoiceCeiling >= voiceFloorSafe) {
-      const culprit = noiseFooledGate ? 'al ruido corto de prueba' : 'al piso de fondo';
       return {
         ok: false,
-        why: `Tu voz (~${voiceAvg.toFixed(1)}dBFS de promedio) está muy pegada ${culprit} (~${notVoiceCeiling.toFixed(1)}dBFS) — no hay un hueco seguro para fijar un umbral acá. Probá hablar más cerca del mic, subir la ganancia en Configuración, o reducir el ruido del ambiente.`,
+        why: `Tu voz (~${voiceAvg.toFixed(1)}dBFS de promedio) está muy pegada al piso de fondo (~${notVoiceCeiling.toFixed(1)}dBFS) — no hay un hueco seguro para fijar un umbral acá. Probá hablar más cerca del mic, subir la ganancia en Configuración, o reducir el ruido del ambiente.`,
       };
     }
 
     const raw = (notVoiceCeiling + voiceFloorSafe) / 2;
     const value = Math.round(Math.max(-45, Math.min(-12, raw)) * 10) / 10;
-    return { ok: true, value, floor, voiceAvg, noisePeak, noiseFooledGate };
+    return { ok: true, value, floor, voiceAvg };
   },
 
   async _applyThreshold(value) {
@@ -1025,7 +1020,7 @@ const GuidedDiag = {
     if (r.noise) {
       lines.push(!r.noise.gateOpened
         ? ['✅', 'Ignoró el ruido corto — no lo confundió con voz']
-        : ['⚠️', 'El ruido corto activó el gate — el umbral propuesto ya tiene esto en cuenta']);
+        : ['ℹ️', 'El ruido corto activó el gate — pero un solo golpe no es representativo de todos los ruidos posibles, así que esto es solo informativo y no cambia el umbral propuesto']);
     }
     if (r.whisper) {
       lines.push(['ℹ️', r.whisper.gateOpened
@@ -1039,7 +1034,7 @@ const GuidedDiag = {
         <div class="guided-suggestion">
           <div class="guided-suggestion__label">Umbral propuesto</div>
           <div class="guided-suggestion__value">${suggestion.value} dBFS</div>
-          <div class="guided-suggestion__why">Deja margen entre tu voz (~${suggestion.voiceAvg.toFixed(1)}dBFS) y el piso de fondo${suggestion.noiseFooledGate ? ' (y el ruido corto de prueba, que sí llegó a activar el gate)' : ''}.</div>
+          <div class="guided-suggestion__why">Deja margen entre tu voz (~${suggestion.voiceAvg.toFixed(1)}dBFS) y el piso de fondo.</div>
           <button class="btn-connect" id="btn-guided-apply" type="button" style="width:100%">✅ Aplicar y guardar</button>
           <div id="guided-apply-result" style="margin-top:8px"></div>
         </div>
