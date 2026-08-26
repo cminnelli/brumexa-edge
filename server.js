@@ -723,16 +723,18 @@ app.get('/diag/mic-level', (_req, res) => {
     ..._micLevel,
     monitorActive: !!_micMonitor,
     // Estado del gate (lib/mic-speech-gate.js) leído EN VIVO, no cacheado en
-    // _micLevel — isOpen()/isSensing() cambian por sus propios timers de
-    // hangover, no solo cuando llega una muestra nueva, así que un snapshot
-    // tomado en el último write podría estar desactualizado.
-    gateOpen:                  micGate.isOpen(),
+    // _micLevel — isVoiceActive()/isSensing() cambian por sus propios timers
+    // de hangover, no solo cuando llega una muestra nueva, así que un
+    // snapshot tomado en el último write podría estar desactualizado.
+    // voiceActive (dinámico, sube/baja con tu voz) — no confundir con
+    // micGateEnabled más abajo (interruptor FIJO de configuración).
+    voiceActive:               micGate.isVoiceActive(),
     sensing:                   micGate.isSensing(),
     ambientFloorDbfs:          micGate.getAmbientFloorDbfs(),
     effectiveThresholdDbfs:    micGate.getEffectiveThresholdDbfs(),
     calibratedThresholdDbfs:   micGate.getSpeakThresholdDbfs(),
     // Para el panel de "¿qué está pasando ahora?" en /diagnostico — sin
-    // esto, gateOpen/sensing por sí solos no alcanzan para saber si de
+    // esto, voiceActive/sensing por sí solos no alcanzan para saber si de
     // verdad hay algo yendo a LiveKit: durante el monitor idle (sin
     // sesión) el gate igual corre (alimenta el LED), pero no hay ninguna
     // conexión a la que mandarle nada.

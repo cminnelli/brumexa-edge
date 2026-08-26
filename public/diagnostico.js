@@ -98,7 +98,7 @@ const MicMeter = {
       dbfs,
       ambientFloorDbfs:       mic.ambientFloorDbfs,
       effectiveThresholdDbfs: mic.effectiveThresholdDbfs,
-      gateOpen: !!mic.gateOpen,
+      voiceActive: !!mic.voiceActive,
       sensing:  !!mic.sensing,
     });
     if (this._history.length > this.MAX_SAMPLES) this._history.shift();
@@ -160,11 +160,11 @@ const MicMeter = {
     const thresholdRising = rise > 2;
 
     // "conectado a LiveKit" = mic.sessionActive (sesión real, ver server.js
-    // /diag/mic-level). "Mandando audio" = ADEMÁS mic.gateOpen — por debajo
-    // del umbral el stream sigue técnicamente abierto pero se manda
+    // /diag/mic-level). "Mandando audio" = ADEMÁS mic.voiceActive — por
+    // debajo del umbral el stream sigue técnicamente abierto pero se manda
     // atenuado (~-90dB, silencio real) a LiveKit, ver _publishMic.
     let cls, text;
-    if (mic.gateOpen) {
+    if (mic.voiceActive) {
       cls = 'live';
       text = mic.sessionActive ? '🎙️ Conectado a LiveKit — mandando tu voz' : '🎙️ Te está escuchando (sin conexión a LiveKit)';
     } else if (thresholdRising) {
@@ -244,7 +244,7 @@ const MicMeter = {
     const step = n > 1 ? (this.CHART_W - this.PAD_L - this.PAD_R) / (n - 1) : (this.CHART_W - this.PAD_L - this.PAD_R);
     let bands = '';
     for (let i = 0; i < n; i++) {
-      if (!hist[i].gateOpen) continue;
+      if (!hist[i].voiceActive) continue;
       const x = this._xFor(i, n) - step / 2;
       bands += `<rect x="${x.toFixed(1)}" y="${this.PAD_T}" width="${(step + 0.6).toFixed(1)}" height="${this.CHART_H - this.PAD_T - this.PAD_B}" fill="rgba(224,160,50,0.22)" />`;
     }
@@ -918,22 +918,22 @@ const GuidedDiag = {
         try {
           const mic  = await fetch('/diag/mic-level', { cache: 'no-store' }).then(r => r.json());
           const dbfs = mic.peak > 0 ? 20 * Math.log10(mic.peak / 32767) : -90;
-          samples.push({ dbfs, gateOpen: !!mic.gateOpen });
-          if (mic.gateOpen && openedAtMs === null) openedAtMs = Date.now() - startedAt;
+          samples.push({ dbfs, voiceActive: !!mic.voiceActive });
+          if (mic.voiceActive && openedAtMs === null) openedAtMs = Date.now() - startedAt;
           const live = document.getElementById('guided-live');
-          if (live) live.textContent = `${dbfs.toFixed(1)} dBFS${mic.gateOpen ? ' · 🎙️ detectando' : ''}`;
+          if (live) live.textContent = `${dbfs.toFixed(1)} dBFS${mic.voiceActive ? ' · 🎙️ detectando' : ''}`;
         } catch {}
         if (!this._running || elapsed >= step.durationMs) { clearInterval(iv); resolve(); }
       }, this.SAMPLE_MS);
     });
 
-    const dbfsValues  = samples.map(s => s.dbfs).filter(v => isFinite(v));
-    const avgDbfs      = dbfsValues.length ? dbfsValues.reduce((a, b) => a + b, 0) / dbfsValues.length : null;
-    const peakDbfs      = dbfsValues.length ? Math.max(...dbfsValues) : null;
-    const gateOpened    = samples.some(s => s.gateOpen);
-    const gateOpenAtEnd = samples.length ? samples[samples.length - 1].gateOpen : false;
+    const dbfsValues     = samples.map(s => s.dbfs).filter(v => isFinite(v));
+    const avgDbfs        = dbfsValues.length ? dbfsValues.reduce((a, b) => a + b, 0) / dbfsValues.length : null;
+    const peakDbfs       = dbfsValues.length ? Math.max(...dbfsValues) : null;
+    const voiceDetected  = samples.some(s => s.voiceActive);
+    const voiceActiveAtEnd = samples.length ? samples[samples.length - 1].voiceActive : false;
 
-    return { avgDbfs, peakDbfs, gateOpened, gateOpenAtEnd, openedAtMs, sampleCount: samples.length };
+    return { avgDbfs, peakDbfs, voiceDetected, voiceActiveAtEnd, openedAtMs, sampleCount: samples.length };
   },
 
   _stepShell(step, instruction) {
@@ -1011,23 +1011,23 @@ const GuidedDiag = {
     if (r.silence1?.avgDbfs != null) {
       lines.push(['ℹ️', `Piso de ruido ahora: ${r.silence1.avgDbfs.toFixed(1)} dBFS`]);
     }
-    if (r.speak?.gateOpened) {
+    if (r.speak?.voiceDetected) {
       lines.push(['✅', `Reaccionó a tu voz${r.speak.openedAtMs != null ? ` — tardó ~${r.speak.openedAtMs}ms en confirmarlo` : ''}`]);
     } else {
       lines.push(['⚠️', 'No detectó que estabas hablando en este paso']);
     }
     if (r.silence2) {
-      lines.push(!r.silence2.gateOpenAtEnd
+      lines.push(!r.silence2.voiceActiveAtEnd
         ? ['✅', 'Volvió a silencio correctamente después de hablar']
         : ['⚠️', 'Seguía "escuchando" al terminar este paso — puede ser normal si hablaste hasta el final']);
     }
     if (r.noise) {
-      lines.push(!r.noise.gateOpened
+      lines.push(!r.noise.voiceDetected
         ? ['✅', 'Ignoró el ruido corto — no lo confundió con voz']
         : ['ℹ️', 'El ruido corto activó el gate — pero un solo golpe no es representativo de todos los ruidos posibles, así que esto es solo informativo y no cambia el umbral propuesto']);
     }
     if (r.whisper) {
-      lines.push(['ℹ️', r.whisper.gateOpened
+      lines.push(['ℹ️', r.whisper.voiceDetected
         ? 'También detecta susurros bien bajitos'
         : 'No detectó el susurro — no es necesariamente un problema, los susurros son borde a propósito']);
     }
