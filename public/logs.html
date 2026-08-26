@@ -16,10 +16,7 @@
   <link rel="stylesheet" href="style.css?v=21" />
   <style>
     body { display: flex; flex-direction: column; height: 100vh; margin: 0; }
-    .logs-wrap {
-      flex: 1; min-height: 0; display: flex; gap: 1px;
-      background: var(--border);
-    }
+    .logs-wrap { flex: 1; min-height: 0; display: flex; }
     .logs-panel { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); }
     .logs-panel__header {
       display: flex; align-items: center; gap: 10px;
@@ -49,9 +46,6 @@
     .log-line.hl-speak { color: var(--accent); }
     .log-line.dim { opacity: .35; }
     .logs-empty { color: var(--text2); font-size: 12px; padding: 4px 0; }
-    @media (max-width: 860px) {
-      .logs-wrap { flex-direction: column; }
-    }
   </style>
 </head>
 <body>
@@ -85,15 +79,6 @@
       <button class="btn-ghost" id="btn-clear-server">Limpiar</button>
     </div>
     <div class="logs-body" id="body-server"></div>
-  </div>
-
-  <div class="logs-panel">
-    <div class="logs-panel__header">
-      <span class="logs-dot" id="dot-system"></span>
-      <span class="logs-panel__title">Sistema (kernel)</span>
-      <span class="logs-panel__count" id="count-system" style="margin-left:auto"></span>
-    </div>
-    <div class="logs-body" id="body-system"></div>
   </div>
 
 </div>

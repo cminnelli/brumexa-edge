@@ -1,10 +1,13 @@
 'use strict';
 
-// Visor de logs en vivo — panel izquierdo (servidor) via WebSocket (/ws/logs,
-// ver lib/log-stream.js: server empuja cada línea apenas la loguea, nada de
-// polling), panel derecho (sistema/kernel) por polling liviano cada 4s (no
-// hay forma barata de "tail -f" del kernel sin permisos/procesos extra, y
-// los eventos ahí son infrecuentes — no hace falta que sea instantáneo).
+// Visor de logs en vivo — WebSocket (/ws/logs, ver lib/log-stream.js: server
+// empuja cada línea apenas la loguea, nada de polling).
+//
+// Antes había un segundo panel con el log de sistema/kernel (dmesg/
+// journalctl), sondeado cada 4s. Se sacó a propósito: esos comandos podían
+// tardar bastante en la Pi y cada corrida bloqueaba el event loop entero
+// (audio, LEDs) mientras esta página estuviera abierta — ver /local/status
+// para el resto del diagnóstico de sistema sin ese sondeo repetido.
 
 const MAX_LINES = 500; // tope de <div> por panel — no queremos miles de nodos vivos en una sesión larga
 
@@ -88,54 +91,4 @@ const MAX_LINES = 500; // tope de <div> por panel — no queremos miles de nodos
   }
 
   connect();
-})();
-
-// ─── Panel sistema (polling) ──────────────────────────────────────────────────
-(function systemPanel() {
-  const body  = document.getElementById('body-system');
-  const dot   = document.getElementById('dot-system');
-  const count = document.getElementById('count-system');
-  const seen  = new Set();
-  let shown = 0;
-
-  function isAtBottom() {
-    return body.scrollHeight - body.scrollTop - body.clientHeight < 40;
-  }
-
-  function appendLine(text) {
-    const el = document.createElement('div');
-    el.className = 'log-line';
-    el.textContent = text;
-    const wasBottom = isAtBottom();
-    body.appendChild(el);
-    shown++;
-    while (body.children.length > MAX_LINES) body.removeChild(body.firstChild);
-    count.textContent = `${shown} líneas`;
-    if (wasBottom) body.scrollTop = body.scrollHeight;
-  }
-
-  async function poll() {
-    try {
-      const res  = await fetch('/local/system-log', { cache: 'no-store' });
-      const data = await res.json();
-      dot.className = 'logs-dot live';
-      const lines = (data.text || '').split('\n').filter(Boolean);
-      for (const line of lines) {
-        if (seen.has(line)) continue;
-        seen.add(line);
-        if (seen.size > MAX_LINES * 2) {
-          // evitar crecer sin límite en una sesión larga — el Set solo
-          // necesita recordar lo suficiente para no re-imprimir el tail
-          const it = seen.values();
-          for (let i = 0; i < MAX_LINES; i++) seen.delete(it.next().value);
-        }
-        appendLine(line);
-      }
-    } catch {
-      dot.className = 'logs-dot down';
-    }
-  }
-
-  poll();
-  setInterval(poll, 4000);
 })();
