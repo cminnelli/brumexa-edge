@@ -1071,6 +1071,9 @@ const GuidedDiag = {
         : '<div class="flow-note bad">✘ No se pudo aplicar — probá de nuevo</div>';
       btn.disabled = false;
       btn.textContent = '✅ Aplicar y guardar';
+      // Breve pausa para que se alcance a leer la confirmación antes de
+      // cerrar solo — si falló, se queda abierto para que puedas reintentar.
+      if (ok) setTimeout(() => document.getElementById('guided-diag-dialog')?.close(), 900);
     });
     document.getElementById('btn-guided-restart')?.addEventListener('click', () => this.start());
   },
