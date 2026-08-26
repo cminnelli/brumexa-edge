@@ -427,15 +427,14 @@ const LedsDiag = {
         return;
       }
       if (!d.configured) {
-        const rootHint = d.isRoot === false ? ' — probá corriendo el server con sudo' : '';
-        kv.innerHTML = kvRows([['Estado', '⚠ Instalado, pero falló al configurar'], ['Detalle', `${d.lastError || 'error desconocido'}${rootHint}`]]);
+        kv.innerHTML = kvRows([['Estado', '⚠ Instalado, pero falló al configurar'], ['Detalle', d.lastError || 'error desconocido']]);
         Summary.set('leds', 'error', 'Falló al configurar');
         return;
       }
-      // El aviso de "no corre como root" se sacó — es defensivo (por si
-      // alguna vez alguien lo necesita), pero acá ws281x ya está
-      // "configured" (funcionando de verdad), así que en la práctica no
-      // hace falta root en este setup y el aviso solo generaba dudas.
+      // El aviso de "no corre como root" (y la sugerencia de probar con
+      // sudo si fallaba configurar) se sacaron del todo — se probó de
+      // verdad corriendo con sudo un rato entero y el comportamiento fue
+      // idéntico, así que root no tiene nada que ver acá.
       kv.innerHTML = kvRows([
         ['Estado', `✅ OK — v${d.packageVersion}`],
         ['LEDs', `${d.numLeds} en GPIO ${d.gpioPin}`],
