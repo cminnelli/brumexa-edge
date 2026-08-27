@@ -133,8 +133,10 @@
 
       <div class="connect-row">
         <button class="btn-connect" id="btn-save-creds" style="flex:none; padding:10px 24px">💾 Guardar credenciales</button>
+        <button class="btn-ghost" id="btn-test-creds" type="button" style="flex:none">🔌 Probar conexión</button>
       </div>
       <div id="creds-save-result" style="margin-top:10px"></div>
+      <div id="creds-test-result" style="margin-top:10px"></div>
     </div>
 
   </div>
@@ -1006,8 +1008,29 @@
     }, {
       btn:    document.getElementById('btn-save-creds'),
       result: document.getElementById('creds-save-result'),
-      okMsg:  'Guardado y aplicado — probá "Diagnóstico de conexión" para confirmar',
+      okMsg:  'Guardado y aplicado — probá "Probar conexión" para confirmar',
     });
+  });
+
+  document.getElementById('btn-test-creds').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-test-creds');
+    const result = document.getElementById('creds-test-result');
+    const restoreText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Probando…';
+    result.innerHTML = '';
+    try {
+      const auth = await fetch('/configuracion/force-auth', { method: 'POST' }).then(r => r.json());
+      if (!auth.ok) throw new Error(auth.error || 'falló la autenticación');
+      const token = await fetch('/configuracion/force-token', { method: 'POST' }).then(r => r.json());
+      if (!token.ok) throw new Error(token.error || 'falló el token de LiveKit');
+      result.innerHTML = `<div class="flow-note ok">✔ Conecta OK — negocio "${esc(auth.status?.businessId || '—')}"</div>`;
+    } catch (e) {
+      result.innerHTML = `<div class="flow-note bad">✘ ${esc(e.message)}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = restoreText;
+    }
   });
 
   document.getElementById('btn-save-color').addEventListener('click', () => {
