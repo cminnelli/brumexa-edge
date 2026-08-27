@@ -263,7 +263,6 @@ app.get('/setup/config', (_req, res) => {
     ragApiUrl: getVal('RAG_API_URL') || 'http://localhost:4000',
     deviceId:  getVal('BRUMEXA_DEVICE_ID'),
     apiKey:    getVal('BRUMEXA_API_KEY'),
-    deviceName: getVal('DEVICE_NAME') || os.hostname(),
     micGain:      getVal('MIC_GAIN')      || '4.0',
     speakerGain:  getVal('SPEAKER_GAIN')  || '3.0',
     talkThreshold: getVal('MIC_TALK_THRESHOLD_DBFS') || '-25',
@@ -379,7 +378,7 @@ async function autoDetectAlsaDevices() {
 app.post('/setup/config', express.json(), (req, res) => {
   const envFile = path.join(__dirname, '.env');
   const {
-    ragApiUrl, deviceId, apiKey, deviceName, micGain, speakerGain, talkThreshold, silenceTimeoutMs, brumexaColor,
+    ragApiUrl, deviceId, apiKey, micGain, speakerGain, talkThreshold, silenceTimeoutMs, brumexaColor,
     ledBreathePeriodMs, ledHangoverMs, ledOnsetMs, ledOffsetMs,
     alsaMicDevice, alsaSpeakerDevice,
     micGateEnabled, micGateAttenuationDb, micPrerollMs,
@@ -390,7 +389,6 @@ app.post('/setup/config', express.json(), (req, res) => {
   if (ragApiUrl  !== undefined) content = setEnvLine(content, 'RAG_API_URL',       ragApiUrl);
   if (deviceId   !== undefined) content = setEnvLine(content, 'BRUMEXA_DEVICE_ID', deviceId);
   if (apiKey     !== undefined) content = setEnvLine(content, 'BRUMEXA_API_KEY',   apiKey);
-  if (deviceName !== undefined) content = setEnvLine(content, 'DEVICE_NAME',       deviceName);
   if (micGain     !== undefined) content = setEnvLine(content, 'MIC_GAIN',      micGain);
   if (speakerGain !== undefined) content = setEnvLine(content, 'SPEAKER_GAIN',  speakerGain);
   if (talkThreshold !== undefined) content = setEnvLine(content, 'MIC_TALK_THRESHOLD_DBFS', talkThreshold);

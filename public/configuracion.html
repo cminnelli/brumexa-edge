@@ -121,10 +121,6 @@
           <label class="field-label" for="inp-device-id">ID del dispositivo</label>
           <input type="text" id="inp-device-id" class="setup-input" placeholder="mi-dispositivo-01" autocomplete="off" spellcheck="false" />
         </div>
-        <div class="field">
-          <label class="field-label" for="inp-device-name">Nombre del dispositivo</label>
-          <input type="text" id="inp-device-name" class="setup-input" placeholder="brumexa-01" autocomplete="off" />
-        </div>
       </div>
       <div class="field">
         <label class="field-label" for="inp-api-key">Clave de acceso (API key)</label>
@@ -660,7 +656,6 @@
       document.getElementById('inp-rag-url').value    = cfg.ragApiUrl    || '';
       document.getElementById('inp-device-id').value   = cfg.deviceId     || '';
       document.getElementById('inp-api-key').value      = cfg.apiKey       || '';
-      document.getElementById('inp-device-name').value = cfg.deviceName   || '';
       await initColorPicker(cfg.brumexaColor || 'negro');
       await CustomColors.init();
       setLiveSliderField('inp-mic-gain',     'val-mic-gain',     cfg.micGain,     4,     v => `${parseFloat(v).toFixed(1)}x`);
@@ -1008,7 +1003,6 @@
       ragApiUrl:  document.getElementById('inp-rag-url').value.trim(),
       deviceId:   document.getElementById('inp-device-id').value.trim(),
       apiKey:     document.getElementById('inp-api-key').value.trim(),
-      deviceName: document.getElementById('inp-device-name').value.trim(),
     }, {
       btn:    document.getElementById('btn-save-creds'),
       result: document.getElementById('creds-save-result'),
