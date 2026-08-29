@@ -261,6 +261,9 @@ async function doConnect() {
       return;
     }
 
+    addLog('✔ Credenciales enviadas — la Pi va a apagar este punto de acceso para probar tu red (es normal que esta página se corte)', 'ok');
+    $('progress-title').textContent = 'Credenciales enviadas — probando tu red…';
+
     // Polling
     startPolling(ssid);
 
