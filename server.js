@@ -429,32 +429,52 @@ app.post('/setup/config', express.json(), async (req, res) => {
   let content = '';
   try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
 
-  if (ragApiUrl  !== undefined) content = setEnvLine(content, 'RAG_API_URL',       ragApiUrl);
-  if (deviceId   !== undefined) content = setEnvLine(content, 'BRUMEXA_DEVICE_ID', deviceId);
-  if (apiKey     !== undefined) content = setEnvLine(content, 'BRUMEXA_API_KEY',   apiKey);
-  if (micGain     !== undefined) content = setEnvLine(content, 'MIC_GAIN',      micGain);
-  if (speakerGain !== undefined) content = setEnvLine(content, 'SPEAKER_GAIN',  speakerGain);
-  if (talkThreshold !== undefined) content = setEnvLine(content, 'MIC_TALK_THRESHOLD_DBFS', talkThreshold);
-  if (silenceTimeoutMs !== undefined) content = setEnvLine(content, 'SILENCE_DISCONNECT_MS', silenceTimeoutMs);
-  if (brumexaColor  !== undefined) content = setEnvLine(content, 'BRUMEXA_COLOR', brumexaColor);
-  if (ledBreathePeriodMs !== undefined) content = setEnvLine(content, 'LED_BREATHE_PERIOD_MS', ledBreathePeriodMs);
-  if (ledHangoverMs      !== undefined) content = setEnvLine(content, 'LED_HANGOVER_MS',       ledHangoverMs);
-  if (ledOnsetMs         !== undefined) content = setEnvLine(content, 'LED_ONSET_MS',          ledOnsetMs);
-  if (ledOffsetMs        !== undefined) content = setEnvLine(content, 'LED_OFFSET_MS',         ledOffsetMs);
-  if (alsaMicDevice     !== undefined) content = setEnvLine(content, 'MIC_ALSA_DEVICE',     alsaMicDevice);
-  if (alsaSpeakerDevice !== undefined) content = setEnvLine(content, 'SPEAKER_ALSA_DEVICE', alsaSpeakerDevice);
-  if (micGateEnabled       !== undefined) content = setEnvLine(content, 'MIC_GATE_ENABLED',        micGateEnabled);
-  if (micGateAttenuationDb !== undefined) content = setEnvLine(content, 'MIC_GATE_ATTENUATION_DB', micGateAttenuationDb);
-  if (notificationSoundsEnabled !== undefined) content = setEnvLine(content, 'NOTIFICATION_SOUNDS_ENABLED', notificationSoundsEnabled);
-  if (micPrerollMs         !== undefined) content = setEnvLine(content, 'MIC_PREROLL_MS',           micPrerollMs);
-  // Vacío es un valor válido acá (= "volver a usar el hostname") — se guarda
-  // tal cual, no se pisa con un default.
-  if (apSsid !== undefined) content = setEnvLine(content, 'WIFI_AP_SSID', apSsid);
-  // Vacío también es válido acá (= "volver al default de lib/wifi.js"), mismo
-  // criterio que apSsid — no se pisa con un default acá.
-  if (apPass !== undefined) content = setEnvLine(content, 'WIFI_AP_PASS', apPass);
-
   try {
+    // apSsid/apPass se resuelven y VALIDAN acá arriba, antes de tocar el
+    // contenido del .env — a diferencia del resto de los campos de este
+    // endpoint (siempre válidos, o se ignoran solos si no parsean como
+    // número), estos dos pueden rechazarse (SSID > 29 caracteres, contraseña
+    // fuera de 8-63). Antes la validación corría DESPUÉS de escribir el
+    // archivo: un valor rechazado igual quedaba persistido en el .env — quien
+    // lo mandó veía el error en pantalla y pensaba que no había pasado nada,
+    // pero el próximo AP de emergencia (reinicio o caída de WiFi real)
+    // arrancaba con ese valor inválido guardado y nmcli fallaba al levantarlo.
+    let apSsidResult;
+    if (apSsid !== undefined) {
+      apSsidResult = await setApSsid(apSsid || os.hostname());
+    }
+    let apPassResult;
+    if (apPass !== undefined) {
+      apPassResult = await setApPass(apPass);
+    }
+
+    if (ragApiUrl  !== undefined) content = setEnvLine(content, 'RAG_API_URL',       ragApiUrl);
+    if (deviceId   !== undefined) content = setEnvLine(content, 'BRUMEXA_DEVICE_ID', deviceId);
+    if (apiKey     !== undefined) content = setEnvLine(content, 'BRUMEXA_API_KEY',   apiKey);
+    if (micGain     !== undefined) content = setEnvLine(content, 'MIC_GAIN',      micGain);
+    if (speakerGain !== undefined) content = setEnvLine(content, 'SPEAKER_GAIN',  speakerGain);
+    if (talkThreshold !== undefined) content = setEnvLine(content, 'MIC_TALK_THRESHOLD_DBFS', talkThreshold);
+    if (silenceTimeoutMs !== undefined) content = setEnvLine(content, 'SILENCE_DISCONNECT_MS', silenceTimeoutMs);
+    if (brumexaColor  !== undefined) content = setEnvLine(content, 'BRUMEXA_COLOR', brumexaColor);
+    if (ledBreathePeriodMs !== undefined) content = setEnvLine(content, 'LED_BREATHE_PERIOD_MS', ledBreathePeriodMs);
+    if (ledHangoverMs      !== undefined) content = setEnvLine(content, 'LED_HANGOVER_MS',       ledHangoverMs);
+    if (ledOnsetMs         !== undefined) content = setEnvLine(content, 'LED_ONSET_MS',          ledOnsetMs);
+    if (ledOffsetMs        !== undefined) content = setEnvLine(content, 'LED_OFFSET_MS',         ledOffsetMs);
+    if (alsaMicDevice     !== undefined) content = setEnvLine(content, 'MIC_ALSA_DEVICE',     alsaMicDevice);
+    if (alsaSpeakerDevice !== undefined) content = setEnvLine(content, 'SPEAKER_ALSA_DEVICE', alsaSpeakerDevice);
+    if (micGateEnabled       !== undefined) content = setEnvLine(content, 'MIC_GATE_ENABLED',        micGateEnabled);
+    if (micGateAttenuationDb !== undefined) content = setEnvLine(content, 'MIC_GATE_ATTENUATION_DB', micGateAttenuationDb);
+    if (notificationSoundsEnabled !== undefined) content = setEnvLine(content, 'NOTIFICATION_SOUNDS_ENABLED', notificationSoundsEnabled);
+    if (micPrerollMs         !== undefined) content = setEnvLine(content, 'MIC_PREROLL_MS',           micPrerollMs);
+    // Vacío es un valor válido acá (= "volver a usar el hostname") — se guarda
+    // tal cual, no se pisa con un default. Solo si pasó la validación de arriba
+    // (apSsidResult.ok) — si se rechazó, no se toca el .env para ese campo.
+    if (apSsid !== undefined && apSsidResult.ok) content = setEnvLine(content, 'WIFI_AP_SSID', apSsid);
+    // Vacío también es válido acá (= "volver al default de lib/wifi.js"), mismo
+    // criterio que apSsid — no se pisa con un default acá. Mismo guard de
+    // validación que arriba.
+    if (apPass !== undefined && apPassResult.ok) content = setEnvLine(content, 'WIFI_AP_PASS', apPass);
+
     require('fs').writeFileSync(envFile, content, 'utf8');
 
     // Aplicar en caliente lo que no necesita reiniciar
@@ -487,15 +507,6 @@ app.post('/setup/config', express.json(), async (req, res) => {
     if (micGateAttenuationDb !== undefined) { const v = parseFloat(micGateAttenuationDb); if (!isNaN(v)) lkSession.setMicGateAttenuationDb(v); }
     if (notificationSoundsEnabled !== undefined) soundEffects.setSoundsEnabled(notificationSoundsEnabled !== 'false' && notificationSoundsEnabled !== false);
     if (micPrerollMs         !== undefined) { const v = parseFloat(micPrerollMs);         if (!isNaN(v)) lkSession.setMicPrerollMs(v); }
-
-    let apSsidResult;
-    if (apSsid !== undefined) {
-      apSsidResult = await setApSsid(apSsid || os.hostname());
-    }
-    let apPassResult;
-    if (apPass !== undefined) {
-      apPassResult = await setApPass(apPass);
-    }
 
     res.json({ ok: true, restarting: false, apSsid: apSsidResult, apPass: apPassResult });
   } catch (err) {
