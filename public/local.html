@@ -12,7 +12,15 @@
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" />
+  <!-- No-bloqueante a propósito: esta página tiene que poder verse conectado
+       al AP de emergencia (sin internet real, ver README) — un <link
+       rel="stylesheet"> normal a un dominio externo sin ruta a internet se
+       queda colgado y traba el render de TODA la página hasta que el
+       navegador se resigna. media="print" + onload lo carga en segundo
+       plano sin bloquear; si nunca llega, la página queda con las fuentes
+       de sistema del fallback (var(--font-sans)/var(--font-display) en
+       style.css) en vez de trabarse. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
   <!-- Red de seguridad contra íconos SVG "gigantes" antes de que cargue el
        CSS — ver el mismo comentario en public/index.html. -->
   <style>svg { width: 1em; height: 1em; }</style>

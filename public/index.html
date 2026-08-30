@@ -22,7 +22,11 @@
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" />
+  <!-- No-bloqueante (media=print + onload) — ver el comentario grande en
+       public/local.html: esta página también se ve conectado al AP de
+       emergencia, sin internet real, y un <link rel=stylesheet> normal a
+       un dominio externo sin ruta a internet traba el render entero. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
   <link rel="stylesheet" href="style.css?v=22" />
 </head>
 <body>
