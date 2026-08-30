@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Brumexa — Configuración</title>
+  <!-- Red de seguridad contra íconos SVG "gigantes" antes de que cargue
+       style.css — ver el mismo comentario en public/index.html. -->
+  <style>svg { width: 1em; height: 1em; }</style>
   <script>
     (function () {
       var t = localStorage.getItem('brumexa-theme');
@@ -103,16 +106,21 @@
     </div>
     <nav class="tab-nav">
       <a class="tab-btn" href="/">Panel</a>
-      <a class="tab-btn active" href="/configuracion"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>Configuración</a>
+      <a class="tab-btn active" href="/configuracion">Configuración</a>
       <a class="tab-btn" href="/diagnostico">Diagnóstico</a>
       <a class="tab-btn" href="/logs">Logs</a>
       <a class="tab-btn" id="nav-terminal" href="/terminal">Terminal Pi</a>
       <a class="tab-btn" href="/local">Local</a>
     </nav>
     <div class="site-header__actions">
-      <button id="btn-update-header" class="btn-ghost" type="button" style="flex-shrink:0; padding:6px 12px; font-size:12px" title="Ir a Actualizar Brumexa y buscar novedades ya">
-        <svg viewBox="0 0 24 24" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M12 4v11"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg>
-        Actualizar
+      <button id="nav-session-btn" class="btn-ghost" type="button" title="Conectar/desconectar la sesión de voz">▶ Conectar</button>
+      <!-- Oculto por default — loadVersion() lo muestra SOLO si hay una
+           actualización pendiente (data.behind > 0). Ver el listener más
+           abajo: solo hace scroll + resalta la card, ya NO dispara la
+           actualización sola — eso lo decide la persona tocando el botón
+           real de adentro de la card. -->
+      <button id="btn-update-header" class="btn-ghost btn-ghost--accent" type="button" style="flex-shrink:0; padding:6px 12px; font-size:12px; display:none" title="Hay una actualización disponible — ir a Mantenimiento">
+        ⬇️ Actualizar
       </button>
       <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambiar tema" title="Cambiar tema"></button>
     </div>
@@ -162,8 +170,8 @@
       </div>
 
       <div class="connect-row">
-        <button class="btn-connect" id="btn-save-creds" style="flex:none; padding:10px 24px">💾 Guardar credenciales</button>
-        <button class="btn-ghost" id="btn-test-creds" type="button" style="flex:none">🔌 Probar conexión</button>
+        <button class="btn-connect" id="btn-save-creds" style="flex:none; padding:9px 20px">💾 Guardar credenciales</button>
+        <button class="btn-ghost" id="btn-test-creds" type="button" style="flex:none; padding:9px 20px; font-size:13px">🔌 Probar conexión</button>
       </div>
       <div id="creds-save-result" style="margin-top:10px"></div>
       <div id="creds-test-result" style="margin-top:10px"></div>
@@ -297,44 +305,48 @@
       </div>
 
       <div class="field-group-label">Voz</div>
-      <div class="field">
-        <label class="field-label" for="inp-mic-gain">Sensibilidad del micrófono</label>
-        <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
-          <div class="gain-row" style="grid-template-columns:1fr 55px">
-            <input type="range" id="inp-mic-gain" class="gain-slider" min="0" max="20" step="0.5" value="4" />
-            <span class="gain-val" id="val-mic-gain">4.0x</span>
+      <div class="field-row">
+        <div class="field">
+          <label class="field-label" for="inp-mic-gain">Sensibilidad del micrófono</label>
+          <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
+            <div class="gain-row" style="grid-template-columns:1fr 55px">
+              <input type="range" id="inp-mic-gain" class="gain-slider" min="0" max="20" step="0.5" value="4" />
+              <span class="gain-val" id="val-mic-gain">4.0x</span>
+            </div>
           </div>
+          <p class="field-hint">Subí si cuesta que te escuche bien; bajá si hay eco o se satura.</p>
         </div>
-        <p class="field-hint">Qué tan fuerte amplifica tu voz antes de mandarla. Subí si cuesta que te escuche bien; bajá si hay eco o se satura.</p>
-      </div>
-      <div class="field">
-        <label class="field-label" for="inp-speaker-gain">Volumen del agente</label>
-        <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
-          <div class="gain-row" style="grid-template-columns:1fr 55px">
-            <input type="range" id="inp-speaker-gain" class="gain-slider" min="0.5" max="4" step="0.1" value="3" />
-            <span class="gain-val" id="val-speaker-gain">3.0x</span>
+        <div class="field">
+          <label class="field-label" for="inp-speaker-gain">Volumen del agente</label>
+          <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
+            <div class="gain-row" style="grid-template-columns:1fr 55px">
+              <input type="range" id="inp-speaker-gain" class="gain-slider" min="0.5" max="4" step="0.1" value="3" />
+              <span class="gain-val" id="val-speaker-gain">3.0x</span>
+            </div>
           </div>
+          <p class="field-hint">Qué tan fuerte sale la voz del agente por el parlante.</p>
         </div>
-        <p class="field-hint">Qué tan fuerte sale la voz del agente por el parlante.</p>
       </div>
       <p class="field-hint">El umbral de sensibilidad y "Recalibrar" se movieron a <a href="/diagnostico" style="color:var(--accent)">Diagnóstico → Panorama de sonido</a>, justo debajo del gráfico — así se ve en vivo el efecto de cada ajuste.</p>
 
-      <div class="field">
-        <label class="field-label" style="display:flex; align-items:center; gap:8px; cursor:pointer">
-          <input type="checkbox" id="inp-mic-gate-enabled" checked style="width:auto" />
-          Silenciar el piso de ruido antes de mandarlo al agente
-        </label>
-        <p class="field-hint">Con esto activado, mientras no detecta tu voz (ver umbral arriba) no publica el ruido de fondo — solo manda audio real cuando confirma que estás hablando. Desactivalo solo si necesitás diagnosticar algo puntual: sin esto, TODO el ruido ambiente se manda siempre al agente.</p>
-      </div>
-      <div class="field">
-        <label class="field-label" for="inp-mic-preroll">Colchón antes de abrir el gate</label>
-        <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
-          <div class="gain-row" style="grid-template-columns:1fr 65px">
-            <input type="range" id="inp-mic-preroll" class="gain-slider" min="300" max="2000" step="50" value="500" />
-            <span class="gain-val" id="val-mic-preroll">500 ms</span>
-          </div>
+      <div class="field-row">
+        <div class="field">
+          <label class="field-label" style="display:flex; align-items:center; gap:8px; cursor:pointer">
+            <input type="checkbox" id="inp-mic-gate-enabled" checked style="width:auto" />
+            Silenciar el piso de ruido antes de mandarlo al agente
+          </label>
+          <p class="field-hint">Solo manda audio real cuando confirma que estás hablando — desactivalo solo para diagnosticar algo puntual.</p>
         </div>
-        <p class="field-hint">Cuánto audio previo guarda para no perder el arranque de la palabra al confirmar que estás hablando. No hace falta tocarlo normalmente.</p>
+        <div class="field">
+          <label class="field-label" for="inp-mic-preroll">Colchón antes de abrir el gate</label>
+          <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
+            <div class="gain-row" style="grid-template-columns:1fr 65px">
+              <input type="range" id="inp-mic-preroll" class="gain-slider" min="300" max="2000" step="50" value="500" />
+              <span class="gain-val" id="val-mic-preroll">500 ms</span>
+            </div>
+          </div>
+          <p class="field-hint">Cuánto audio previo guarda para no perder el arranque de la palabra. No hace falta tocarlo normalmente.</p>
+        </div>
       </div>
 
       <div class="divider"></div>
@@ -438,6 +450,7 @@
 </main>
 
 <script src="theme.js?v=1"></script>
+<script src="session-quick.js?v=1"></script>
 <script>
   function esc(s) {
     return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
@@ -1040,17 +1053,23 @@
       // hay algo para traer (o no se pudo chequear, por las dudas) — antes
       // aparecía siempre, aunque ya estuvieras al día, lo que invitaba a
       // tocarlo "porque sí" sin necesidad.
-      const btnUpdate = document.getElementById('btn-update');
+      const btnUpdate       = document.getElementById('btn-update');
+      const btnUpdateHeader = document.getElementById('btn-update-header');
       if (data.behind === null) {
         rows.push(['¿Hay más nuevas?', 'No se pudo chequear (sin red / sin remoto configurado)']);
         if (btnUpdate) btnUpdate.style.display = '';
+        if (btnUpdateHeader) btnUpdateHeader.style.display = 'none';
       } else if (data.behind === 0) {
         banner = '<div class="pill ok" style="margin-top:8px">✔ Estás al día — no hay actualizaciones pendientes</div>';
         if (btnUpdate) btnUpdate.style.display = 'none';
+        if (btnUpdateHeader) btnUpdateHeader.style.display = 'none';
       } else {
         rows.push(['Versión disponible', data.remoteSubject ? `${esc(data.remoteSubject)} (${esc(data.remoteHash)})` : (data.remoteHash ? esc(data.remoteHash) : '(nueva)')]);
         banner = '<div class="pill warn" style="margin-top:8px">⬇️ Hay una actualización disponible — tocá "Buscar actualizaciones" para traerla</div>';
         if (btnUpdate) btnUpdate.style.display = '';
+        // Atajo del header: solo aparece cuando hay algo de verdad para
+        // traer — antes estaba siempre visible, aunque estuvieras al día.
+        if (btnUpdateHeader) btnUpdateHeader.style.display = '';
       }
       kv.innerHTML = kvRows(rows) + banner;
     } catch (e) {
@@ -1168,18 +1187,18 @@
     localStorage.setItem('brumexa-update-branch', e.target.value);
   });
 
-  // Atajo en el header (siempre visible, es sticky) — para no tener que
-  // scrollear hasta el fondo de la página cada vez que querés buscar
-  // actualizaciones. Scrollea a la card real y dispara el mismo botón de
-  // siempre (mismo flujo, sin duplicar la lógica de update/restart-polling).
+  // Atajo en el header (sticky, y solo visible si loadVersion() detectó que
+  // hay algo nuevo — ver ahí abajo) — lleva a la card real sin disparar la
+  // actualización solo: antes hacía scroll Y arrancaba el update de una,
+  // sin que la persona llegara a leer qué versión es ni elegir el branch.
+  // Ahora es un atajo de NAVEGACIÓN nomás — el botón real de la card es
+  // quien decide cuándo actualizar de verdad.
   document.getElementById('btn-update-header').addEventListener('click', () => {
     const card = document.getElementById('card-update');
     card.scrollIntoView({ behavior: 'smooth', block: 'center' });
     card.classList.remove('highlight-pulse');
     void card.offsetWidth; // fuerza reflow — para que la animación se repita si ya se había disparado antes
     card.classList.add('highlight-pulse');
-    const btn = document.getElementById('btn-update');
-    if (!btn.disabled) setTimeout(() => btn.click(), 400); // pequeño delay para que se vea el scroll antes de arrancar
   });
 
   async function runRestart() {

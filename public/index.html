@@ -4,6 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Brumexa — Panel</title>
+  <!-- Los <svg> inline (íconos del navbar, etc.) no tienen width/height propio
+       — sin CSS se ven "gigantes" (tamaño por default del navegador) durante
+       el instante antes de que cargue style.css, o si llega a fallar la
+       carga. Esta regla mínima (inline, no bloquea nada) les pone un techo
+       razonable YA, antes de que exista cualquier otro CSS — el tamaño
+       final y preciso lo siguen dando las reglas de style.css normales
+       una vez que cargan, esto es solo la red de seguridad. -->
+  <style>svg { width: 1em; height: 1em; }</style>
   <script>
     // Aplica el tema guardado ANTES de pintar — evita el flash del tema
     // equivocado al cargar. El resto del toggle vive en theme.js.
@@ -30,13 +38,14 @@
     </div>
     <nav class="tab-nav">
       <a class="tab-btn active" href="/">Panel</a>
-      <a class="tab-btn" href="/configuracion"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>Configuración</a>
+      <a class="tab-btn" href="/configuracion">Configuración</a>
       <a class="tab-btn" href="/diagnostico">Diagnóstico</a>
       <a class="tab-btn" href="/logs">Logs</a>
       <a class="tab-btn" id="nav-terminal" href="/terminal">Terminal Pi</a>
       <a class="tab-btn" href="/local">Local</a>
     </nav>
     <div class="site-header__actions">
+      <button id="nav-session-btn" class="btn-ghost" type="button" title="Conectar/desconectar la sesión de voz">▶ Conectar</button>
       <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambiar tema" title="Cambiar tema"></button>
     </div>
   </div>
@@ -256,6 +265,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
 <script src="theme.js?v=1"></script>
+<script src="session-quick.js?v=1"></script>
 <script src="app.js?v=34"></script>
 </body>
 </html>

@@ -151,11 +151,10 @@ body {
 .theme-toggle:hover { background: var(--surface2); border-color: var(--border2); color: var(--accent); }
 .theme-toggle svg { display: block; }
 
-/* Tab nav — antes era una píldora gris (fondo + borde alrededor de todo el
-   grupo) que competía visualmente con el resto del header. Ahora cada link
-   es su propio elemento suelto, sin cápsula exterior: la pestaña activa se
-   marca con el texto en acento + un subrayado fino, más liviano y
-   "tecnológico" que un fondo sólido. */
+/* Tab nav — cada link es su propio elemento suelto, sin cápsula exterior
+   alrededor de todo el grupo. La pestaña activa se marca con una píldora
+   de fondo suave (mismo lenguaje que un segmented control) — antes era un
+   subrayado, que se sentía más "línea de tiempo" que navegación. */
 .tab-nav {
   display: flex;
   gap: 2px;
@@ -175,17 +174,16 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 14px 8px;
+  padding: 6px 14px;
   border: none;
-  border-bottom: 2px solid transparent;
-  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  border-radius: 999px;
   background: transparent;
   color: var(--text2);
   font-size: 12.5px;
   font-weight: 600;
   letter-spacing: 0.01em;
   cursor: pointer;
-  transition: background var(--tr), color var(--tr), border-color var(--tr);
+  transition: background var(--tr), color var(--tr);
   white-space: nowrap;
 }
 .tab-btn svg {
@@ -195,9 +193,9 @@ body {
 }
 .tab-btn:hover:not(.active) { color: var(--text); background: var(--surface2); }
 .tab-btn.active {
-  color: var(--accent);
+  color: var(--text);
   font-weight: 700;
-  border-bottom-color: var(--accent);
+  background: var(--surface2);
 }
 
 /* ═══════════════════════════════════════════════════════════
