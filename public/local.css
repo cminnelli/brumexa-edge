@@ -55,6 +55,21 @@ pre.dump {
   height: 100%; background: linear-gradient(90deg, var(--accent), #8fb4f5);
   border-radius: 999px; transition: width .15s ease;
 }
+/* Variantes de color por umbral — el gradient de arriba (mic/parlante) no
+   necesita transmitir "esto está mal" de un vistazo, pero las barras de
+   salud del sistema (RAM/CPU/Disco, ver .stat-bar) sí. */
+.meter-fill.warn { background: var(--warn); }
+.meter-fill.bad  { background: var(--danger); }
+
+/* ── Mini "Task Manager" (RAM/CPU/Disco) arriba de la card Sistema ── */
+.stat-bars {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-bottom: 12px; padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.stat-bar { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+.stat-bar__label { flex: 0 0 108px; color: var(--text2); font-weight: 600; }
+.stat-bar .meter { flex: 1; width: auto; }
 
 /* ── Audio: grilla mic/parlante lado a lado ── */
 .audio-grid {

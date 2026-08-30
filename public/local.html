@@ -78,6 +78,7 @@
           <div class="card-section-desc">Identidad y salud de esta Raspberry</div>
         </div>
       </div>
+      <div class="stat-bars" id="stat-bars-system"></div>
       <div class="kv" id="kv-system"></div>
       <p class="field-hint" style="margin-top:10px">El nombre del dispositivo es también el que usa por default el Access Point de respaldo (cuando Brumexa no tiene WiFi configurado) — cambiable en <a href="/configuracion" style="color:var(--accent)">Configuración → WiFi</a>.</p>
     </div>
@@ -240,6 +241,36 @@
     return `<div class="meter"><div class="meter-fill" style="width:${pct}%"></div></div><span class="v">${pct}%</span>`;
   }
 
+  // Mini "Task Manager" — RAM/CPU/Disco de un vistazo, arriba de la card
+  // Sistema. warnAt/badAt son los umbrales (%) para pasar de ok → warn → bad.
+  function statBar(label, pct, warnAt, badAt, note) {
+    if (pct == null) {
+      return `<div class="stat-bar"><div class="stat-bar__label">${label}</div><div class="section-empty">midiendo…</div></div>`;
+    }
+    const cls = pct >= badAt ? 'bad' : pct >= warnAt ? 'warn' : 'ok';
+    return `
+      <div class="stat-bar">
+        <div class="stat-bar__label">${label}${note ? ` <span class="section-empty">${note}</span>` : ''}</div>
+        <div class="meter"><div class="meter-fill ${cls}" style="width:${pct}%"></div></div>
+        <span class="v ${cls}">${pct}%</span>
+      </div>`;
+  }
+
+  function renderStatBars(sys, disk) {
+    const ramPct = (sys.freeMemMB != null && sys.totalMemMB)
+      ? Math.round(((sys.totalMemMB - sys.freeMemMB) / sys.totalMemMB) * 100)
+      : null;
+    const ramNote = (sys.freeMemMB != null) ? `${sys.totalMemMB - sys.freeMemMB} / ${sys.totalMemMB} MB` : '';
+    const cpuNote = sys.cpuCores ? `${sys.cpuCores} núcleos` : '';
+    const diskNote = disk ? `${disk.usedMB} / ${disk.totalMB} MB` : '';
+
+    // Sin wrapper propio acá — el contenedor (#stat-bars-system en el HTML)
+    // ya tiene la clase "stat-bars", esto solo llena adentro.
+    return statBar('RAM', ramPct, 70, 85, ramNote)
+      + statBar('CPU', sys.cpuUsagePct, 60, 85, cpuNote)
+      + statBar('Disco (SD)', disk ? disk.usePct : null, 75, 90, diskNote);
+  }
+
   function ageLabel(ts) {
     if (!ts) return 'sin datos';
     const s = Math.round((Date.now() - ts) / 1000);
@@ -378,12 +409,12 @@
       txt.textContent = `Actualizado ${new Date(data.generatedAt).toLocaleTimeString()}`;
 
       const sys = data.system || {};
+      document.getElementById('stat-bars-system').innerHTML = renderStatBars(sys, data.disk);
       document.getElementById('kv-system').innerHTML = kvRows([
         ['Nombre del dispositivo (hostname)', sys.hostname],
         ['Usuario', sys.username],
         ['Plataforma', `${sys.platform} (${sys.arch})`],
         ['Uptime', sys.uptimeSec != null ? `${Math.floor(sys.uptimeSec / 60)} min` : null],
-        ['Memoria libre', sys.freeMemMB != null ? `${sys.freeMemMB} / ${sys.totalMemMB} MB` : null],
         ['Temp. CPU', tempBadge(sys.cpuTempC)],
         ['Undervoltage/throttle', throttledBadge(sys.throttled)],
       ]);

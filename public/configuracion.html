@@ -423,8 +423,8 @@
       <div class="field">
         <div class="connect-row" style="padding-top:0">
           <select id="sel-update-branch" class="select-input" style="max-width:200px; flex:none">
+            <option value="main" selected>main — estable</option>
             <option value="dev">dev — para probar cosas</option>
-            <option value="main">main — estable</option>
           </select>
           <button class="btn-connect" id="btn-update" style="flex:none; padding:9px 20px">⬇️ Buscar actualizaciones</button>
         </div>
@@ -1096,14 +1096,6 @@
         ['Última actualización', `${new Date(data.date).toLocaleString()} (${ageLabel(new Date(data.date).getTime())})`],
       ];
 
-      // Preseleccionar el branch elegido la última vez (localStorage) o, si
-      // es la primera vez, el que está corriendo ahora mismo — así no hay
-      // sorpresa de "tocar actualizar" y que sin querer te cambie de branch.
-      const selBranch = document.getElementById('sel-update-branch');
-      if (selBranch && !selBranch.dataset.userTouched) {
-        const saved = localStorage.getItem('brumexa-update-branch');
-        selBranch.value = saved || data.branch || 'main';
-      }
       // El chequeo usa "git ls-remote" (server.js), no "git fetch" — más
       // seguro (nunca escribe nada en el .git local) pero ya no sabe
       // CUÁNTOS commits hay ni cuál es el último sin traerlos de verdad,
@@ -1243,10 +1235,14 @@
   }
   document.getElementById('btn-update').addEventListener('click', runUpdate);
 
-  document.getElementById('sel-update-branch').addEventListener('change', (e) => {
-    e.target.dataset.userTouched = '1'; // no pisar la elección manual la próxima vez que loadVersion() recargue
-    localStorage.setItem('brumexa-update-branch', e.target.value);
-  });
+  // Antes esto recordaba el branch elegido en localStorage y preseleccionaba
+  // el que estuviera CORRIENDO en ese momento (ver loadVersion() más arriba)
+  // — pedido explícito: eso es un riesgo, si el dispositivo terminaba en
+  // "dev" alguna vez (a propósito o no), quedaba pegado ahí en cada visita
+  // futura sin que nadie lo eligiera de nuevo. Ahora "main" es SIEMPRE el
+  // default (ver el atributo "selected" en el <option> de arriba) y solo
+  // cambia dentro de la visita actual si se lo toca a mano — sin memoria
+  // entre visitas.
 
   // Atajo en el header (sticky, y solo visible si loadVersion() detectó que
   // hay algo nuevo — ver ahí abajo) — lleva a la card real sin disparar la

@@ -282,8 +282,15 @@ const MicMeter = {
       ? `<text x="${this.CHART_W - this.PAD_R - 3}" y="${(effY - 5).toFixed(1)}" font-size="10" text-anchor="end" fill="var(--text2)">se activa acá (${lastSample.effectiveThresholdDbfs.toFixed(1)}dB)</text>`
       : '';
 
+    // width/height van en el style= (no como atributos width="..."/height="...")
+    // a propósito: la red de seguridad global "svg { width:1em; height:1em }"
+    // del <head> (ver diagnostico.html) le gana a los atributos width/height
+    // planos del SVG (son solo el valor inicial, cualquier regla CSS los
+    // pisa) — sin esto el gráfico quedaba aplastado a ~16px de alto (el
+    // ancho se salvaba de pura casualidad por el min-width de acá abajo).
+    // Un inline style="" sí le gana a esa regla del <head>.
     wrap.innerHTML = `
-      <svg width="100%" height="${this.CHART_H}" viewBox="0 0 ${this.CHART_W} ${this.CHART_H}" style="display:block; min-width:420px; background:var(--bg); border-radius:8px">
+      <svg viewBox="0 0 ${this.CHART_W} ${this.CHART_H}" style="display:block; width:100%; height:${this.CHART_H}px; min-width:420px; background:var(--bg); border-radius:8px">
         ${bands}
         ${grid}
         ${effLine ? `<polyline points="${effLine}" fill="none" stroke="var(--text2)" stroke-width="1.3" stroke-dasharray="4,3" opacity="0.85" />` : ''}
@@ -936,8 +943,12 @@ const SensitivityControls = {
     const y = v => H - PAD - ((v - lo) / (hi - lo || 1)) * (H - PAD * 2);
     const points = ticksDbfs.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
     const ty = y(thresholdDbfs).toFixed(1);
+    // width/height en el style= — mismo motivo que _renderChart() más
+    // arriba: la red de seguridad global "svg { width:1em; height:1em }"
+    // del <head> le gana a los atributos planos width="../height=", y acá
+    // ni siquiera hay un min-width que lo disimule (quedaba invisible del todo).
     return `
-      <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block;margin-top:8px;background:var(--bg);border-radius:6px">
+      <svg viewBox="0 0 ${W} ${H}" style="display:block;width:${W}px;height:${H}px;margin-top:8px;background:var(--bg);border-radius:6px">
         <line x1="0" y1="${ty}" x2="${W}" y2="${ty}" stroke="var(--warn)" stroke-width="1" stroke-dasharray="4,3" />
         <polyline points="${points}" fill="none" stroke="var(--accent)" stroke-width="1.5" />
       </svg>
