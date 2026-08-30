@@ -302,6 +302,8 @@ app.get('/setup/config', (_req, res) => {
     micGateEnabled:       getVal('MIC_GATE_ENABLED')       || 'true',
     micGateAttenuationDb: getVal('MIC_GATE_ATTENUATION_DB') || '-90',
     micPrerollMs:         getVal('MIC_PREROLL_MS')          || '500',
+    // Chimes de conexión (WiFi/LiveKit) — ver lib/sound-effects.js.
+    notificationSoundsEnabled: getVal('NOTIFICATION_SOUNDS_ENABLED') || 'true',
     brumexaColor: getVal('BRUMEXA_COLOR') || 'negro',
     // Ritmo de los LEDS — ver lib/leds.js (setBreathePeriodMs, setHangoverMs,
     // setOnsetDurationMs, setOffsetDurationMs) para el porqué de cada uno.
@@ -416,6 +418,7 @@ app.post('/setup/config', express.json(), async (req, res) => {
     ledBreathePeriodMs, ledHangoverMs, ledOnsetMs, ledOffsetMs,
     alsaMicDevice, alsaSpeakerDevice,
     micGateEnabled, micGateAttenuationDb, micPrerollMs,
+    notificationSoundsEnabled,
     apSsid,
   } = req.body || {};
   let content = '';
@@ -437,6 +440,7 @@ app.post('/setup/config', express.json(), async (req, res) => {
   if (alsaSpeakerDevice !== undefined) content = setEnvLine(content, 'SPEAKER_ALSA_DEVICE', alsaSpeakerDevice);
   if (micGateEnabled       !== undefined) content = setEnvLine(content, 'MIC_GATE_ENABLED',        micGateEnabled);
   if (micGateAttenuationDb !== undefined) content = setEnvLine(content, 'MIC_GATE_ATTENUATION_DB', micGateAttenuationDb);
+  if (notificationSoundsEnabled !== undefined) content = setEnvLine(content, 'NOTIFICATION_SOUNDS_ENABLED', notificationSoundsEnabled);
   if (micPrerollMs         !== undefined) content = setEnvLine(content, 'MIC_PREROLL_MS',           micPrerollMs);
   // Vacío es un valor válido acá (= "volver a usar el hostname") — se guarda
   // tal cual, no se pisa con un default.
@@ -473,6 +477,7 @@ app.post('/setup/config', express.json(), async (req, res) => {
     if (ledOffsetMs        !== undefined) { const v = parseFloat(ledOffsetMs);        if (!isNaN(v)) leds.setOffsetDurationMs(v); }
     if (micGateEnabled       !== undefined) lkSession.setMicGateEnabled(micGateEnabled !== 'false' && micGateEnabled !== false);
     if (micGateAttenuationDb !== undefined) { const v = parseFloat(micGateAttenuationDb); if (!isNaN(v)) lkSession.setMicGateAttenuationDb(v); }
+    if (notificationSoundsEnabled !== undefined) soundEffects.setSoundsEnabled(notificationSoundsEnabled !== 'false' && notificationSoundsEnabled !== false);
     if (micPrerollMs         !== undefined) { const v = parseFloat(micPrerollMs);         if (!isNaN(v)) lkSession.setMicPrerollMs(v); }
 
     let apSsidResult;
@@ -1023,7 +1028,15 @@ lkSession.on('agent-audio',   () => {
   const yaEstabaConfirmado = _agentConfirmed;
   _agentConfirmed = true;
   leds.idle();
-  if (!yaEstabaConfirmado) soundEffects.playLivekitConnectedSound();
+  if (!yaEstabaConfirmado) {
+    // El chime sigue, en volumen, el gain que la persona le puso a la voz
+    // del agente (POST /session/speaker-gain) — así no suena fuerte si
+    // bajaron esa voz, ni al revés. Tope en 1.6x (el audio está masterizado
+    // a ~0.6 de amplitud máxima) para no distorsionar cuando ese gain está
+    // compensando un speaker/mic débil — puede llegar hasta 32x, muy por
+    // encima de lo que hace falta para el volumen de una notificación.
+    soundEffects.playLivekitConnectedSound(Math.min(lkSession.getSpeakerGain(), 1.6));
+  }
 });
 lkSession.on('error',         e => { console.error('[lk-session-evt] error:', e.message); leds.brumexaError(4000); startMicMonitor(); });
 // _isReconnecting en lkSession vuelve a false apenas la SALA reconecta
