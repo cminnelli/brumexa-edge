@@ -409,7 +409,18 @@ body {
   background: rgba(91,106,240,.08);
 }
 .source-opt:hover .source-opt-inner { border-color: var(--accent-h); }
-.source-opt-icon { font-size: 20px; flex-shrink: 0; }
+/* Antes emoji (🌐/🍓/🔈) — mismo lenguaje de ícono de línea que el resto
+   del sitio (.card-section-icon/.dbg-icon: monocromo, currentColor). El
+   tinte a --accent en :checked es el único momento en que estos íconos
+   llevan color — reafirma la selección con el violeta de marca en vez de
+   agregar otro color nuevo a la paleta. */
+.source-opt-icon { flex-shrink: 0; color: var(--text2); transition: color var(--tr); }
+.source-opt-icon svg {
+  width: 20px; height: 20px; display: block;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round;
+}
+.source-opt input:checked + .source-opt-inner .source-opt-icon { color: var(--accent); }
 .source-opt-text { display: flex; flex-direction: column; gap: 2px; }
 .source-opt-text strong { font-size: 12px; font-weight: 600; color: var(--text); }
 .source-opt-text small  { font-size: 10px; color: var(--muted); line-height: 1.3; }
