@@ -4,32 +4,47 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Brumexa — Diagnóstico local</title>
-  <!-- Red de seguridad contra íconos SVG "gigantes" antes de que cargue
-       local.css — ver el mismo comentario en public/index.html. -->
+  <script>
+    (function () {
+      var t = localStorage.getItem('brumexa-theme');
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" />
+  <!-- Red de seguridad contra íconos SVG "gigantes" antes de que cargue el
+       CSS — ver el mismo comentario en public/index.html. -->
   <style>svg { width: 1em; height: 1em; }</style>
-  <link rel="stylesheet" href="local.css" />
+  <!-- style.css primero (tokens de tema claro/oscuro + navbar compartido),
+       local.css después SOLO con los widgets propios de este dashboard
+       (signal-bar, meter, flow-step, dump, etc.) — ya no redefine colores
+       propios, así esta página respeta el mismo tema claro/oscuro que el
+       resto del sitio en vez de quedar fija en oscuro. -->
+  <link rel="stylesheet" href="style.css?v=21" />
+  <link rel="stylesheet" href="local.css?v=2" />
 </head>
 <body>
 
-<header class="header">
-  <span class="header-icon">🩺</span>
-  <div>
-    <div class="header-title">Brumexa — Diagnóstico local</div>
-    <div class="header-sub">Situación del dispositivo, sin internet — solo lectura</div>
+<header class="site-header">
+  <div class="site-header__inner">
+    <div class="site-header__brand">
+      <span class="brand-name">Brumexa</span>
+    </div>
+    <nav class="tab-nav">
+      <a class="tab-btn" href="/">Panel</a>
+      <a class="tab-btn" href="/configuracion">Configuración</a>
+      <a class="tab-btn" href="/diagnostico">Diagnóstico</a>
+      <a class="tab-btn" href="/logs">Logs</a>
+      <a class="tab-btn" href="/terminal">Terminal Pi</a>
+      <a class="tab-btn active" href="/local">Local</a>
+    </nav>
+    <div class="site-header__actions">
+      <button id="nav-session-btn" class="btn-ghost" type="button" title="Conectar/desconectar la sesión de voz">▶ Conectar</button>
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambiar tema" title="Cambiar tema"></button>
+    </div>
   </div>
 </header>
-
-<!-- Esta página usa su propio tema oscuro fijo (local.css), no el navbar
-     compartido de style.css (que tiene su propio esquema de colores y
-     toggle claro/oscuro) — para no mezclar los dos, un nav propio, chico,
-     con el mismo criterio visual del resto de esta página. -->
-<nav class="local-nav">
-  <a href="/">Panel</a>
-  <a href="/configuracion">Configuración</a>
-  <a href="/diagnostico">Diagnóstico</a>
-  <a href="/logs">Logs</a>
-  <a href="/terminal">Terminal Pi</a>
-</nav>
 
 <main class="page">
 
@@ -70,14 +85,12 @@
     <div id="body-bluetooth"></div>
   </div>
 
-  <div class="refresh-note">
-    Se actualiza solo cada 6 segundos —
-    <a href="/configuracion" style="color:var(--accent)">⚙️ ir a Configuración para editar credenciales, mic, parlante y forzar pruebas</a>
-    — <a href="/logs" style="color:var(--accent)">🗒️ ver logs en vivo</a>
-  </div>
+  <div class="refresh-note">Se actualiza solo cada 6 segundos — para editar algo, usá Configuración; para ver logs en vivo, Logs (arriba).</div>
 
 </main>
 
+<script src="theme.js?v=1"></script>
+<script src="session-quick.js?v=1"></script>
 <script>
   const REFRESH_MS = 6000;
 

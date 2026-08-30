@@ -204,6 +204,7 @@
         </div>
         <div id="wifi-scan-status" class="wifi-scan-status"><span class="spinner"></span> Buscando redes…</div>
         <ul class="network-list" id="wifi-network-list" style="display:none"></ul>
+        <div id="wifi-scan-raw"></div>
 
         <div class="field" style="margin-top:12px">
           <label class="field-label" for="inp-wifi-ssid">Nombre de red (SSID)</label>
@@ -244,15 +245,20 @@
       </div>
       <input type="hidden" id="inp-brumexa-color" value="negro" />
       <div class="color-grid" id="color-grid"></div>
-      <div class="color-detail" id="color-detail"></div>
-      <div class="connect-row" style="margin-top:1rem; align-items:center">
+      <p class="field-hint">Tocar una tarjeta la prende en el dispositivo al toque, para que la veas antes de decidir.</p>
+
+      <details class="tech-details">
+        <summary>Ver detalle de esta combinación</summary>
+        <div class="color-detail" id="color-detail" style="margin-top:0.75rem"></div>
+      </details>
+
+      <div class="connect-row" style="align-items:center">
         <button class="btn-connect" id="btn-save-color" style="flex:none; padding:9px 20px">🎨 Guardar color</button>
-        <p class="field-hint" style="margin:0">Tocar una tarjeta ya lo prende en el dispositivo, para que lo veas antes de decidir. "Guardar" lo deja así después de reiniciar.</p>
       </div>
       <div id="color-save-result" style="margin-top:10px"></div>
 
-      <details class="tech-details" id="custom-colors-details" style="margin-top:14px">
-        <summary>🎨 Personalizar cada color a mano (en vez de un preset)</summary>
+      <details class="tech-details" id="custom-colors-details">
+        <summary>Personalizar cada color a mano</summary>
         <div id="custom-colors-roles" class="custom-colors-grid" style="margin-top:0.75rem"></div>
       </details>
     </div>
@@ -304,7 +310,6 @@
         </div>
       </div>
 
-      <div class="field-group-label">Voz</div>
       <div class="field-row">
         <div class="field">
           <label class="field-label" for="inp-mic-gain">Sensibilidad del micrófono</label>
@@ -314,7 +319,6 @@
               <span class="gain-val" id="val-mic-gain">4.0x</span>
             </div>
           </div>
-          <p class="field-hint">Subí si cuesta que te escuche bien; bajá si hay eco o se satura.</p>
         </div>
         <div class="field">
           <label class="field-label" for="inp-speaker-gain">Volumen del agente</label>
@@ -324,34 +328,9 @@
               <span class="gain-val" id="val-speaker-gain">3.0x</span>
             </div>
           </div>
-          <p class="field-hint">Qué tan fuerte sale la voz del agente por el parlante.</p>
-        </div>
-      </div>
-      <p class="field-hint">El umbral de sensibilidad y "Recalibrar" se movieron a <a href="/diagnostico" style="color:var(--accent)">Diagnóstico → Panorama de sonido</a>, justo debajo del gráfico — así se ve en vivo el efecto de cada ajuste.</p>
-
-      <div class="field-row">
-        <div class="field">
-          <label class="field-label" style="display:flex; align-items:center; gap:8px; cursor:pointer">
-            <input type="checkbox" id="inp-mic-gate-enabled" checked style="width:auto" />
-            Silenciar el piso de ruido antes de mandarlo al agente
-          </label>
-          <p class="field-hint">Solo manda audio real cuando confirma que estás hablando — desactivalo solo para diagnosticar algo puntual.</p>
-        </div>
-        <div class="field">
-          <label class="field-label" for="inp-mic-preroll">Colchón antes de abrir el gate</label>
-          <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
-            <div class="gain-row" style="grid-template-columns:1fr 65px">
-              <input type="range" id="inp-mic-preroll" class="gain-slider" min="300" max="2000" step="50" value="500" />
-              <span class="gain-val" id="val-mic-preroll">500 ms</span>
-            </div>
-          </div>
-          <p class="field-hint">Cuánto audio previo guarda para no perder el arranque de la palabra. No hace falta tocarlo normalmente.</p>
         </div>
       </div>
 
-      <div class="divider"></div>
-
-      <div class="field-group-label">Sesión</div>
       <div class="field">
         <label class="field-label" for="inp-silence-timeout">Corte automático por silencio</label>
         <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
@@ -360,36 +339,49 @@
             <span class="gain-val" id="val-silence-timeout">20 s</span>
           </div>
         </div>
-        <p class="field-hint">Si nadie habla (ni vos ni el agente) durante este tiempo, la sesión se desconecta sola. Arrastrá del todo a la izquierda (0s) para desactivarlo.</p>
+        <p class="field-hint">Se desconecta sola si nadie habla. Arrastrá del todo a la izquierda para desactivarlo.</p>
       </div>
 
-      <div class="divider"></div>
-
-      <div class="field-group-label">Hardware</div>
-      <div class="field">
+      <div class="field" style="margin-bottom:0.5rem">
         <label class="field-label">Micrófono</label>
         <button class="btn-ghost" id="btn-mic-toggle" type="button">Cargando…</button>
-        <p class="field-hint">Aplica en la próxima sesión — no afecta una ya conectada. No se guarda en .env. Para probar mic/parlante/LEDs, ver <a href="/diagnostico" style="color:var(--accent)">Diagnóstico</a>.</p>
       </div>
 
-      <div class="field">
-        <details class="tech-details">
-          <summary>Elegir dispositivo de audio a mano</summary>
-          <div style="display:flex; flex-direction:column; gap:0.75rem">
-            <div>
-              <label class="field-label" for="sel-alsa-mic">Dispositivo de micrófono</label>
-              <select id="sel-alsa-mic" class="select-input"></select>
-            </div>
-            <div>
-              <label class="field-label" for="sel-alsa-speaker">Dispositivo de parlante</label>
-              <select id="sel-alsa-speaker" class="select-input"></select>
-            </div>
-            <p class="field-hint">Normalmente no hace falta tocar esto — el dispositivo ya viene con el correcto. Cambialo solo si el mic o el parlante no andan con el que está elegido. Se aplica en la próxima sesión.</p>
-            <div id="alsa-device-result"></div>
+      <details class="tech-details">
+        <summary>Ajustes avanzados</summary>
+        <div style="display:flex; flex-direction:column; gap:1rem; margin-top:0.75rem">
+          <div class="field">
+            <label class="field-label" style="display:flex; align-items:center; gap:8px; cursor:pointer">
+              <input type="checkbox" id="inp-mic-gate-enabled" checked style="width:auto" />
+              Silenciar el ruido de fondo
+            </label>
+            <p class="field-hint">Solo manda audio al agente cuando confirma que estás hablando.</p>
           </div>
-        </details>
-      </div>
 
+          <div class="field">
+            <label class="field-label" for="inp-mic-preroll">Colchón antes de abrir el gate</label>
+            <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
+              <div class="gain-row" style="grid-template-columns:1fr 65px">
+                <input type="range" id="inp-mic-preroll" class="gain-slider" min="300" max="2000" step="50" value="500" />
+                <span class="gain-val" id="val-mic-preroll">500 ms</span>
+              </div>
+            </div>
+            <p class="field-hint">Audio previo que guarda para no perder el arranque de la palabra.</p>
+          </div>
+
+          <div>
+            <label class="field-label" for="sel-alsa-mic">Dispositivo de micrófono</label>
+            <select id="sel-alsa-mic" class="select-input"></select>
+          </div>
+          <div>
+            <label class="field-label" for="sel-alsa-speaker">Dispositivo de parlante</label>
+            <select id="sel-alsa-speaker" class="select-input"></select>
+          </div>
+          <div id="alsa-device-result"></div>
+
+          <p class="field-hint">El umbral de sensibilidad y "Recalibrar" están en <a href="/diagnostico" style="color:var(--accent)">Diagnóstico → Panorama de sonido</a>.</p>
+        </div>
+      </details>
     </div>
   </div>
 
@@ -403,24 +395,19 @@
         <span class="card-section-icon"><svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg></span>
         <div>
           <div class="card-section-title">Actualizar Brumexa</div>
-          <div class="card-section-desc">Trae los últimos cambios del código (equivalente a "git pull") y reinicia el servidor solo si hubo novedades</div>
+          <div class="card-section-desc">Trae los últimos cambios y reinicia solo si hubo novedades</div>
         </div>
       </div>
-      <div class="field-group-label">Versión instalada</div>
       <div class="kv" id="kv-version" style="margin-bottom:14px"></div>
 
       <div class="field">
-        <label for="sel-update-branch" class="field-label">Branch a traer</label>
-        <select id="sel-update-branch" class="select-input" style="max-width:220px">
-          <option value="dev">dev — para probar cosas</option>
-          <option value="main">main — estable</option>
-        </select>
-        <p class="field-hint">Elegí "dev" para probar cambios nuevos, "main" para la versión estable. Se puede cambiar de branch en cualquier momento — cada actualización clona fresco el branch elegido (mismo mecanismo seguro de siempre, nunca "git pull" in-place).</p>
-      </div>
-
-      <div class="field">
-        <button class="btn-connect" id="btn-update" style="width:auto; padding:9px 20px">⬇️ Buscar actualizaciones</button>
-        <p class="field-hint">Trae los últimos cambios del código y reinicia el servidor solo si hubo novedades.</p>
+        <div class="connect-row" style="padding-top:0">
+          <select id="sel-update-branch" class="select-input" style="max-width:200px; flex:none">
+            <option value="dev">dev — para probar cosas</option>
+            <option value="main">main — estable</option>
+          </select>
+          <button class="btn-connect" id="btn-update" style="flex:none; padding:9px 20px">⬇️ Buscar actualizaciones</button>
+        </div>
       </div>
       <div id="update-result"></div>
       <!-- Log en vivo del proceso — se llena solo mientras "Actualizar" está
@@ -438,7 +425,7 @@
 
       <div class="field" style="margin-bottom:0">
         <button class="btn-ghost" id="btn-restart" style="width:auto; padding:9px 20px">🔄 Reiniciar Brumexa</button>
-        <p class="field-hint">No toca el código ni la configuración — solo apaga y prende el proceso. Útil si algo se traba y no hace falta actualizar nada.</p>
+        <p class="field-hint">Apaga y prende el proceso sin tocar código ni configuración.</p>
       </div>
     </div>
   </div>
@@ -863,15 +850,15 @@
     list.style.display   = 'none';
     btn.disabled = true;
     try {
-      const { networks } = await fetch('/wifi/scan').then(r => r.json());
-      renderWifiNetworks(networks || []);
+      const { networks, raw } = await fetch('/wifi/scan').then(r => r.json());
+      renderWifiNetworks(networks || [], raw);
     } catch {
       status.innerHTML = '<span class="field-hint">No se pudo escanear redes.</span>';
     }
     btn.disabled = false;
   }
 
-  function renderWifiNetworks(networks) {
+  function renderWifiNetworks(networks, raw) {
     const status = document.getElementById('wifi-scan-status');
     const list   = document.getElementById('wifi-network-list');
     status.style.display = 'none';
@@ -885,6 +872,14 @@
         <span class="net-lock">${hasPass ? '🔒' : '🔓'}</span>
       </li>`;
     }).join('') || '<div class="field-hint">No se encontraron redes — probá "Buscar" de nuevo.</div>';
+
+    // Salida cruda de nmcli (caché + forzado) — para diagnosticar "¿por qué
+    // no aparece tal red?" sin ir a Terminal/SSH. Colapsado por default, no
+    // molesta a quien solo quiere elegir una red y conectarse.
+    const rawBlock = document.getElementById('wifi-scan-raw');
+    if (rawBlock) rawBlock.outerHTML = raw
+      ? `<details id="wifi-scan-raw" style="margin-top:8px"><summary style="cursor:pointer;font-size:11px;color:var(--muted)">Ver detalle técnico del escaneo</summary><pre style="white-space:pre-wrap;font-size:11px;color:var(--muted);margin-top:6px;max-height:200px;overflow-y:auto">${esc(raw)}</pre></details>`
+      : '<div id="wifi-scan-raw"></div>';
 
     list.querySelectorAll('.network-item').forEach(li => {
       li.addEventListener('click', () => {
