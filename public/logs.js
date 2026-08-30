@@ -1,7 +1,11 @@
 'use strict';
 
-// Visor de logs en vivo — WebSocket (/ws/logs, ver lib/log-stream.js: server
-// empuja cada línea apenas la loguea, nada de polling).
+// Visor de logs en vivo — un único WebSocket (/ws/logs, ver lib/log-stream.js)
+// alimenta DOS paneles: "Servidor" (console.log/warn/error de toda la app) y
+// "WiFi" (historial persistente de logs/wifi-debug.log, sobrevive reinicios —
+// antes solo se podía leer tipeando la URL /wifi/debug-log a mano, ahora se
+// ve acá directo). El server tagea cada entrada con `source` ('server' o
+// 'wifi'); acá solo se rutea al panel que corresponda, sin pedir nada aparte.
 //
 // Antes había un segundo panel con el log de sistema/kernel (dmesg/
 // journalctl), sondeado cada 4s. Se sacó a propósito: esos comandos podían
@@ -11,44 +15,46 @@
 
 const MAX_LINES = 500; // tope de <div> por panel — no queremos miles de nodos vivos en una sesión larga
 
-// ─── Panel servidor (WebSocket) ──────────────────────────────────────────────
-(function serverPanel() {
-  const body   = document.getElementById('body-server');
-  const dot    = document.getElementById('dot-server');
-  const count  = document.getElementById('count-server');
-  const filter = document.getElementById('logs-filter');
-  const btnClr = document.getElementById('btn-clear-server');
+// stage/origin ya vienen clasificados del server (lib/log-stream.js) — acá
+// solo se traducen a clases CSS, mismo criterio que ya usa el color ANSI
+// de la terminal (pm2 logs), para que el panel del navegador y la
+// consola por SSH se vean equivalentes.
+function classify(entry) {
+  if (entry.stream === 'stderr') return 'stderr';
+  if (entry.origin === 'PI')  return 'origin-pi';
+  if (entry.origin === 'RED') return 'origin-red';
+  if (entry.stage === 'tx')   return 'hl-tx';
+  if (entry.stage === 'rx')   return 'hl-rx';
+  if (entry.stage === 'wait') return 'hl-wait';
+  if (/Gate (ABIERTO|CERRADO)/.test(entry.text)) return 'hl-gate';
+  return '';
+}
 
-  let shown  = 0;
+function fmtTs(ts) {
+  const d = new Date(ts);
+  const base = d.toLocaleTimeString('es-AR', { hour12: false });
+  const ms = String(d.getMilliseconds()).padStart(3, '0');
+  return `${base}.${ms}`;
+}
+
+// Crea un panel (server o wifi) con su propio filtro/contador/botón limpiar.
+// Devuelve solo append(entry) — el que arma la conexión WS de más abajo
+// decide a qué panel mandar cada entrada según entry.source.
+function makePanel(prefix) {
+  const body   = document.getElementById(`body-${prefix}`);
+  const dot    = document.getElementById(`dot-${prefix}`);
+  const count  = document.getElementById(`count-${prefix}`);
+  const filter = document.getElementById(`filter-${prefix}`);
+  const btnClr = document.getElementById(`btn-clear-${prefix}`);
+
+  let shown = 0;
   let filterText = '';
 
   function isAtBottom() {
     return body.scrollHeight - body.scrollTop - body.clientHeight < 40;
   }
 
-  function fmtTs(ts) {
-    const d = new Date(ts);
-    const base = d.toLocaleTimeString('es-AR', { hour12: false });
-    const ms = String(d.getMilliseconds()).padStart(3, '0');
-    return `${base}.${ms}`;
-  }
-
-  // stage/origin ya vienen clasificados del server (lib/log-stream.js) — acá
-  // solo se traducen a clases CSS, mismo criterio que ya usa el color ANSI
-  // de la terminal (pm2 logs), para que el panel del navegador y la
-  // consola por SSH se vean equivalentes.
-  function classify(entry) {
-    if (entry.stream === 'stderr') return 'stderr';
-    if (entry.origin === 'PI')  return 'origin-pi';
-    if (entry.origin === 'RED') return 'origin-red';
-    if (entry.stage === 'tx')   return 'hl-tx';
-    if (entry.stage === 'rx')   return 'hl-rx';
-    if (entry.stage === 'wait') return 'hl-wait';
-    if (/Gate (ABIERTO|CERRADO)/.test(entry.text)) return 'hl-gate';
-    return '';
-  }
-
-  function appendEntry(entry) {
+  function append(entry) {
     const el = document.createElement('div');
     el.className = 'log-line ' + classify(entry);
     el.dataset.text = entry.text.toLowerCase();
@@ -80,27 +86,44 @@ const MAX_LINES = 500; // tope de <div> por panel — no queremos miles de nodos
     count.textContent = '';
   });
 
-  let ws = null;
-  let retryMs = 500;
-
-  function connect() {
-    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(`${protocol}//${location.host}/ws/logs`);
-
-    ws.onopen = () => {
-      dot.className = 'logs-dot live';
-      retryMs = 500;
-    };
-    ws.onmessage = (e) => {
-      try { appendEntry(JSON.parse(e.data)); } catch {}
-    };
-    ws.onclose = () => {
-      dot.className = 'logs-dot down';
-      retryMs = Math.min(retryMs * 1.6, 5000);
-      setTimeout(connect, retryMs);
-    };
-    ws.onerror = () => { try { ws.close(); } catch {} };
+  function setLive(isLive) {
+    dot.className = 'logs-dot ' + (isLive ? 'live' : 'down');
   }
 
-  connect();
-})();
+  return { append, setLive };
+}
+
+const panels = {
+  server: makePanel('server'),
+  wifi:   makePanel('wifi'),
+};
+
+let ws = null;
+let retryMs = 500;
+
+function connect() {
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${protocol}//${location.host}/ws/logs`);
+
+  ws.onopen = () => {
+    panels.server.setLive(true);
+    panels.wifi.setLive(true);
+    retryMs = 500;
+  };
+  ws.onmessage = (e) => {
+    try {
+      const entry = JSON.parse(e.data);
+      const panel = panels[entry.source] || panels.server;
+      panel.append(entry);
+    } catch {}
+  };
+  ws.onclose = () => {
+    panels.server.setLive(false);
+    panels.wifi.setLive(false);
+    retryMs = Math.min(retryMs * 1.6, 5000);
+    setTimeout(connect, retryMs);
+  };
+  ws.onerror = () => { try { ws.close(); } catch {} };
+}
+
+connect();

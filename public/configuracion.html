@@ -259,8 +259,16 @@
           <span class="input-suffix-group__suffix">_AP</span>
         </div>
       </div>
+      <div class="field">
+        <label class="field-label" for="inp-ap-pass">Contraseña de esta red</label>
+        <div class="setup-token-row">
+          <input type="password" id="inp-ap-pass" class="setup-input" placeholder="Contraseña del AP" autocomplete="off" spellcheck="false" minlength="8" maxlength="63" />
+          <button class="btn-ghost" id="btn-toggle-ap-pass" type="button" title="Mostrar/ocultar">👁</button>
+        </div>
+        <p class="field-hint">Entre 8 y 63 caracteres (mínimo que exige WiFi/WPA2). Vacío = volver a la contraseña por default.</p>
+      </div>
       <div class="connect-row">
-        <button class="btn-ghost" id="btn-save-ap-name" type="button" style="flex:none; padding:9px 20px">💾 Guardar nombre del AP</button>
+        <button class="btn-ghost" id="btn-save-ap-name" type="button" style="flex:none; padding:9px 20px">💾 Guardar cambios del AP</button>
       </div>
       <div id="ap-name-save-result" style="margin-top:10px"></div>
     </div>
@@ -438,23 +446,29 @@
 
     <!-- § Actualizar Brumexa -->
     <div class="card" id="card-update">
-      <div class="card-section-hdr">
-        <span class="card-section-icon"><svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg></span>
-        <div>
-          <div class="card-section-title">Actualizar Brumexa</div>
-          <div class="card-section-desc">Trae los últimos cambios y reinicia solo si hubo novedades</div>
+      <div class="card-hdr-row">
+        <div class="card-section-hdr" style="margin-bottom:0">
+          <span class="card-section-icon"><svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg></span>
+          <div>
+            <div class="card-section-title">Actualizar Brumexa</div>
+            <div class="card-section-desc">Trae los últimos cambios y reinicia solo si hubo novedades</div>
+          </div>
         </div>
+        <!-- Chico y a un costado a propósito — no es la acción principal de
+             la card, es un detalle técnico (a qué branch de git actualizar)
+             que casi nadie necesita tocar. "main" queda SIEMPRE
+             preseleccionado (ver loadVersion() y el <option selected> de
+             abajo) — nunca se acuerda de una elección de "dev" entre
+             visitas. -->
+        <select id="sel-update-branch" class="select-input select-input--mini" title="Branch de actualización">
+          <option value="main" selected>main — estable</option>
+          <option value="dev">dev — para probar cosas</option>
+        </select>
       </div>
       <div class="kv" id="kv-version" style="margin-bottom:14px"></div>
 
-      <div class="field">
-        <div class="connect-row" style="padding-top:0">
-          <select id="sel-update-branch" class="select-input" style="max-width:200px; flex:none">
-            <option value="main" selected>main — estable</option>
-            <option value="dev">dev — para probar cosas</option>
-          </select>
-          <button class="btn-connect" id="btn-update" style="flex:none; padding:9px 20px">⬇️ Buscar actualizaciones</button>
-        </div>
+      <div class="connect-row">
+        <button class="btn-connect" id="btn-update" style="flex:none; padding:9px 20px">⬇️ Buscar actualizaciones</button>
       </div>
       <div id="update-result"></div>
       <!-- Log en vivo del proceso — se llena solo mientras "Actualizar" está
@@ -825,6 +839,7 @@
       // Pedido explícito: antes se veía en blanco y parecía que "no trajo
       // nada" en vez de mostrar qué nombre se está usando de verdad.
       document.getElementById('inp-ap-name').value = cfg?.apSsid || cfg2.server?.hostname || '';
+      document.getElementById('inp-ap-pass').value = cfg?.apPass || '';
       const btnUpdate  = document.getElementById('btn-update');
       const btnRestart = document.getElementById('btn-restart');
       if (cfg2.server?.platform === 'linux') {
@@ -1027,35 +1042,56 @@
   // diferencia de esos campos, esto puede llegar a cortar por un instante a
   // quien esté conectado al propio AP en el momento (ver comentario de
   // setApSsid en lib/wifi.js), así que la persona tiene que confirmarlo.
+  // Contraseña: oculta por default, mismo botón 👁/🙈 que ya usa la API key
+  // de arriba (card-creds) y el campo de WiFi del cliente más arriba en esta
+  // misma card.
+  document.getElementById('btn-toggle-ap-pass').addEventListener('click', () => {
+    const inp = document.getElementById('inp-ap-pass');
+    const btn = document.getElementById('btn-toggle-ap-pass');
+    const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    btn.textContent = show ? '🙈' : '👁';
+  });
+
   document.getElementById('btn-save-ap-name').addEventListener('click', async () => {
-    const inp    = document.getElementById('inp-ap-name');
-    const btn    = document.getElementById('btn-save-ap-name');
-    const result = document.getElementById('ap-name-save-result');
-    const value  = inp.value.trim();
+    const inp     = document.getElementById('inp-ap-name');
+    const passInp = document.getElementById('inp-ap-pass');
+    const btn     = document.getElementById('btn-save-ap-name');
+    const result  = document.getElementById('ap-name-save-result');
+    const value   = inp.value.trim();
+    const pass    = passInp.value.trim();
+
+    if (pass && (pass.length < 8 || pass.length > 63)) {
+      result.innerHTML = '<div class="flow-note bad">✘ La contraseña debe tener entre 8 y 63 caracteres.</div>';
+      return;
+    }
 
     btn.disabled = true;
     try {
       const res  = await fetch('/setup/config', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apSsid: value }),
+        body: JSON.stringify({ apSsid: value, apPass: pass }),
       });
       const data = await res.json();
-      if (!res.ok || !data.ok || (data.apSsid && !data.apSsid.ok)) {
-        throw new Error(data.apSsid?.error || data.error || 'No se pudo guardar');
+      if (!res.ok || !data.ok || (data.apSsid && !data.apSsid.ok) || (data.apPass && !data.apPass.ok)) {
+        throw new Error(data.apPass?.error || data.apSsid?.error || data.error || 'No se pudo guardar');
       }
       // El campo NUNCA queda vacío tras guardar — si se borró para volver
       // al default, el backend resuelve la base al hostname (data.apSsid.base)
       // y acá se refleja ESO en el input, no lo que se mandó (que pudo haber
       // sido ''). Pedido explícito: antes quedaba en blanco después de
-      // guardar y parecía que no había pasado nada.
+      // guardar y parecía que no había pasado nada. Misma lógica para la
+      // contraseña con data.apPass.pass (vacío → vuelve al default).
       if (data.apSsid?.base) inp.value = data.apSsid.base;
+      if (data.apPass?.pass) passInp.value = data.apPass.pass;
 
       // Nunca reinicia el AP al toque aunque ya esté activo — si lo estuviera,
       // reactivarlo desde acá cortaría a quien está conectado A ese mismo AP
       // (única forma de llegar a esta página sin WiFi real configurado) a
       // mitad de la operación. deferredWhileApActive avisa ese caso explícito.
-      const nota = data.apSsid?.deferredWhileApActive
-        ? ' — el AP sigue activo con el nombre viejo por ahora (no se corta la conexión actual); se va a aplicar solo en la próxima vez que Brumexa lo levante, por ejemplo reiniciando el dispositivo'
+      const deferred = data.apSsid?.deferredWhileApActive || data.apPass?.deferredWhileApActive;
+      const nota = deferred
+        ? ' — el AP sigue activo con los datos viejos por ahora (no se corta la conexión actual); se va a aplicar solo en la próxima vez que Brumexa lo levante, por ejemplo reiniciando el dispositivo'
         : ' (se aplica la próxima vez que Brumexa levante el AP)';
       result.innerHTML = `<div class="flow-note ok">✔ Guardado — "${esc(data.apSsid?.ssid || value)}"${nota}</div>`;
       loadWifiCurrent();

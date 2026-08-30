@@ -49,7 +49,7 @@ const { startRecording, stopRecording, getStatus,
         listRecordings, RECORDINGS_DIR,
         reserveBrowserFilename, saveBrowserRecording,
         deleteRecording, boostCaptureGain } = require('./lib/recorder');
-const { setupWifi, autoStartAP, startHealthMonitor, getStatus: getWifiStatus, getStatusAsync: getWifiStatusAsync, setApSsid } = require('./lib/wifi');
+const { setupWifi, autoStartAP, startHealthMonitor, getStatus: getWifiStatus, getStatusAsync: getWifiStatusAsync, setApSsid, setApPass, DEFAULT_AP_PASS } = require('./lib/wifi');
 const { setupLocalDebug, getSystemInfo }                = require('./lib/local-debug');
 
 // lib/configuracion.js se carga con red de seguridad: si el archivo llegó
@@ -317,6 +317,11 @@ app.get('/setup/config', (_req, res) => {
     // se manda tal cual (sin default acá) para que el front distinga "nunca
     // se tocó" (mostrar el hostname como placeholder) de "se puso a mano".
     apSsid: getVal('WIFI_AP_SSID'),
+    // A diferencia de apSsid (que puede quedar vacío = "usar el hostname"),
+    // acá siempre se manda la contraseña real que está en uso — si nunca se
+    // tocó, cae en el mismo default que usa lib/wifi.js al arrancar sin
+    // WIFI_AP_PASS en .env.
+    apPass: getVal('WIFI_AP_PASS') || DEFAULT_AP_PASS,
   });
 });
 
@@ -419,7 +424,7 @@ app.post('/setup/config', express.json(), async (req, res) => {
     alsaMicDevice, alsaSpeakerDevice,
     micGateEnabled, micGateAttenuationDb, micPrerollMs,
     notificationSoundsEnabled,
-    apSsid,
+    apSsid, apPass,
   } = req.body || {};
   let content = '';
   try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
@@ -445,6 +450,9 @@ app.post('/setup/config', express.json(), async (req, res) => {
   // Vacío es un valor válido acá (= "volver a usar el hostname") — se guarda
   // tal cual, no se pisa con un default.
   if (apSsid !== undefined) content = setEnvLine(content, 'WIFI_AP_SSID', apSsid);
+  // Vacío también es válido acá (= "volver al default de lib/wifi.js"), mismo
+  // criterio que apSsid — no se pisa con un default acá.
+  if (apPass !== undefined) content = setEnvLine(content, 'WIFI_AP_PASS', apPass);
 
   try {
     require('fs').writeFileSync(envFile, content, 'utf8');
@@ -484,8 +492,12 @@ app.post('/setup/config', express.json(), async (req, res) => {
     if (apSsid !== undefined) {
       apSsidResult = await setApSsid(apSsid || os.hostname());
     }
+    let apPassResult;
+    if (apPass !== undefined) {
+      apPassResult = await setApPass(apPass);
+    }
 
-    res.json({ ok: true, restarting: false, apSsid: apSsidResult });
+    res.json({ ok: true, restarting: false, apSsid: apSsidResult, apPass: apPassResult });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

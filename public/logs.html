@@ -25,6 +25,7 @@
     body { display: flex; flex-direction: column; height: 100vh; margin: 0; }
     .logs-wrap { flex: 1; min-height: 0; display: flex; }
     .logs-panel { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); }
+    .logs-panel + .logs-panel { border-left: 1px solid var(--border); }
     .logs-panel__header {
       display: flex; align-items: center; gap: 10px;
       padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--surface);
@@ -95,11 +96,22 @@
     <div class="logs-panel__header">
       <span class="logs-dot" id="dot-server"></span>
       <span class="logs-panel__title">Servidor (en vivo)</span>
-      <input id="logs-filter" class="logs-filter" type="search" placeholder="Filtrar (ej. gate, hablando, error)…" autocomplete="off" />
+      <input id="filter-server" class="logs-filter" type="search" placeholder="Filtrar (ej. gate, hablando, error)…" autocomplete="off" />
       <span class="logs-panel__count" id="count-server"></span>
       <button class="btn-ghost" id="btn-clear-server">Limpiar</button>
     </div>
     <div class="logs-body" id="body-server"></div>
+  </div>
+
+  <div class="logs-panel">
+    <div class="logs-panel__header">
+      <span class="logs-dot" id="dot-wifi"></span>
+      <span class="logs-panel__title">WiFi (persistente)</span>
+      <input id="filter-wifi" class="logs-filter" type="search" placeholder="Filtrar (ej. AP, conectado, error)…" autocomplete="off" />
+      <span class="logs-panel__count" id="count-wifi"></span>
+      <button class="btn-ghost" id="btn-clear-wifi">Limpiar</button>
+    </div>
+    <div class="logs-body" id="body-wifi"></div>
   </div>
 
 </div>

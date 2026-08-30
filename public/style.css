@@ -440,6 +440,24 @@ body {
 }
 .select-input:focus { border-color: var(--accent); }
 
+/* Variante chica — para un selector secundario que no debe competir
+   visualmente con la acción principal de la card (ej. branch de
+   actualización, arriba a la derecha del header en vez de al lado del
+   botón grande). Transparente hasta que se toca, para que se sienta como
+   un detalle técnico y no como un segundo control igual de importante. */
+.select-input--mini {
+  width: auto;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-color: transparent;
+  background: var(--surface2);
+  color: var(--text2);
+  flex-shrink: 0;
+}
+.select-input--mini:hover  { border-color: var(--border); color: var(--text); }
+.select-input--mini:focus  { border-color: var(--accent); color: var(--text); }
+
 /* ═══════════════════════════════════════════════════════════
    STEPS DE CONEXIÓN
 ══════════════════════════════════════════════════════════ */
