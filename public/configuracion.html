@@ -71,7 +71,10 @@
          con los tokens de tema claro/oscuro de esta página en vez de colores
          fijos, porque acá sí hay toggle de tema). ── */
     .wifi-scan-status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text2); padding: 4px 0; }
-    .network-list { list-style: none; display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; }
+    .network-list {
+      list-style: none; display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0;
+      max-height: 260px; overflow-y: auto; /* con muchas redes cerca (edificios, etc.) esto podía crecer sin límite y empujar el resto de la página */
+    }
     .network-item {
       display: flex; align-items: center; gap: 10px;
       padding: 9px 12px;
@@ -203,6 +206,7 @@
           <button class="btn-ghost" id="btn-wifi-rescan" type="button">↺ Buscar</button>
         </div>
         <div id="wifi-scan-status" class="wifi-scan-status"><span class="spinner"></span> Buscando redes…</div>
+        <input type="search" id="inp-wifi-filter" class="setup-input" placeholder="Filtrar por nombre…" autocomplete="off" style="display:none; margin-bottom:8px" />
         <ul class="network-list" id="wifi-network-list" style="display:none"></ul>
         <div id="wifi-scan-raw"></div>
 
@@ -842,6 +846,16 @@
   });
   document.getElementById('btn-wifi-rescan').addEventListener('click', scanWifiNetworks);
 
+  // Filtra por nombre la lista YA cargada (no dispara un escaneo nuevo) —
+  // útil ahora que el fix de Polkit hace que aparezcan bastantes más redes
+  // que antes (edificios con muchos vecinos, etc.).
+  document.getElementById('inp-wifi-filter').addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    document.querySelectorAll('#wifi-network-list .network-item').forEach(li => {
+      li.style.display = (!q || li.dataset.ssid.toLowerCase().includes(q)) ? '' : 'none';
+    });
+  });
+
   async function scanWifiNetworks() {
     const status = document.getElementById('wifi-scan-status');
     const list   = document.getElementById('wifi-network-list');
@@ -861,8 +875,11 @@
   function renderWifiNetworks(networks, raw) {
     const status = document.getElementById('wifi-scan-status');
     const list   = document.getElementById('wifi-network-list');
+    const filter = document.getElementById('inp-wifi-filter');
     status.style.display = 'none';
     list.style.display   = '';
+    filter.style.display = networks.length ? '' : 'none'; // sin redes, no tiene sentido mostrar el filtro
+    filter.value = '';
     list.innerHTML = networks.map(n => {
       const hasPass = n.security && n.security !== 'open' && n.security !== '--';
       return `<li class="network-item" data-ssid="${esc(n.ssid)}">
