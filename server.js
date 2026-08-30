@@ -49,7 +49,7 @@ const { startRecording, stopRecording, getStatus,
         listRecordings, RECORDINGS_DIR,
         reserveBrowserFilename, saveBrowserRecording,
         deleteRecording, boostCaptureGain } = require('./lib/recorder');
-const { setupWifi, autoStartAP, startHealthMonitor, getStatus: getWifiStatus, getStatusAsync: getWifiStatusAsync } = require('./lib/wifi');
+const { setupWifi, autoStartAP, startHealthMonitor, getStatus: getWifiStatus, getStatusAsync: getWifiStatusAsync, setApSsid } = require('./lib/wifi');
 const { setupLocalDebug, getSystemInfo }                = require('./lib/local-debug');
 
 // lib/configuracion.js se carga con red de seguridad: si el archivo llegó
@@ -310,6 +310,10 @@ app.get('/setup/config', (_req, res) => {
     ledOffsetMs:        getVal('LED_OFFSET_MS')         || '965',
     alsaMicDevice:      getVal('MIC_ALSA_DEVICE')     || 'default',
     alsaSpeakerDevice:  getVal('SPEAKER_ALSA_DEVICE') || 'plughw:0,0',
+    // Vacío/no seteado = usa el hostname del dispositivo (ver lib/wifi.js) —
+    // se manda tal cual (sin default acá) para que el front distinga "nunca
+    // se tocó" (mostrar el hostname como placeholder) de "se puso a mano".
+    apSsid: getVal('WIFI_AP_SSID'),
   });
 });
 
@@ -404,13 +408,14 @@ async function autoDetectAlsaDevices() {
 // Todos estos campos, BRUMEXA_COLOR incluido, se aplican sin reiniciar el
 // proceso (credenciales → ragAuth/ragToken.setCredentials, ganancias/umbral →
 // lkSession, mic gain del modo browser → lib/audio, color → leds.setDeviceColor).
-app.post('/setup/config', express.json(), (req, res) => {
+app.post('/setup/config', express.json(), async (req, res) => {
   const envFile = path.join(__dirname, '.env');
   const {
     ragApiUrl, deviceId, apiKey, micGain, speakerGain, talkThreshold, silenceTimeoutMs, brumexaColor,
     ledBreathePeriodMs, ledHangoverMs, ledOnsetMs, ledOffsetMs,
     alsaMicDevice, alsaSpeakerDevice,
     micGateEnabled, micGateAttenuationDb, micPrerollMs,
+    apSsid,
   } = req.body || {};
   let content = '';
   try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
@@ -432,6 +437,9 @@ app.post('/setup/config', express.json(), (req, res) => {
   if (micGateEnabled       !== undefined) content = setEnvLine(content, 'MIC_GATE_ENABLED',        micGateEnabled);
   if (micGateAttenuationDb !== undefined) content = setEnvLine(content, 'MIC_GATE_ATTENUATION_DB', micGateAttenuationDb);
   if (micPrerollMs         !== undefined) content = setEnvLine(content, 'MIC_PREROLL_MS',           micPrerollMs);
+  // Vacío es un valor válido acá (= "volver a usar el hostname") — se guarda
+  // tal cual, no se pisa con un default.
+  if (apSsid !== undefined) content = setEnvLine(content, 'WIFI_AP_SSID', apSsid);
 
   try {
     require('fs').writeFileSync(envFile, content, 'utf8');
@@ -466,7 +474,12 @@ app.post('/setup/config', express.json(), (req, res) => {
     if (micGateAttenuationDb !== undefined) { const v = parseFloat(micGateAttenuationDb); if (!isNaN(v)) lkSession.setMicGateAttenuationDb(v); }
     if (micPrerollMs         !== undefined) { const v = parseFloat(micPrerollMs);         if (!isNaN(v)) lkSession.setMicPrerollMs(v); }
 
-    res.json({ ok: true, restarting: false });
+    let apSsidResult;
+    if (apSsid !== undefined) {
+      apSsidResult = await setApSsid(apSsid || os.hostname());
+    }
+
+    res.json({ ok: true, restarting: false, apSsid: apSsidResult });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

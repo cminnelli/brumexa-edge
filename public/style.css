@@ -305,9 +305,8 @@ body {
   color: var(--text2);
 }
 /* Íconos de línea minimalistas — monocromo, heredan --text2 (o lo que
-   pinte el contenedor), sin relleno de color propio. Mismo tamaño en
-   card-section-icon (cards principales) y .ic (tarjetas chicas de /local). */
-.card-section-icon svg, .ic svg {
+   pinte el contenedor), sin relleno de color propio. */
+.card-section-icon svg {
   width: 18px; height: 18px; display: block;
   stroke: currentColor; fill: none;
   stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round;

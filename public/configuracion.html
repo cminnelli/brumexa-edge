@@ -228,6 +228,22 @@
         </div>
         <div id="wifi-connect-result" style="margin-top:10px"></div>
       </div>
+
+      <div class="divider" style="margin:14px 0"></div>
+
+      <!-- § Nombre del Access Point — la red que la propia Brumexa genera
+           cuando no tiene WiFi configurado o lo pierde (para entrar a
+           /setup). Antes solo se podía cambiar editando .env por SSH; acá
+           queda como cualquier otro campo de configuración. -->
+      <div class="field">
+        <label class="field-label" for="inp-ap-name">Nombre del Access Point que genera Brumexa</label>
+        <input type="text" id="inp-ap-name" class="setup-input" placeholder="Nombre del dispositivo" autocomplete="off" spellcheck="false" maxlength="32" />
+        <p class="field-hint">Red que aparece cuando Brumexa no tiene WiFi configurado o se queda sin conexión (para entrar a <code>/setup</code>). Vacío = usa el nombre del dispositivo (<span id="ap-name-hostname">—</span>).</p>
+      </div>
+      <div class="connect-row">
+        <button class="btn-ghost" id="btn-save-ap-name" type="button" style="flex:none; padding:9px 20px">💾 Guardar nombre del AP</button>
+      </div>
+      <div id="ap-name-save-result" style="margin-top:10px"></div>
     </div>
 
   </div>
@@ -758,6 +774,7 @@
       setLiveSliderField('inp-led-hangover', 'val-led-hangover', cfg.ledHangoverMs,      1100, v => `${v} ms`);
       setLiveSliderField('inp-mic-preroll',          'val-mic-preroll',          cfg.micPrerollMs,         500, v => `${v} ms`);
       document.getElementById('inp-mic-gate-enabled').checked = cfg.micGateEnabled !== 'false';
+      document.getElementById('inp-ap-name').value = cfg.apSsid || '';
 
       micEnabledState = status.micEnabled !== false;
       updateMicButton();
@@ -775,6 +792,8 @@
     // backend también lo rechaza aunque alguien fuerce el request).
     try {
       const cfg2 = await fetch('/config', { cache: 'no-store' }).then(r => r.json());
+      const hostnameSpan = document.getElementById('ap-name-hostname');
+      if (hostnameSpan) hostnameSpan.textContent = cfg2.server?.hostname || '—';
       const btnUpdate  = document.getElementById('btn-update');
       const btnRestart = document.getElementById('btn-restart');
       if (cfg2.server?.platform === 'linux') {
@@ -971,6 +990,36 @@
   });
 
   loadWifiCurrent();
+
+  // ─── Nombre del AP ───────────────────────────────────────────────────────
+  // Botón explícito (no aplica al toque como los sliders de Sonido) — a
+  // diferencia de esos campos, esto puede llegar a cortar por un instante a
+  // quien esté conectado al propio AP en el momento (ver comentario de
+  // setApSsid en lib/wifi.js), así que la persona tiene que confirmarlo.
+  document.getElementById('btn-save-ap-name').addEventListener('click', async () => {
+    const inp    = document.getElementById('inp-ap-name');
+    const btn    = document.getElementById('btn-save-ap-name');
+    const result = document.getElementById('ap-name-save-result');
+    const value  = inp.value.trim();
+
+    btn.disabled = true;
+    try {
+      const res  = await fetch('/setup/config', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apSsid: value }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok || (data.apSsid && !data.apSsid.ok)) {
+        throw new Error(data.apSsid?.error || data.error || 'No se pudo guardar');
+      }
+      const restarted = data.apSsid?.restarted;
+      result.innerHTML = `<div class="flow-note ok">✔ Guardado — "${esc(data.apSsid?.ssid || value)}"${restarted ? ' (AP reactivado ya)' : ' (se aplica la próxima vez que Brumexa levante el AP)'}</div>`;
+      loadWifiCurrent();
+    } catch (e) {
+      result.innerHTML = `<div class="flow-note bad">✘ ${esc(e.message)}</div>`;
+    }
+    btn.disabled = false;
+  });
 
   // Dispositivos ALSA (mic/parlante) — se usa el mismo par de endpoints que
   // ya tenía el Panel para listarlos, pero ACÁ la elección se persiste
