@@ -304,3 +304,44 @@ pm2 save
 ```
 
 Para confirmar en el momento (sin esperar a que se repita) hay un log de diagnóstico permanente en [`lib/livekit-session.js`](lib/livekit-session.js) — buscar `[lk-session-debug] connectionState` en `pm2 logs brumexa-edge`; si queda en un estado que no sea `connected` mientras la señalización dice que todo anda bien, es la misma causa.
+
+**El Access Point de respaldo nunca se levanta cuando no hay WiFi** (el dispositivo se queda
+"resignado" sin red, sin que aparezca nunca la red `..._AP` al buscar desde el celu): confirmar
+primero en `http://<ip-o-hostname>:3000/wifi/debug-log` (o `pm2 logs brumexa-edge`) si aparece
+algo como:
+
+```
+AP "..." FALLÓ al activar — Error: Failed to setup a Wi-Fi hotspot: Not authorized to control networking.
+```
+
+Es un permiso de Polkit, no un bug de `lib/wifi.js`: `nmcli device wifi hotspot` necesita el
+permiso `org.freedesktop.NetworkManager.network-control`, que por default solo se concede sin
+preguntar nada si hay una sesión de login activa en consola — corriendo como servicio de
+systemd/PM2 sin sesión (y sin root, a propósito, ver arriba), Polkit lo niega en silencio.
+`install.sh` (paso 4) ya agrega la regla que soluciona esto en instalaciones nuevas — pero un
+dispositivo instalado ANTES de que se agregara esta regla no la tiene, y actualizar el código
+(`git pull` + reiniciar) no la aplica sola, porque es configuración de sistema, no de la app. Para
+aplicarla a mano en un dispositivo ya instalado, por SSH o desde `/terminal`:
+
+```bash
+sudo tee /etc/polkit-1/rules.d/50-brumexa-wifi-scan.rules > /dev/null <<EOF
+polkit.addRule(function(action, subject) {
+    if (action.id.indexOf("org.freedesktop.NetworkManager.") === 0 &&
+        subject.user == "$(whoami)") {
+        return polkit.Result.YES;
+    }
+});
+EOF
+sudo systemctl restart polkit
+```
+
+Para confirmar que quedó bien aplicado sin arriesgarse a perder la conexión probando el AP en
+vivo, `pkcheck` simula la decisión de Polkit sin ejecutar nada real:
+
+```bash
+pkcheck --action-id org.freedesktop.NetworkManager.network-control --process $$ ; echo "resultado: $?"
+```
+
+`resultado: 0` = autorizado. Cualquier otro valor = la regla no se aplicó bien (revisar el
+contenido del archivo con `cat /etc/polkit-1/rules.d/50-brumexa-wifi-scan.rules` y reintentar el
+`systemctl restart polkit`).
