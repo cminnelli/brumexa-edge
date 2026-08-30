@@ -1,15 +1,16 @@
 'use strict';
 
 /**
- * Genera sounds/wifi_ap_activado.wav — arpegio ascendente corto (3 notas)
- * que suena cuando el dispositivo activa su propio Access Point de
- * aprovisionamiento (ver playApReadySound() en lib/sound-effects.js).
+ * Genera sounds/wifi_conectado.wav — arpegio ascendente corto (3 notas)
+ * que suena cuando el dispositivo activa su propio AP de aprovisionamiento
+ * O se conecta con éxito a la red WiFi real del usuario (ver
+ * playWifiConnectedSound() en lib/sound-effects.js).
  *
  * Sin dependencias externas: sintetiza el tono con Math.sin y escribe el
  * WAV a mano (header PCM16LE de 44 bytes). Correr con:
- *   node scripts/generate-ap-ready-sound.js
+ *   node scripts/generate-wifi-connected-sound.js
  *
- * Es solo un placeholder — reemplazá sounds/wifi_ap_activado.wav por
+ * Es solo un placeholder — reemplazá sounds/wifi_conectado.wav por
  * cualquier otro .wav si querés un sonido distinto, no hace falta tocar
  * código para eso.
  */
@@ -83,11 +84,11 @@ function main() {
 
   const outDir = path.join(__dirname, '..', 'sounds');
   fs.mkdirSync(outDir, { recursive: true });
-  const outPath = path.join(outDir, 'wifi_ap_activado.wav');
+  const outPath = path.join(outDir, 'wifi_conectado.wav');
   writeWavFile(outPath, samples, SAMPLE_RATE);
 
   const durationMs = Math.round(samples.length / SAMPLE_RATE * 1000);
-  console.log(`[generate-ap-ready-sound] Escrito ${outPath} — ${durationMs}ms, ${samples.length} samples`);
+  console.log(`[generate-wifi-connected-sound] Escrito ${outPath} — ${durationMs}ms, ${samples.length} samples`);
 }
 
 main();
