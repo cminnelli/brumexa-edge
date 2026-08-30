@@ -35,29 +35,38 @@ info "Instalando dependencias del sistema..."
 sudo apt install -y -qq alsa-utils bluez network-manager curl python3-venv python3-pip
 ok "Dependencias instaladas"
 
-# ─── 4. Permiso de escaneo WiFi sin sesión activa (Polkit) ───────────────────
-# Encontrado real: nmcli/NetworkManager delega en Polkit el permiso para
-# FORZAR un escaneo WiFi nuevo (--rescan yes, org.freedesktop.NetworkManager.
-# wifi.scan) — y por default eso exige una sesión de login activa. El server
-# de Brumexa corre como servicio de systemd (PM2 al boot), sin ninguna sesión
-# — sin esta regla, nmcli desde el server SIEMPRE devolvía apenas la red ya
-# conectada (la única que ya "conoce" sin necesitar escanear), aunque un
-# "nmcli device wifi list" corrido a mano por SSH sí trajera todas las redes
-# cercanas. Conectarse a una red SÍ funciona igual sin esto (es un permiso
-# de Polkit distinto, con default más permisivo) — este problema es
-# específico del escaneo/listado de redes disponibles.
-info "Configurando permiso de escaneo WiFi para servicios sin sesión (Polkit)..."
+# ─── 4. Permisos de NetworkManager sin sesión activa (Polkit) ────────────────
+# Encontrado real (dos veces, dos acciones de Polkit distintas): nmcli/
+# NetworkManager delega en Polkit varios permisos que por default exigen una
+# sesión de login activa en consola. El server de Brumexa corre como
+# servicio de systemd (PM2 al boot, ver paso 12 — a propósito SIN root, así
+# que tampoco lo salva ser root), sin ninguna sesión — sin esta regla:
+#   - org.freedesktop.NetworkManager.wifi.scan: nmcli no podía FORZAR un
+#     escaneo nuevo (--rescan yes) y SIEMPRE devolvía apenas la red ya
+#     conectada (la única que ya "conoce" sin necesitar escanear), aunque un
+#     "nmcli device wifi list" corrido a mano por SSH sí trajera todas las
+#     redes cercanas.
+#   - org.freedesktop.NetworkManager.network-control: "nmcli device wifi
+#     hotspot" (el AP de emergencia de lib/wifi.js) fallaba siempre con
+#     "Not authorized to control networking" — el AP de provisioning NUNCA
+#     se llegaba a levantar en un dispositivo recién instalado sin WiFi
+#     cargado, que es justo el caso de uso principal de esa función.
+# En vez de listar acción por acción cada vez que aparece una nueva (ya van
+# dos), la regla cubre TODO org.freedesktop.NetworkManager.* para este
+# usuario — es exactamente lo que se necesita: este dispositivo administra
+# su propia red de forma autónoma, sin que nadie esté loggeado in situ.
+info "Configurando permisos de NetworkManager para servicios sin sesión (Polkit)..."
 CURRENT_USER="$(whoami)"
 sudo tee /etc/polkit-1/rules.d/50-brumexa-wifi-scan.rules > /dev/null <<EOF
 polkit.addRule(function(action, subject) {
-    if (action.id == "org.freedesktop.NetworkManager.wifi.scan" &&
+    if (action.id.indexOf("org.freedesktop.NetworkManager.") === 0 &&
         subject.user == "${CURRENT_USER}") {
         return polkit.Result.YES;
     }
 });
 EOF
 sudo systemctl restart polkit
-ok "Permiso de escaneo WiFi configurado para ${CURRENT_USER}"
+ok "Permisos de NetworkManager configurados para ${CURRENT_USER}"
 
 # ─── 5. Node.js 20 ───────────────────────────────────────────────────────────
 info "Instalando Node.js 20..."
