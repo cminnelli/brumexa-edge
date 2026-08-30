@@ -47,6 +47,26 @@ body {
 .header-title { font-size: 17px; font-weight: 700; letter-spacing: .01em; }
 .header-sub   { font-size: 12px; color: var(--text2); }
 
+/* ── Nav de vuelta al resto del sitio ── */
+.local-nav {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 0.6rem 1.25rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.local-nav a {
+  font-size: 12px; font-weight: 600;
+  color: var(--text2); text-decoration: none;
+  padding: 5px 10px; border-radius: 999px;
+  border: 1px solid transparent;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.local-nav a:hover {
+  color: var(--text);
+  background: var(--surface2);
+  border-color: var(--border);
+}
+
 /* ── Page grid ── */
 .page {
   max-width: 640px;

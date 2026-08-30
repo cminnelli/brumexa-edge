@@ -16,6 +16,18 @@
   </div>
 </header>
 
+<!-- Esta página usa su propio tema oscuro fijo (local.css), no el navbar
+     compartido de style.css (que tiene su propio esquema de colores y
+     toggle claro/oscuro) — para no mezclar los dos, un nav propio, chico,
+     con el mismo criterio visual del resto de esta página. -->
+<nav class="local-nav">
+  <a href="/">Panel</a>
+  <a href="/configuracion">Configuración</a>
+  <a href="/diagnostico">Diagnóstico</a>
+  <a href="/logs">Logs</a>
+  <a href="/terminal">Terminal Pi</a>
+</nav>
+
 <main class="page">
 
   <div class="card span-2" id="card-refresh">
