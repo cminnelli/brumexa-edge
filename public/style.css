@@ -68,6 +68,17 @@
 }
 
 /* ─── Base ── */
+/* overflow-x:hidden en html Y body — red de seguridad: si CUALQUIER
+   elemento de la página (el nav con muchas pestañas, dos botones flex:none
+   uno al lado del otro, lo que sea) termina más ancho que el viewport en
+   celular, sin esto el navegador no lo recorta — hace scrollable a la
+   página ENTERA de punta a punta, header sticky incluido, y hay que
+   arrastrar todo hacia la derecha para volver a ver el borde izquierdo.
+   Con esto, ese elemento puntual queda cortado/oculto en vez de romper el
+   layout completo — el resto de este archivo (.tab-nav, .connect-row más
+   abajo) se encarga de que ni siquiera llegue a necesitar el corte. */
+html, body { overflow-x: hidden; }
+
 body {
   font-family: var(--font-sans);
   background: var(--bg);
@@ -159,6 +170,26 @@ body {
   display: flex;
   gap: 2px;
   justify-self: center;
+  /* min-width:0 — sin esto, una celda de grid con ancho "auto" (ver
+     .site-header__inner) crece para acomodar TODO el contenido en vez de
+     poder achicarse; en celular, con 7 pestañas, eso empujaba el header
+     entero más ancho que la pantalla en vez de dejar que este nav scrollee
+     internamente (overflow-x de abajo). */
+  min-width: 0;
+  max-width: 100%;
+}
+@media (max-width: 720px) {
+  .tab-nav {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Firefox */
+  }
+  .tab-nav::-webkit-scrollbar { display: none; } /* Chrome/Safari — la barra scrollbar se ve como un glitch pegada a pestañas chicas */
+  .site-header__inner {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.5rem;
+    padding: 0 0.75rem;
+  }
 }
 
 /* Extras a la derecha del header (toggle de tema + a veces un atajo como
@@ -603,6 +634,15 @@ body {
   align-items: center;
   gap: 10px;
   padding-top: 1rem;
+}
+/* Varias cards usan connect-row con dos botones de ancho fijo lado a lado
+   (ej. "Guardar credenciales" + "Probar conexión", con flex:none puesto a
+   mano inline en el HTML) — en celular la suma de los dos no entra en el
+   ancho de la card. !important porque gana el flex:none inline del HTML
+   (mayor especificidad); apilar es siempre mejor que desbordar. */
+@media (max-width: 480px) {
+  .connect-row { flex-wrap: wrap; }
+  .connect-row > * { flex: 1 1 100% !important; }
 }
 
 .btn-connect {
