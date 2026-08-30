@@ -1,12 +1,14 @@
 'use strict';
 
 /**
- * Genera sounds/livekit_conectado.wav — ping corto de 2 notas (distinto del
- * arpegio de 3 notas de wifi_conectado.wav, para que se puedan distinguir a
- * oído) que suena cuando el agente de LiveKit confirma que está en la sala
- * y ya se lo puede escuchar (ver buildLivekitChimePcm() en
- * lib/sound-effects.js, y el evento 'agent-audio' en server.js — NO el
- * 'connected' de la sala, que solo confirma el transporte, no al agente).
+ * Genera sounds/livekit_conectado.wav — barrido agudo hacia arriba seguido
+ * de un remate corto hacia abajo (forma "sube-baja", distinta del "sube-sube"
+ * de wifi_conectado.wav para que se puedan diferenciar a oído) con
+ * armónicos, para que suene más digital/sintético que un ping de xilófono.
+ * Suena cuando el agente de LiveKit confirma que está en la sala y ya se lo
+ * puede escuchar (ver buildLivekitChimePcm() en lib/sound-effects.js, y el
+ * evento 'agent-audio' en server.js — NO el 'connected' de la sala, que solo
+ * confirma el transporte, no al agente).
  *
  * SAMPLE_RATE = 48000, a propósito, NO 44100 como wifi_conectado.wav: este
  * chime no abre su propio aplay — server.js lo escribe directo en el mismo
@@ -30,22 +32,34 @@ const fs   = require('fs');
 const path = require('path');
 
 const SAMPLE_RATE = 48000;
-const NOTES_HZ    = [880.00, 1108.73]; // A5 - C#6 — ping más corto y agudo que el de WiFi
-const NOTE_MS     = 90;
-const GAP_MS      = 15;
-const FADE_MS     = 10; // raised-cosine in/out por nota, evita clicks
-const AMPLITUDE   = 0.6; // fracción de full-scale (int16)
+const FADE_MS     = 8;   // raised-cosine in/out por chirp, evita clicks
+const AMPLITUDE   = 0.35; // fracción de full-scale (int16) — más bajo que antes (0.6);
+                          // el gain en vivo (ver server.js, Math.min(speakerGain, 1.6))
+                          // sigue aplicándose arriba de este piso más bajo.
 
-function renderNote(freqHz, durationMs) {
+// Cada chirp barre de freqStart a freqEnd (no un tono fijo) y suma armónicos
+// (múltiplos de la frecuencia instantánea) para una textura más rica que un
+// seno puro — se normaliza por la suma de amplitudes de los armónicos para
+// no arriesgar clipping antes de aplicar AMPLITUDE.
+function renderChirp(freqStart, freqEnd, durationMs, harmonics) {
   const n = Math.round(SAMPLE_RATE * durationMs / 1000);
   const fadeSamples = Math.round(SAMPLE_RATE * FADE_MS / 1000);
+  const T = durationMs / 1000;
+  const harmonicsSum = harmonics.reduce((s, h) => s + h.amp, 0);
   const samples = new Int16Array(n);
   for (let i = 0; i < n; i++) {
+    const t = i / SAMPLE_RATE;
+    // Fase instantánea integrada — el barrido de frecuencia queda continuo,
+    // sin saltos de fase (ver el mismo cálculo en generate-wifi-connected-sound.js).
+    const phase = 2 * Math.PI * (freqStart * t + (freqEnd - freqStart) * t * t / (2 * T));
+    let v = 0;
+    for (const h of harmonics) v += h.amp * Math.sin(h.mult * phase);
+    v /= harmonicsSum;
+
     let env = 1;
     if (i < fadeSamples) env = 0.5 * (1 - Math.cos(Math.PI * i / fadeSamples));
     else if (i > n - fadeSamples) env = 0.5 * (1 - Math.cos(Math.PI * (n - i) / fadeSamples));
-    const t = i / SAMPLE_RATE;
-    const v = Math.sin(2 * Math.PI * freqHz * t) * env * AMPLITUDE;
+    v *= env * AMPLITUDE;
     samples[i] = Math.max(-32768, Math.min(32767, Math.round(v * 32767)));
   }
   return samples;
@@ -86,11 +100,16 @@ function writeWavFile(filePath, samples, sampleRate) {
 }
 
 function main() {
-  const chunks = [];
-  NOTES_HZ.forEach((freq, i) => {
-    chunks.push(renderNote(freq, NOTE_MS));
-    if (i < NOTES_HZ.length - 1) chunks.push(renderSilence(GAP_MS));
-  });
+  // Armónicos con un poco más de 2º/4º que el de WiFi (salta el 3º) — le da
+  // un filo levemente más metálico, para que también se distingan por
+  // textura y no solo por la forma del barrido.
+  const HARMONICS = [{ mult: 1, amp: 1 }, { mult: 2, amp: 0.3 }, { mult: 4, amp: 0.1 }];
+
+  const chunks = [
+    renderChirp(760, 1600, 100, HARMONICS), // barrido hacia arriba — "enlazando"
+    renderSilence(10),
+    renderChirp(1600, 1250, 55, HARMONICS), // remate corto hacia abajo — "listo", distinto del sube-sube de WiFi
+  ];
   const samples = concatInt16(chunks);
 
   const outDir = path.join(__dirname, '..', 'sounds');
