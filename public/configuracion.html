@@ -229,17 +229,32 @@
         </div>
         <div id="wifi-connect-result" style="margin-top:10px"></div>
       </div>
+    </div><!-- /card-wifi -->
 
-      <div class="divider" style="margin:14px 0"></div>
+    <!-- § Access Point de respaldo — card APARTE de la de WiFi a propósito
+         (antes vivía pegada abajo, en la misma tarjeta, separada solo por
+         una línea — confundía qué era cada cosa). Esta es la red que la
+         propia Brumexa genera SOLA, sin que nadie la prenda a mano, cuando
+         se queda sin la red de arriba (o todavía no tiene una cargada) —
+         para poder entrar y volver a conectarla. Antes el nombre solo se
+         podía cambiar editando .env por SSH; acá queda como cualquier otro
+         campo de configuración. -->
+    <div class="card" id="card-ap">
+      <div class="card-section-hdr">
+        <span class="card-section-icon"><svg viewBox="0 0 24 24"><rect x="3" y="14" width="18" height="7" rx="1.5"/><circle cx="7" cy="17.5" r="0.8" fill="currentColor" stroke="none"/><path d="M9 9a4 4 0 0 1 6 0"/><path d="M7 6.5a8 8 0 0 1 10 0"/></svg></span>
+        <div>
+          <div class="card-section-title">Access Point de respaldo</div>
+          <div class="card-section-desc">Se prende sola cuando Brumexa se queda sin la red de arriba — su propia WiFi de emergencia para volver a conectarla</div>
+        </div>
+      </div>
 
-      <!-- § Nombre del Access Point — la red que la propia Brumexa genera
-           cuando no tiene WiFi configurado o lo pierde (para entrar a
-           /setup). Antes solo se podía cambiar editando .env por SSH; acá
-           queda como cualquier otro campo de configuración. -->
       <div class="field">
-        <label class="field-label" for="inp-ap-name">Nombre del Access Point que genera Brumexa</label>
-        <input type="text" id="inp-ap-name" class="setup-input" placeholder="Nombre del dispositivo" autocomplete="off" spellcheck="false" maxlength="29" />
-        <p class="field-hint">Red que aparece cuando Brumexa no tiene WiFi configurado o se queda sin conexión (para entrar a <code>/setup</code>). Se le agrega el sufijo "_AP" al transmitir, para distinguirla de un simple nombre de dispositivo. Vacío = usa el nombre del dispositivo (red final: <span id="ap-name-hostname">—</span>).</p>
+        <label class="field-label" for="inp-ap-name">Nombre de esta red</label>
+        <div class="input-suffix-group">
+          <input type="text" id="inp-ap-name" class="setup-input" placeholder="Nombre del dispositivo" autocomplete="off" spellcheck="false" maxlength="29" />
+          <span class="input-suffix-group__suffix">_AP</span>
+        </div>
+        <p class="field-hint">El campo siempre muestra el nombre que se está usando de verdad — si nunca lo cambiaste, es el nombre del dispositivo. Para volver al default, borralo y guardá.</p>
       </div>
       <div class="connect-row">
         <button class="btn-ghost" id="btn-save-ap-name" type="button" style="flex:none; padding:9px 20px">💾 Guardar nombre del AP</button>
@@ -776,7 +791,6 @@
       setLiveSliderField('inp-led-hangover', 'val-led-hangover', cfg.ledHangoverMs,      1100, v => `${v} ms`);
       setLiveSliderField('inp-mic-preroll',          'val-mic-preroll',          cfg.micPrerollMs,         500, v => `${v} ms`);
       document.getElementById('inp-mic-gate-enabled').checked = cfg.micGateEnabled !== 'false';
-      document.getElementById('inp-ap-name').value = cfg.apSsid || '';
 
       micEnabledState = status.micEnabled !== false;
       updateMicButton();
@@ -794,8 +808,11 @@
     // backend también lo rechaza aunque alguien fuerce el request).
     try {
       const cfg2 = await fetch('/config', { cache: 'no-store' }).then(r => r.json());
-      const hostnameSpan = document.getElementById('ap-name-hostname');
-      if (hostnameSpan) hostnameSpan.textContent = cfg2.server?.hostname ? `${cfg2.server.hostname}_AP` : '—';
+      // El campo NUNCA queda vacío — sin nombre propio guardado (cfg.apSsid
+      // vacío), muestra el default real que se está usando: el hostname.
+      // Pedido explícito: antes se veía en blanco y parecía que "no trajo
+      // nada" en vez de mostrar qué nombre se está usando de verdad.
+      document.getElementById('inp-ap-name').value = cfg?.apSsid || cfg2.server?.hostname || '';
       const btnUpdate  = document.getElementById('btn-update');
       const btnRestart = document.getElementById('btn-restart');
       if (cfg2.server?.platform === 'linux') {
@@ -1014,6 +1031,13 @@
       if (!res.ok || !data.ok || (data.apSsid && !data.apSsid.ok)) {
         throw new Error(data.apSsid?.error || data.error || 'No se pudo guardar');
       }
+      // El campo NUNCA queda vacío tras guardar — si se borró para volver
+      // al default, el backend resuelve la base al hostname (data.apSsid.base)
+      // y acá se refleja ESO en el input, no lo que se mandó (que pudo haber
+      // sido ''). Pedido explícito: antes quedaba en blanco después de
+      // guardar y parecía que no había pasado nada.
+      if (data.apSsid?.base) inp.value = data.apSsid.base;
+
       // Nunca reinicia el AP al toque aunque ya esté activo — si lo estuviera,
       // reactivarlo desde acá cortaría a quien está conectado A ese mismo AP
       // (única forma de llegar a esta página sin WiFi real configurado) a

@@ -182,6 +182,7 @@ body {
   font-size: 12.5px;
   font-weight: 600;
   letter-spacing: 0.01em;
+  text-decoration: none; /* son <a>, el navegador los subraya por default sin esto */
   cursor: pointer;
   transition: background var(--tr), color var(--tr);
   white-space: nowrap;
@@ -1252,6 +1253,24 @@ body {
 .setup-input:focus { border-color: var(--accent); }
 .setup-input::placeholder { color: var(--muted); }
 .setup-input--short { width: 120px; }
+
+/* Input con un sufijo fijo pegado al lado (ej. nombre del AP + "_AP") — el
+   sufijo nunca se edita, solo el campo de texto; evita que alguien borre o
+   duplique el sufijo a mano sin querer. */
+.input-suffix-group { display: flex; align-items: stretch; }
+.input-suffix-group .setup-input {
+  border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: none;
+}
+.input-suffix-group .setup-input:focus + .input-suffix-group__suffix { border-color: var(--accent); }
+.input-suffix-group__suffix {
+  display: flex; align-items: center; flex-shrink: 0;
+  padding: 0 10px;
+  border: 1px solid var(--border); border-left: none;
+  border-top-right-radius: var(--r-sm); border-bottom-right-radius: var(--r-sm);
+  background: var(--surface2); color: var(--text2);
+  font-size: 13px; font-weight: 600;
+  transition: border-color var(--tr);
+}
 
 /* Desplegable liviano para un detalle técnico que casi nunca hace falta
    tocar (ej. elegir el dispositivo ALSA a mano) — colapsado por default,
