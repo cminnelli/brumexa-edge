@@ -78,6 +78,7 @@ const micGate                                          = require('./lib/mic-spee
 const calibrationHistory                               = require('./lib/calibration-history');
 const { createCalibrationRunner }                      = require('./lib/calibration');
 const leds                                             = require('./lib/leds');
+const soundEffects                                     = require('./lib/sound-effects');
 const ragAuth                                          = require('./lib/rag-auth');
 const { requestRoomToken, setCredentials: setTokenCredentials } = require('./lib/rag-token');
 const { POP_SETTLE_MS: MIC_MONITOR_WARMUP_MS }         = require('./lib/mic-calibration');
@@ -1013,8 +1014,17 @@ lkSession.on('connected',     () => { stopMicMonitor(); _sessionConnectedAt = Da
 // Recién acá el agente confirmó que está — ya sea porque se suscribió justo
 // ahora (TrackSubscribed) o porque ya estaba en la sala al conectar. Este es
 // el momento real de "conectado" para el usuario, así que el LED pasa a
-// idle acá, no en el 'connected' de arriba.
-lkSession.on('agent-audio',   () => { _agentConfirmed = true; leds.idle(); });
+// idle acá, no en el 'connected' de arriba. El sonido solo suena en el
+// FLANCO (primera confirmación tras conectar o reconectar) — sin el chequeo
+// de _agentConfirmed, sonaría de nuevo cada vez que este evento se repite
+// dentro de una sesión ya confirmada (ver el comentario de _agentConfirmed
+// más arriba).
+lkSession.on('agent-audio',   () => {
+  const yaEstabaConfirmado = _agentConfirmed;
+  _agentConfirmed = true;
+  leds.idle();
+  if (!yaEstabaConfirmado) soundEffects.playLivekitConnectedSound();
+});
 lkSession.on('error',         e => { console.error('[lk-session-evt] error:', e.message); leds.brumexaError(4000); startMicMonitor(); });
 // _isReconnecting en lkSession vuelve a false apenas la SALA reconecta
 // (room.connect() de start() resuelto), no cuando el agente confirma — así
