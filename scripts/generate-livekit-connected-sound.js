@@ -4,9 +4,17 @@
  * Genera sounds/livekit_conectado.wav — ping corto de 2 notas (distinto del
  * arpegio de 3 notas de wifi_conectado.wav, para que se puedan distinguir a
  * oído) que suena cuando el agente de LiveKit confirma que está en la sala
- * y ya se lo puede escuchar (ver playLivekitConnectedSound() en
+ * y ya se lo puede escuchar (ver buildLivekitChimePcm() en
  * lib/sound-effects.js, y el evento 'agent-audio' en server.js — NO el
  * 'connected' de la sala, que solo confirma el transporte, no al agente).
+ *
+ * SAMPLE_RATE = 48000, a propósito, NO 44100 como wifi_conectado.wav: este
+ * chime no abre su propio aplay — server.js lo escribe directo en el mismo
+ * pipe que lib/livekit-session.js ya tiene abierto para la voz del agente
+ * (ver playChime()/getSpeakerFormat() ahí), que corre fijo a 48000Hz mono.
+ * Si este archivo no matchea ese sampleRate, sound-effects.js lo descarta
+ * en vez de meterlo a destiempo/tono incorrecto en ese pipe — no cambies
+ * este valor sin cambiar también SPEAKER_SAMPLE_RATE en livekit-session.js.
  *
  * Mismo enfoque que scripts/generate-wifi-connected-sound.js: sin
  * dependencias externas, sintetiza con Math.sin y escribe el WAV a mano.
@@ -14,14 +22,14 @@
  *   node scripts/generate-livekit-connected-sound.js
  *
  * Es solo un placeholder — reemplazá sounds/livekit_conectado.wav por
- * cualquier otro .wav si querés un sonido distinto, no hace falta tocar
- * código para eso.
+ * cualquier otro .wav (mismo sampleRate/mono) si querés un sonido distinto,
+ * no hace falta tocar código para eso.
  */
 
 const fs   = require('fs');
 const path = require('path');
 
-const SAMPLE_RATE = 44100;
+const SAMPLE_RATE = 48000;
 const NOTES_HZ    = [880.00, 1108.73]; // A5 - C#6 — ping más corto y agudo que el de WiFi
 const NOTE_MS     = 90;
 const GAP_MS      = 15;

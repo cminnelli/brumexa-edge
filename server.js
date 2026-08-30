@@ -1035,7 +1035,15 @@ lkSession.on('agent-audio',   () => {
     // a ~0.6 de amplitud máxima) para no distorsionar cuando ese gain está
     // compensando un speaker/mic débil — puede llegar hasta 32x, muy por
     // encima de lo que hace falta para el volumen de una notificación.
-    soundEffects.playLivekitConnectedSound(Math.min(lkSession.getSpeakerGain(), 1.6));
+    //
+    // Se escribe DIRECTO en el mismo pipe de aplay que ya usa la voz del
+    // agente (lkSession.playChime), en vez de abrir un aplay propio — dos
+    // aplay separados compitiendo por el mismo device ALSA (plughw:0,0) es
+    // justo por qué a veces no se escuchaba: el que perdía la carrera por
+    // el device fallaba en silencio con "Device or resource busy".
+    const gain  = Math.min(lkSession.getSpeakerGain(), 1.6);
+    const chime = soundEffects.buildLivekitChimePcm(gain, lkSession.getSpeakerFormat());
+    if (chime) lkSession.playChime(chime);
   }
 });
 lkSession.on('error',         e => { console.error('[lk-session-evt] error:', e.message); leds.brumexaError(4000); startMicMonitor(); });
