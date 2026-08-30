@@ -1012,8 +1012,14 @@
       if (!res.ok || !data.ok || (data.apSsid && !data.apSsid.ok)) {
         throw new Error(data.apSsid?.error || data.error || 'No se pudo guardar');
       }
-      const restarted = data.apSsid?.restarted;
-      result.innerHTML = `<div class="flow-note ok">✔ Guardado — "${esc(data.apSsid?.ssid || value)}"${restarted ? ' (AP reactivado ya)' : ' (se aplica la próxima vez que Brumexa levante el AP)'}</div>`;
+      // Nunca reinicia el AP al toque aunque ya esté activo — si lo estuviera,
+      // reactivarlo desde acá cortaría a quien está conectado A ese mismo AP
+      // (única forma de llegar a esta página sin WiFi real configurado) a
+      // mitad de la operación. deferredWhileApActive avisa ese caso explícito.
+      const nota = data.apSsid?.deferredWhileApActive
+        ? ' — el AP sigue activo con el nombre viejo por ahora (no se corta la conexión actual); se va a aplicar solo en la próxima vez que Brumexa lo levante, por ejemplo reiniciando el dispositivo'
+        : ' (se aplica la próxima vez que Brumexa levante el AP)';
+      result.innerHTML = `<div class="flow-note ok">✔ Guardado — "${esc(data.apSsid?.ssid || value)}"${nota}</div>`;
       loadWifiCurrent();
     } catch (e) {
       result.innerHTML = `<div class="flow-note bad">✘ ${esc(e.message)}</div>`;
