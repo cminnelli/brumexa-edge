@@ -63,6 +63,35 @@
     }
     .update-warn__title { font-size: 13px; font-weight: 600; color: var(--warn); }
     .update-warn__text  { font-size: 12px; color: var(--text2); margin: 6px 0 10px; }
+
+    /* ── Card WiFi — lista de redes (mismo criterio visual que /setup, pero
+         con los tokens de tema claro/oscuro de esta página en vez de colores
+         fijos, porque acá sí hay toggle de tema). ── */
+    .wifi-scan-status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text2); padding: 4px 0; }
+    .network-list { list-style: none; display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; }
+    .network-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--r-sm);
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+      user-select: none;
+    }
+    .network-item:hover    { border-color: var(--accent-h); background: var(--surface2); }
+    .network-item.selected { border-color: var(--accent); background: rgba(91,106,240,.08); }
+    .net-icon   { font-size: 16px; flex-shrink: 0; }
+    .net-name   { flex: 1; font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .net-lock   { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+    .signal-bar { display: inline-flex; gap: 2px; align-items: flex-end; height: 13px; flex-shrink: 0; }
+    .signal-bar span { width: 3.5px; border-radius: 1.5px; background: var(--border); }
+    .signal-bar span.on { background: var(--accent); }
+    .spinner {
+      display: inline-block; width: 15px; height: 15px;
+      border: 2px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: wifi-spin .7s linear infinite; flex-shrink: 0;
+    }
+    @keyframes wifi-spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
@@ -138,6 +167,54 @@
       </div>
       <div id="creds-save-result" style="margin-top:10px"></div>
       <div id="creds-test-result" style="margin-top:10px"></div>
+    </div>
+
+    <!-- § WiFi — antes solo se podía ver/cambiar entrando a /setup (pensado
+         para cuando el dispositivo está en modo Access Point, sin otra
+         página disponible). Acá se resume lo mismo sin salir de
+         Configuración: colapsada muestra la red actual nomás; "Cambiar red"
+         despliega el mismo flujo de escanear + conectar. -->
+    <div class="card" id="card-wifi">
+      <div class="card-section-hdr">
+        <span class="card-section-icon"><svg viewBox="0 0 24 24"><path d="M2 8.5a16 16 0 0 1 20 0"/><path d="M5.5 12a11 11 0 0 1 13 0"/><path d="M9 15.5a6 6 0 0 1 6 0"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/></svg></span>
+        <div>
+          <div class="card-section-title">WiFi</div>
+          <div class="card-section-desc">Red a la que está conectada la Raspberry</div>
+        </div>
+      </div>
+
+      <div class="kv" id="kv-wifi-current"><div class="field-hint">Consultando…</div></div>
+
+      <button class="btn-ghost" id="btn-wifi-toggle" type="button" style="margin-top:12px">🔄 Cambiar red</button>
+
+      <div id="wifi-change-panel" class="wifi-change-panel" style="display:none">
+        <div class="divider" style="margin:14px 0"></div>
+
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px">
+          <div class="field-group-label" style="margin:0">Redes disponibles</div>
+          <button class="btn-ghost" id="btn-wifi-rescan" type="button">↺ Buscar</button>
+        </div>
+        <div id="wifi-scan-status" class="wifi-scan-status"><span class="spinner"></span> Buscando redes…</div>
+        <ul class="network-list" id="wifi-network-list" style="display:none"></ul>
+
+        <div class="field" style="margin-top:12px">
+          <label class="field-label" for="inp-wifi-ssid">Nombre de red (SSID)</label>
+          <input type="text" id="inp-wifi-ssid" class="setup-input" placeholder="Nombre de tu WiFi" autocomplete="off" spellcheck="false" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="inp-wifi-pass">Contraseña</label>
+          <div class="setup-token-row">
+            <input type="password" id="inp-wifi-pass" class="setup-input" placeholder="Contraseña de tu WiFi" autocomplete="off" />
+            <button class="btn-ghost" id="btn-wifi-toggle-pass" type="button" title="Mostrar/ocultar">👁</button>
+          </div>
+        </div>
+
+        <div class="connect-row">
+          <button class="btn-connect" id="btn-wifi-connect" style="flex:none; padding:9px 20px">📶 Conectar</button>
+          <p class="field-hint" style="margin:0">Al conectar a una red nueva la Raspberry puede cambiar de IP — si estás viendo esta página desde la red vieja, es normal perder la conexión un momento.</p>
+        </div>
+        <div id="wifi-connect-result" style="margin-top:10px"></div>
+      </div>
     </div>
 
   </div>
@@ -713,6 +790,162 @@
     // nunca, en silencio, sin ningún aviso en pantalla.
     if (cfg) loadAlsaDevices(cfg.alsaMicDevice, cfg.alsaSpeakerDevice);
   }
+
+  // ─── WiFi — resumen + cambiar red sin salir de Configuración ────────────
+  // Mismo backend que ya usa /setup (GET /wifi/status, /wifi/scan, POST
+  // /wifi/connect, GET /wifi/connect/status) — no se duplica nada del lado
+  // del servidor, solo se arma una UI más compacta encima, pensada para
+  // cuando el dispositivo YA tiene WiFi anda (no hace falta estar en el AP
+  // ni saber que existe /setup para cambiar de red).
+  function signalBarsWifi(signal) {
+    if (signal == null) return '—';
+    const lvl = signal >= 75 ? 4 : signal >= 50 ? 3 : signal >= 25 ? 2 : 1;
+    const heights = ['4px', '8px', '12px', '16px'];
+    let html = '<span class="signal-bar">';
+    for (let i = 0; i < 4; i++) html += `<span style="height:${heights[i]}" class="${i < lvl ? 'on' : ''}"></span>`;
+    return html + `</span> <span style="font-size:11px;color:var(--text2)">${signal}%</span>`;
+  }
+
+  async function loadWifiCurrent() {
+    const kv = document.getElementById('kv-wifi-current');
+    try {
+      const s = await fetch('/wifi/status', { cache: 'no-store' }).then(r => r.json());
+      if (!s.available) {
+        kv.innerHTML = '<div class="field-hint">No disponible — este server no está corriendo en la Raspberry.</div>';
+      } else if (s.apActive) {
+        kv.innerHTML = `
+          <div class="kv-row"><span class="k">Estado</span><span class="v"><span class="pill warn">Modo configuración (AP)</span></span></div>
+          <div class="kv-row"><span class="k">Red del AP</span><span class="v">${esc(s.apSsid)} — ${esc(s.apIp)}</span></div>
+        `;
+      } else if (s.connectedSSID) {
+        kv.innerHTML = `
+          <div class="kv-row"><span class="k">Red</span><span class="v">${esc(s.connectedSSID)}</span></div>
+          <div class="kv-row"><span class="k">Señal</span><span class="v">${signalBarsWifi(s.signal)}</span></div>
+          <div class="kv-row"><span class="k">IP</span><span class="v">${esc(s.ipAddress || '—')}</span></div>
+        `;
+      } else {
+        kv.innerHTML = '<div class="field-hint">Sin WiFi configurado todavía.</div>';
+      }
+    } catch (e) {
+      kv.innerHTML = `<div class="field-hint">Error: ${esc(e.message)}</div>`;
+    }
+  }
+
+  let _wifiScanned = false;
+  document.getElementById('btn-wifi-toggle').addEventListener('click', () => {
+    const panel  = document.getElementById('wifi-change-panel');
+    const toggle = document.getElementById('btn-wifi-toggle');
+    const opening = panel.style.display === 'none';
+    panel.style.display = opening ? '' : 'none';
+    toggle.textContent = opening ? '✕ Cerrar' : '🔄 Cambiar red';
+    if (opening && !_wifiScanned) { _wifiScanned = true; scanWifiNetworks(); }
+  });
+  document.getElementById('btn-wifi-rescan').addEventListener('click', scanWifiNetworks);
+
+  async function scanWifiNetworks() {
+    const status = document.getElementById('wifi-scan-status');
+    const list   = document.getElementById('wifi-network-list');
+    const btn    = document.getElementById('btn-wifi-rescan');
+    status.style.display = 'flex';
+    list.style.display   = 'none';
+    btn.disabled = true;
+    try {
+      const { networks } = await fetch('/wifi/scan').then(r => r.json());
+      renderWifiNetworks(networks || []);
+    } catch {
+      status.innerHTML = '<span class="field-hint">No se pudo escanear redes.</span>';
+    }
+    btn.disabled = false;
+  }
+
+  function renderWifiNetworks(networks) {
+    const status = document.getElementById('wifi-scan-status');
+    const list   = document.getElementById('wifi-network-list');
+    status.style.display = 'none';
+    list.style.display   = '';
+    list.innerHTML = networks.map(n => {
+      const hasPass = n.security && n.security !== 'open' && n.security !== '--';
+      return `<li class="network-item" data-ssid="${esc(n.ssid)}">
+        <span class="net-icon">📶</span>
+        <span class="net-name">${esc(n.ssid)}</span>
+        ${signalBarsWifi(n.signal)}
+        <span class="net-lock">${hasPass ? '🔒' : '🔓'}</span>
+      </li>`;
+    }).join('') || '<div class="field-hint">No se encontraron redes — probá "Buscar" de nuevo.</div>';
+
+    list.querySelectorAll('.network-item').forEach(li => {
+      li.addEventListener('click', () => {
+        list.querySelectorAll('.network-item').forEach(el => el.classList.remove('selected'));
+        li.classList.add('selected');
+        document.getElementById('inp-wifi-ssid').value = li.dataset.ssid;
+        document.getElementById('inp-wifi-pass').focus();
+      });
+    });
+  }
+
+  document.getElementById('btn-wifi-toggle-pass').addEventListener('click', () => {
+    const inp = document.getElementById('inp-wifi-pass');
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+  });
+
+  let _wifiPolling = null;
+  document.getElementById('btn-wifi-connect').addEventListener('click', async () => {
+    const ssidInp = document.getElementById('inp-wifi-ssid');
+    const ssid    = ssidInp.value.trim();
+    const pass    = document.getElementById('inp-wifi-pass').value;
+    const btn     = document.getElementById('btn-wifi-connect');
+    const result  = document.getElementById('wifi-connect-result');
+    if (!ssid) { ssidInp.focus(); return; }
+
+    btn.disabled = true;
+    btn.textContent = '📶 Conectando…';
+    result.innerHTML = `<div class="flow-note">Conectando a "${esc(ssid)}"…</div>`;
+
+    let started;
+    try {
+      const res = await fetch('/wifi/connect', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ ssid, password: pass }),
+      }).then(r => r.json());
+      started = res.ok;
+      if (!started) result.innerHTML = `<div class="flow-note bad">✘ ${esc(res.error || 'No se pudo iniciar la conexión')}</div>`;
+    } catch (e) {
+      started = false;
+      result.innerHTML = `<div class="flow-note bad">✘ ${esc(e.message)}</div>`;
+    }
+    if (!started) { btn.disabled = false; btn.textContent = '📶 Conectar'; return; }
+
+    if (_wifiPolling) clearInterval(_wifiPolling);
+    const start = Date.now();
+    // Igual que /setup: mientras esto corre, la Pi puede estar cambiando de
+    // red de verdad (apaga el radio, prueba, quizás cambia de IP) — un fetch
+    // que falla acá durante esa ventana NO es un error real, solo hay que
+    // seguir esperando al próximo tick.
+    _wifiPolling = setInterval(async () => {
+      try {
+        const s = await fetch('/wifi/connect/status').then(r => r.json());
+        if (s.status === 'connected') {
+          clearInterval(_wifiPolling); _wifiPolling = null;
+          result.innerHTML = `<div class="flow-note ok">✔ Conectado a "${esc(s.ssid)}" — IP: ${esc(s.ip || '—')}</div>`;
+          btn.disabled = false; btn.textContent = '📶 Conectar';
+          loadWifiCurrent();
+        } else if (s.status === 'error') {
+          clearInterval(_wifiPolling); _wifiPolling = null;
+          result.innerHTML = `<div class="flow-note bad">✘ ${esc(s.error || 'No se pudo conectar')}</div>`;
+          btn.disabled = false; btn.textContent = '📶 Conectar';
+        } else if (Date.now() - start > 35000) {
+          clearInterval(_wifiPolling); _wifiPolling = null;
+          result.innerHTML = '<div class="flow-note bad">✘ Tiempo de espera agotado — revisá la contraseña e intentá de nuevo.</div>';
+          btn.disabled = false; btn.textContent = '📶 Conectar';
+        }
+      } catch {
+        // ver comentario de arriba — puede ser solo la Pi cambiando de red
+      }
+    }, 2000);
+  });
+
+  loadWifiCurrent();
 
   // Dispositivos ALSA (mic/parlante) — se usa el mismo par de endpoints que
   // ya tenía el Panel para listarlos, pero ACÁ la elección se persiste
