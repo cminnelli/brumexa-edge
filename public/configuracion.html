@@ -16,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=21" />
+  <link rel="stylesheet" href="style.css?v=22" />
   <style>
     #card-update.highlight-pulse {
       animation: card-highlight-pulse 1.3s ease-out;
@@ -114,6 +114,7 @@
       <a class="tab-btn" href="/logs">Logs</a>
       <a class="tab-btn" id="nav-terminal" href="/terminal">Terminal Pi</a>
       <a class="tab-btn" href="/local">Local</a>
+      <a class="tab-btn" href="#" id="nav-admin">Admin</a>
     </nav>
     <div class="site-header__actions">
       <button id="nav-session-btn" class="btn-ghost" type="button" title="Conectar/desconectar la sesión de voz">▶ Conectar</button>
@@ -237,8 +238,8 @@
            queda como cualquier otro campo de configuración. -->
       <div class="field">
         <label class="field-label" for="inp-ap-name">Nombre del Access Point que genera Brumexa</label>
-        <input type="text" id="inp-ap-name" class="setup-input" placeholder="Nombre del dispositivo" autocomplete="off" spellcheck="false" maxlength="32" />
-        <p class="field-hint">Red que aparece cuando Brumexa no tiene WiFi configurado o se queda sin conexión (para entrar a <code>/setup</code>). Vacío = usa el nombre del dispositivo (<span id="ap-name-hostname">—</span>).</p>
+        <input type="text" id="inp-ap-name" class="setup-input" placeholder="Nombre del dispositivo" autocomplete="off" spellcheck="false" maxlength="29" />
+        <p class="field-hint">Red que aparece cuando Brumexa no tiene WiFi configurado o se queda sin conexión (para entrar a <code>/setup</code>). Se le agrega el sufijo "_AP" al transmitir, para distinguirla de un simple nombre de dispositivo. Vacío = usa el nombre del dispositivo (red final: <span id="ap-name-hostname">—</span>).</p>
       </div>
       <div class="connect-row">
         <button class="btn-ghost" id="btn-save-ap-name" type="button" style="flex:none; padding:9px 20px">💾 Guardar nombre del AP</button>
@@ -458,6 +459,7 @@
 
 <script src="theme.js?v=1"></script>
 <script src="session-quick.js?v=1"></script>
+<script src="admin-link.js?v=1"></script>
 <script>
   function esc(s) {
     return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
@@ -793,7 +795,7 @@
     try {
       const cfg2 = await fetch('/config', { cache: 'no-store' }).then(r => r.json());
       const hostnameSpan = document.getElementById('ap-name-hostname');
-      if (hostnameSpan) hostnameSpan.textContent = cfg2.server?.hostname || '—';
+      if (hostnameSpan) hostnameSpan.textContent = cfg2.server?.hostname ? `${cfg2.server.hostname}_AP` : '—';
       const btnUpdate  = document.getElementById('btn-update');
       const btnRestart = document.getElementById('btn-restart');
       if (cfg2.server?.platform === 'linux') {

@@ -142,14 +142,16 @@ que hay más de una Brumexa cerca.
 **Si la Pi todavía no tiene WiFi cargado, o se le cortó y no logra reconectar sola:** arranca
 sola un Access Point (AP) de emergencia — su propia red WiFi, para poder entrar y cargarle la
 red real. Por default:
-- SSID: `brumexa-local`
+- SSID: el hostname del dispositivo + el sufijo `_AP` (ej. `brumexa-oficina_AP`) — así varias
+  Brumexas en modo AP a la vez se distinguen por nombre en vez de aparecer todas iguales.
 - Contraseña: `brumexa123`
 - IP: `10.42.0.1`
 
-(los tres son configurables — `WIFI_AP_SSID` / `WIFI_AP_PASS` / `WIFI_AP_IP` en `.env.example`).
-Conectate a esa red WiFi desde tu celu/PC y entrá a `http://10.42.0.1:3000/setup` para cargar
-el SSID/contraseña de tu WiFi real — apenas lo guardás, la Pi se conecta sola y volvés a
-entrar por `brumexa-oficina.local` como siempre.
+(los tres son configurables — SSID desde `/configuracion` → WiFi sin tocar nada por SSH, o los
+tres via `WIFI_AP_SSID` / `WIFI_AP_PASS` / `WIFI_AP_IP` en `.env.example`; `WIFI_AP_SSID` es el
+nombre BASE, el sufijo `_AP` se agrega siempre). Conectate a esa red WiFi desde tu celu/PC y
+entrá a `http://10.42.0.1:3000/setup` para cargar el SSID/contraseña de tu WiFi real — apenas lo
+guardás, la Pi se conecta sola y volvés a entrar por `brumexa-oficina.local` como siempre.
 
 Esto es automático, no hace falta tocar nada: `lib/wifi.js` monitorea la señal cada 15s (LEDs
 en naranja si está débil) y, si se pierde la conexión por más de 45s sin reconectar sola,

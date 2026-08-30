@@ -25,7 +25,7 @@
        (colores de pill ligeramente distintos, tipografía de card-title
        distinta). Sacado a propósito: ahora esta página hereda EXACTAMENTE
        los mismos componentes que /configuracion y /diagnostico. -->
-  <link rel="stylesheet" href="style.css?v=21" />
+  <link rel="stylesheet" href="style.css?v=22" />
   <link rel="stylesheet" href="local.css?v=3" />
 </head>
 <body>
@@ -42,6 +42,7 @@
       <a class="tab-btn" href="/logs">Logs</a>
       <a class="tab-btn" href="/terminal">Terminal Pi</a>
       <a class="tab-btn active" href="/local">Local</a>
+      <a class="tab-btn" href="#" id="nav-admin">Admin</a>
     </nav>
     <div class="site-header__actions">
       <button id="nav-session-btn" class="btn-ghost" type="button" title="Conectar/desconectar la sesión de voz">▶ Conectar</button>
@@ -80,7 +81,7 @@
       </div>
       <div class="stat-bars" id="stat-bars-system"></div>
       <div class="kv" id="kv-system"></div>
-      <p class="field-hint" style="margin-top:10px">El nombre del dispositivo es también el que usa por default el Access Point de respaldo (cuando Brumexa no tiene WiFi configurado) — cambiable en <a href="/configuracion" style="color:var(--accent)">Configuración → WiFi</a>.</p>
+      <p class="field-hint" style="margin-top:10px">El Access Point de respaldo (cuando Brumexa no tiene WiFi configurado) usa este nombre + el sufijo "_AP" por default — cambiable en <a href="/configuracion" style="color:var(--accent)">Configuración → WiFi</a>.</p>
     </div>
 
     <!-- § WiFi -->
@@ -153,6 +154,7 @@
 
 <script src="theme.js?v=1"></script>
 <script src="session-quick.js?v=1"></script>
+<script src="admin-link.js?v=1"></script>
 <script>
   const REFRESH_MS = 6000;
 
