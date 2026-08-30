@@ -1,14 +1,18 @@
 'use strict';
 
 /**
- * Genera sounds/livekit_conectado.wav — barrido agudo hacia arriba seguido
- * de un remate corto hacia abajo (forma "sube-baja", distinta del "sube-sube"
- * de wifi_conectado.wav para que se puedan diferenciar a oído) con
- * armónicos, para que suene más digital/sintético que un ping de xilófono.
- * Suena cuando el agente de LiveKit confirma que está en la sala y ya se lo
- * puede escuchar (ver buildLivekitChimePcm() en lib/sound-effects.js, y el
- * evento 'agent-audio' en server.js — NO el 'connected' de la sala, que solo
+ * Genera sounds/livekit_conectado.wav — dos "blips" FM cortos y percusivos,
+ * contorno inverso al de wifi_conectado.wav (agudo→grave en vez de
+ * grave→agudo, para que se puedan diferenciar a oído) que suena cuando el
+ * agente de LiveKit confirma que está en la sala y ya se lo puede escuchar
+ * (ver buildLivekitChimePcm() en lib/sound-effects.js, y el evento
+ * 'agent-audio' en server.js — NO el 'connected' de la sala, que solo
  * confirma el transporte, no al agente).
+ *
+ * Mismo enfoque que scripts/generate-wifi-connected-sound.js: síntesis FM
+ * (sin(carrier + index·sin(mod))) con envolvente percusiva en vez de un
+ * barrido de tono puro (sonaba a silbido) — ver los comentarios ahí para el
+ * detalle de por qué.
  *
  * SAMPLE_RATE = 48000, a propósito, NO 44100 como wifi_conectado.wav: este
  * chime no abre su propio aplay — server.js lo escribe directo en el mismo
@@ -18,8 +22,6 @@
  * en vez de meterlo a destiempo/tono incorrecto en ese pipe — no cambies
  * este valor sin cambiar también SPEAKER_SAMPLE_RATE en livekit-session.js.
  *
- * Mismo enfoque que scripts/generate-wifi-connected-sound.js: sin
- * dependencias externas, sintetiza con Math.sin y escribe el WAV a mano.
  * Correr con:
  *   node scripts/generate-livekit-connected-sound.js
  *
@@ -32,35 +34,31 @@ const fs   = require('fs');
 const path = require('path');
 
 const SAMPLE_RATE = 48000;
-const FADE_MS     = 8;   // raised-cosine in/out por chirp, evita clicks
-const AMPLITUDE   = 0.35; // fracción de full-scale (int16) — más bajo que antes (0.6);
-                          // el gain en vivo (ver server.js, Math.min(speakerGain, 1.6))
-                          // sigue aplicándose arriba de este piso más bajo.
+const AMPLITUDE   = 0.4; // fracción de full-scale (int16) — el gain en vivo
+                          // (ver server.js, Math.min(speakerGain, 1.6)) sigue
+                          // aplicándose arriba de este piso.
 
-// Cada chirp barre de freqStart a freqEnd (no un tono fijo) y suma armónicos
-// (múltiplos de la frecuencia instantánea) para una textura más rica que un
-// seno puro — se normaliza por la suma de amplitudes de los armónicos para
-// no arriesgar clipping antes de aplicar AMPLITUDE.
-function renderChirp(freqStart, freqEnd, durationMs, harmonics) {
+// Ver el comentario grande en generate-wifi-connected-sound.js — misma
+// síntesis FM + envolvente percusiva (ataque rápido, decaimiento tipo
+// potencia) acá.
+function renderFmBlip(carrierHz, modHz, modIndex, durationMs, attackMs, decayShape) {
   const n = Math.round(SAMPLE_RATE * durationMs / 1000);
-  const fadeSamples = Math.round(SAMPLE_RATE * FADE_MS / 1000);
-  const T = durationMs / 1000;
-  const harmonicsSum = harmonics.reduce((s, h) => s + h.amp, 0);
+  const attackSamples = Math.round(SAMPLE_RATE * attackMs / 1000);
   const samples = new Int16Array(n);
   for (let i = 0; i < n; i++) {
     const t = i / SAMPLE_RATE;
-    // Fase instantánea integrada — el barrido de frecuencia queda continuo,
-    // sin saltos de fase (ver el mismo cálculo en generate-wifi-connected-sound.js).
-    const phase = 2 * Math.PI * (freqStart * t + (freqEnd - freqStart) * t * t / (2 * T));
-    let v = 0;
-    for (const h of harmonics) v += h.amp * Math.sin(h.mult * phase);
-    v /= harmonicsSum;
+    const v = Math.sin(2 * Math.PI * carrierHz * t + modIndex * Math.sin(2 * Math.PI * modHz * t));
 
-    let env = 1;
-    if (i < fadeSamples) env = 0.5 * (1 - Math.cos(Math.PI * i / fadeSamples));
-    else if (i > n - fadeSamples) env = 0.5 * (1 - Math.cos(Math.PI * (n - i) / fadeSamples));
-    v *= env * AMPLITUDE;
-    samples[i] = Math.max(-32768, Math.min(32767, Math.round(v * 32767)));
+    let env;
+    if (i < attackSamples) {
+      env = 0.5 * (1 - Math.cos(Math.PI * i / attackSamples));
+    } else {
+      const rel = (i - attackSamples) / Math.max(1, n - attackSamples);
+      env = Math.pow(1 - rel, decayShape);
+    }
+
+    const s = v * env * AMPLITUDE;
+    samples[i] = Math.max(-32768, Math.min(32767, Math.round(s * 32767)));
   }
   return samples;
 }
@@ -100,15 +98,10 @@ function writeWavFile(filePath, samples, sampleRate) {
 }
 
 function main() {
-  // Armónicos con un poco más de 2º/4º que el de WiFi (salta el 3º) — le da
-  // un filo levemente más metálico, para que también se distingan por
-  // textura y no solo por la forma del barrido.
-  const HARMONICS = [{ mult: 1, amp: 1 }, { mult: 2, amp: 0.3 }, { mult: 4, amp: 0.1 }];
-
   const chunks = [
-    renderChirp(760, 1600, 100, HARMONICS), // barrido hacia arriba — "enlazando"
-    renderSilence(10),
-    renderChirp(1600, 1250, 55, HARMONICS), // remate corto hacia abajo — "listo", distinto del sube-sube de WiFi
+    renderFmBlip(1500, 380, 3.4, 55, 2, 2.6), // blip 1 — agudo y corto
+    renderSilence(25),
+    renderFmBlip(1050, 260, 2.6, 70, 2, 2.2), // blip 2 — más grave, "asienta" (contorno inverso al de WiFi)
   ];
   const samples = concatInt16(chunks);
 

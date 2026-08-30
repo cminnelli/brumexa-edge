@@ -1,11 +1,17 @@
 'use strict';
 
 /**
- * Genera sounds/wifi_conectado.wav — dos barridos ascendentes cortos (chirps,
- * no notas fijas) con armónicos, para que suene más digital/sintético que un
- * arpegio de xilófono. Suena cuando el dispositivo activa su propio AP de
- * aprovisionamiento O se conecta con éxito a la red WiFi real del usuario
- * (ver playWifiConnectedSound() en lib/sound-effects.js).
+ * Genera sounds/wifi_conectado.wav — dos "blips" FM cortos y percusivos (no
+ * un barrido de tono puro, que terminaba sonando a silbido) que suena cuando
+ * el dispositivo activa su propio AP de aprovisionamiento O se conecta con
+ * éxito a la red WiFi real del usuario (ver playWifiConnectedSound() en
+ * lib/sound-effects.js).
+ *
+ * Síntesis FM (modulación de frecuencia: sin(carrier + index·sin(mod))) en
+ * vez de un seno/barrido simple — es lo que le da el carácter "digital/
+ * sintetizador" (metálico, inarmónico) en vez de sonar a flauta o silbido.
+ * Envolvente percusiva (ataque rápido + decaimiento tipo potencia, no un
+ * fade simétrico) para que suene a "blip" corto, no a tono sostenido.
  *
  * Sin dependencias externas: sintetiza con Math.sin y escribe el WAV a mano
  * (header PCM16LE de 44 bytes). Correr con:
@@ -20,34 +26,33 @@ const fs   = require('fs');
 const path = require('path');
 
 const SAMPLE_RATE = 44100;
-const FADE_MS     = 10;  // raised-cosine in/out por chirp, evita clicks
-const AMPLITUDE   = 0.35; // fracción de full-scale (int16) — más bajo que antes (0.6)
+const AMPLITUDE   = 0.4; // fracción de full-scale (int16)
 
-// Cada chirp barre de freqStart a freqEnd (no un tono fijo — eso es lo que
-// le da el aire "digital/sintético" en vez de sonar a xilófono) y suma
-// armónicos (múltiplos de la frecuencia instantánea) para una textura más
-// rica que un seno puro. Se normaliza por la suma de amplitudes de los
-// armónicos para no arriesgar clipping antes de aplicar AMPLITUDE.
-function renderChirp(freqStart, freqEnd, durationMs, harmonics) {
+// FM: sin(2π·carrierHz·t + modIndex·sin(2π·modHz·t)) — el propio seno de FM
+// ya queda acotado a [-1,1] sin importar modIndex, no hace falta normalizar
+// como con la suma de armónicos. attackMs = subida rápida (raised-cosine);
+// el resto del blip decae como (1-rel)^decayShape — decayShape alto (2-3)
+// da una caída rápida-al-principio típica de un "blip" percusivo, no un
+// tono sostenido que se apaga recién al final (eso es lo que sonaba a
+// silbido).
+function renderFmBlip(carrierHz, modHz, modIndex, durationMs, attackMs, decayShape) {
   const n = Math.round(SAMPLE_RATE * durationMs / 1000);
-  const fadeSamples = Math.round(SAMPLE_RATE * FADE_MS / 1000);
-  const T = durationMs / 1000;
-  const harmonicsSum = harmonics.reduce((s, h) => s + h.amp, 0);
+  const attackSamples = Math.round(SAMPLE_RATE * attackMs / 1000);
   const samples = new Int16Array(n);
   for (let i = 0; i < n; i++) {
     const t = i / SAMPLE_RATE;
-    // Fase instantánea integrada (no solo 2π·f(t)·t) — así el barrido de
-    // frecuencia es continuo, sin saltos de fase.
-    const phase = 2 * Math.PI * (freqStart * t + (freqEnd - freqStart) * t * t / (2 * T));
-    let v = 0;
-    for (const h of harmonics) v += h.amp * Math.sin(h.mult * phase);
-    v /= harmonicsSum;
+    const v = Math.sin(2 * Math.PI * carrierHz * t + modIndex * Math.sin(2 * Math.PI * modHz * t));
 
-    let env = 1;
-    if (i < fadeSamples) env = 0.5 * (1 - Math.cos(Math.PI * i / fadeSamples));
-    else if (i > n - fadeSamples) env = 0.5 * (1 - Math.cos(Math.PI * (n - i) / fadeSamples));
-    v *= env * AMPLITUDE;
-    samples[i] = Math.max(-32768, Math.min(32767, Math.round(v * 32767)));
+    let env;
+    if (i < attackSamples) {
+      env = 0.5 * (1 - Math.cos(Math.PI * i / attackSamples));
+    } else {
+      const rel = (i - attackSamples) / Math.max(1, n - attackSamples);
+      env = Math.pow(1 - rel, decayShape);
+    }
+
+    const s = v * env * AMPLITUDE;
+    samples[i] = Math.max(-32768, Math.min(32767, Math.round(s * 32767)));
   }
   return samples;
 }
@@ -87,14 +92,10 @@ function writeWavFile(filePath, samples, sampleRate) {
 }
 
 function main() {
-  // Armónicos: fundamental + 2º y 3er múltiplo, suaves — da un timbre
-  // "sintetizador" en vez de un seno limpio (que suena más a flauta/campana).
-  const HARMONICS = [{ mult: 1, amp: 1 }, { mult: 2, amp: 0.22 }, { mult: 3, amp: 0.09 }];
-
   const chunks = [
-    renderChirp(420, 840,  130, HARMONICS),  // barrido 1: sube una octava
-    renderSilence(20),
-    renderChirp(640, 1280, 110, HARMONICS),  // barrido 2: más corto y más agudo — remata la idea de "enlazado"
+    renderFmBlip(820,  210, 3.0, 80, 3, 2.5), // blip 1
+    renderSilence(35),
+    renderFmBlip(1300, 340, 3.6, 90, 3, 2.2), // blip 2 — más agudo, remata "enlazado"
   ];
   const samples = concatInt16(chunks);
 
