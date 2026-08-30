@@ -35,19 +35,43 @@ info "Instalando dependencias del sistema..."
 sudo apt install -y -qq alsa-utils bluez network-manager curl python3-venv python3-pip
 ok "Dependencias instaladas"
 
-# ─── 4. Node.js 20 ───────────────────────────────────────────────────────────
+# ─── 4. Permiso de escaneo WiFi sin sesión activa (Polkit) ───────────────────
+# Encontrado real: nmcli/NetworkManager delega en Polkit el permiso para
+# FORZAR un escaneo WiFi nuevo (--rescan yes, org.freedesktop.NetworkManager.
+# wifi.scan) — y por default eso exige una sesión de login activa. El server
+# de Brumexa corre como servicio de systemd (PM2 al boot), sin ninguna sesión
+# — sin esta regla, nmcli desde el server SIEMPRE devolvía apenas la red ya
+# conectada (la única que ya "conoce" sin necesitar escanear), aunque un
+# "nmcli device wifi list" corrido a mano por SSH sí trajera todas las redes
+# cercanas. Conectarse a una red SÍ funciona igual sin esto (es un permiso
+# de Polkit distinto, con default más permisivo) — este problema es
+# específico del escaneo/listado de redes disponibles.
+info "Configurando permiso de escaneo WiFi para servicios sin sesión (Polkit)..."
+CURRENT_USER="$(whoami)"
+sudo tee /etc/polkit-1/rules.d/50-brumexa-wifi-scan.rules > /dev/null <<EOF
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.NetworkManager.wifi.scan" &&
+        subject.user == "${CURRENT_USER}") {
+        return polkit.Result.YES;
+    }
+});
+EOF
+sudo systemctl restart polkit
+ok "Permiso de escaneo WiFi configurado para ${CURRENT_USER}"
+
+# ─── 5. Node.js 20 ───────────────────────────────────────────────────────────
 info "Instalando Node.js 20..."
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - > /dev/null 2>&1
 sudo apt install -y -qq nodejs
 NODE_VER=$(node -v)
 ok "Node.js instalado: $NODE_VER"
 
-# ─── 5. Git ──────────────────────────────────────────────────────────────────
+# ─── 6. Git ──────────────────────────────────────────────────────────────────
 info "Instalando Git..."
 sudo apt install -y -qq git
 ok "Git instalado: $(git --version)"
 
-# ─── 6. Clonar repo ──────────────────────────────────────────────────────────
+# ─── 7. Clonar repo ──────────────────────────────────────────────────────────
 info "Clonando brumexa-edge..."
 mkdir -p ~/proyectos
 cd ~/proyectos
@@ -62,16 +86,16 @@ else
 fi
 ok "Repo listo"
 
-# ─── 7. npm install ──────────────────────────────────────────────────────────
+# ─── 8. npm install ──────────────────────────────────────────────────────────
 info "Instalando dependencias Node (puede tardar 3-5 min)..."
 npm install --silent
 ok "npm install completado"
 
-# ─── 8. rpi-ws281x-native (NeoPixel) ─────────────────────────────────────────
+# ─── 9. rpi-ws281x-native (NeoPixel) ─────────────────────────────────────────
 info "Instalando librería NeoPixel..."
 npm install rpi-ws281x --silent 2>/dev/null && ok "rpi-ws281x instalado" || info "rpi-ws281x no disponible (se omite)"
 
-# ─── 9. Configurar .env ──────────────────────────────────────────────────────
+# ─── 10. Configurar .env ──────────────────────────────────────────────────────
 echo ""
 if [ -f ".env" ]; then
   ok ".env ya existe — no se sobreescribe"
@@ -90,7 +114,7 @@ else
   ok ".env configurado"
 fi
 
-# ─── 10. Configurar config.txt ───────────────────────────────────────────────
+# ─── 11. Configurar config.txt ───────────────────────────────────────────────
 CONFIG=/boot/firmware/config.txt
 info "Configurando /boot/firmware/config.txt..."
 
@@ -120,7 +144,7 @@ else
   ok "SPI (NeoPixel) agregado al config.txt"
 fi
 
-# ─── 11. Arranque automático con PM2 ─────────────────────────────────────────
+# ─── 12. Arranque automático con PM2 ─────────────────────────────────────────
 echo ""
 read -p "¿Configurar arranque automático al boot con PM2? (s/n): " AUTOSTART
 if [ "$AUTOSTART" = "s" ] || [ "$AUTOSTART" = "S" ]; then
@@ -139,7 +163,7 @@ if [ "$AUTOSTART" = "s" ] || [ "$AUTOSTART" = "S" ]; then
   ok "PM2 configurado — el server arranca solo al boot"
 fi
 
-# ─── 12. Arranque temprano (scripts/boot.js) ─────────────────────────────────
+# ─── 13. Arranque temprano (scripts/boot.js) ─────────────────────────────────
 # Entre que prende la Pi y que PM2/Node terminan de bootear y llegan a
 # leds.init() dentro de server.js, pasan varios segundos sin ninguna luz. Este
 # servicio systemd corre ANTES que PM2 (DefaultDependencies=no + sysinit.target,
