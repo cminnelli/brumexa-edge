@@ -320,6 +320,15 @@
       <div class="kv" id="kv-version" style="margin-bottom:14px"></div>
 
       <div class="field">
+        <label for="sel-update-branch" class="field-label">Branch a traer</label>
+        <select id="sel-update-branch" class="select-input" style="max-width:220px">
+          <option value="dev">dev — para probar cosas</option>
+          <option value="main">main — estable</option>
+        </select>
+        <p class="field-hint">Elegí "dev" para probar cambios nuevos, "main" para la versión estable. Se puede cambiar de branch en cualquier momento — cada actualización clona fresco el branch elegido (mismo mecanismo seguro de siempre, nunca "git pull" in-place).</p>
+      </div>
+
+      <div class="field">
         <button class="btn-connect" id="btn-update" style="width:auto; padding:9px 20px">⬇️ Buscar actualizaciones</button>
         <p class="field-hint">Trae los últimos cambios del código y reinicia el servidor solo si hubo novedades.</p>
       </div>
@@ -774,9 +783,19 @@
       if (!data.ok) { kv.innerHTML = `<div class="field-hint">${esc(data.error)}</div>`; return; }
 
       const rows = [
+        ['Branch corriendo', data.branch ? esc(data.branch) : '(desconocido)'],
         ['Versión instalada', `${esc(data.subject)} (${data.hash})`],
         ['Última actualización', `${new Date(data.date).toLocaleString()} (${ageLabel(new Date(data.date).getTime())})`],
       ];
+
+      // Preseleccionar el branch elegido la última vez (localStorage) o, si
+      // es la primera vez, el que está corriendo ahora mismo — así no hay
+      // sorpresa de "tocar actualizar" y que sin querer te cambie de branch.
+      const selBranch = document.getElementById('sel-update-branch');
+      if (selBranch && !selBranch.dataset.userTouched) {
+        const saved = localStorage.getItem('brumexa-update-branch');
+        selBranch.value = saved || data.branch || 'main';
+      }
       // El chequeo usa "git ls-remote" (server.js), no "git fetch" — más
       // seguro (nunca escribe nada en el .git local) pero ya no sabe
       // CUÁNTOS commits hay ni cuál es el último sin traerlos de verdad,
@@ -853,13 +872,18 @@
   async function runUpdate() {
     const btn    = document.getElementById('btn-update');
     const result = document.getElementById('update-result');
+    const branch = document.getElementById('sel-update-branch')?.value || 'main';
     btn.disabled = true;
     btn.textContent = '⬇️ Buscando…';
     result.innerHTML = '';
     _startUpdateLog();
     let data;
     try {
-      data = await fetch('/configuracion/update', { method: 'POST' }).then(r => r.json());
+      data = await fetch('/configuracion/update', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ branch }),
+      }).then(r => r.json());
     } catch (e) {
       _stopUpdateLog();
       result.innerHTML = `<div class="flow-note bad">✘ No se pudo conectar con el servidor: ${esc(e.message)}</div>`;
@@ -905,6 +929,11 @@
   }
   document.getElementById('btn-update').addEventListener('click', runUpdate);
 
+  document.getElementById('sel-update-branch').addEventListener('change', (e) => {
+    e.target.dataset.userTouched = '1'; // no pisar la elección manual la próxima vez que loadVersion() recargue
+    localStorage.setItem('brumexa-update-branch', e.target.value);
+  });
+
   // Atajo en el header (siempre visible, es sticky) — para no tener que
   // scrollear hasta el fondo de la página cada vez que querés buscar
   // actualizaciones. Scrollea a la card real y dispara el mismo botón de
@@ -948,12 +977,17 @@
   async function stashAndRetry() {
     const btn    = document.getElementById('btn-stash-retry');
     const result = document.getElementById('update-result');
+    const branch = document.getElementById('sel-update-branch')?.value || 'main';
     btn.disabled = true;
     btn.textContent = 'Guardando y actualizando…';
     _startUpdateLog();
     let data;
     try {
-      data = await fetch('/configuracion/update/stash-and-retry', { method: 'POST' }).then(r => r.json());
+      data = await fetch('/configuracion/update/stash-and-retry', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ branch }),
+      }).then(r => r.json());
     } catch (e) {
       _stopUpdateLog();
       result.innerHTML = `<div class="flow-note bad">✘ No se pudo conectar con el servidor: ${esc(e.message)}</div>`;

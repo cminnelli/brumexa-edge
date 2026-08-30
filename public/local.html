@@ -97,6 +97,40 @@
     return `<span class="signal-bar">${spans}</span> <span class="v">${pct}%</span>`;
   }
 
+  // Ancho de banda WiFi — kbps instantáneo, calculado server-side comparando
+  // contra la lectura anterior (ver getBandwidth() en lib/wifi.js). null en
+  // la primera lectura de todo el proceso (no hay "anterior" con qué comparar).
+  function kbpsLabel(kbps) {
+    if (kbps == null) return '<span class="section-empty">midiendo…</span>';
+    if (kbps >= 1000) return `<span class="v">${(kbps / 1000).toFixed(1)} Mbps</span>`;
+    return `<span class="v">${kbps} kbps</span>`;
+  }
+
+  // Latencia al servidor LiveKit — sondeo de fondo cada 20s (server.js,
+  // startLivekitHealthPoll), no un fetch nuevo por cada carga de /local.
+  function latencyBadge(health) {
+    if (!health || health.checkedAt == null) return '<span class="section-empty">sin chequear todavía</span>';
+    if (!health.online) return `<span class="pill bad">sin respuesta (${esc(health.reason || '?')})</span>`;
+    const ms  = health.latency;
+    const cls = ms >= 400 ? 'bad' : ms >= 150 ? 'warn' : 'ok';
+    return `<span class="v ${cls}">${ms} ms</span> <span class="section-empty">(hace ${ageLabel(health.checkedAt)})</span>`;
+  }
+
+  // Indicador de "¿estoy perdiendo datos?" — connectionQuality lo calcula el
+  // propio SDK de LiveKit a partir de las stats reales de WebRTC (RTT,
+  // packet loss), no algo medido acá — simple y de bajo costo, tal como se
+  // pidió. Solo tiene sentido con sesión activa (sin sesión, queda null).
+  function qualityBadge(q) {
+    const MAP = {
+      excellent: ['ok',   '🟢 Excelente'],
+      good:      ['ok',   '🟢 Buena'],
+      poor:      ['warn', '🟠 Pobre — puede estar perdiendo datos'],
+      lost:      ['bad',  '🔴 Perdida — sin datos llegando'],
+    };
+    const [cls, label] = MAP[q] || ['', null];
+    return label ? `<span class="pill ${cls}">${label}</span>` : '<span class="section-empty">sin sesión activa</span>';
+  }
+
   function tempBadge(c) {
     if (c == null) return 'no disponible';
     const cls = c >= 75 ? 'bad' : c >= 60 ? 'warn' : 'ok';
@@ -265,6 +299,7 @@
       ]);
 
       const wifi = data.wifi || {};
+      const bw = wifi.bandwidth;
       document.getElementById('kv-wifi').innerHTML = wifi.error
         ? `<div class="section-empty">Error: ${esc(wifi.error)}</div>`
         : kvRows([
@@ -273,9 +308,12 @@
             ['Señal', signalBar(wifi.signal)],
             ['AP activo', pill(wifi.apActive)],
             ['AP SSID/IP', wifi.apSsid ? `${wifi.apSsid} — ${wifi.apIp}` : null],
+            ['Bajada / Subida', bw ? `${kbpsLabel(bw.rxKbps)} ↓ &nbsp; ${kbpsLabel(bw.txKbps)} ↑` : null],
+            ['Datos totales (interfaz)', bw ? `${bw.rxTotalMB} MB ↓ / ${bw.txTotalMB} MB ↑` : null],
           ]);
 
       const session = data.session || {};
+      const livekitHealth = (data.device || {}).livekitHealth;
       document.getElementById('kv-session').innerHTML = session.error
         ? `<div class="section-empty">Error: ${esc(session.error)}</div>`
         : (data.session ? kvRows([
@@ -283,6 +321,8 @@
             ['Sala', session.roomName],
             ['Conectado', pill(session.isConnected)],
             ['Reintentando', pill(session.isReconnecting, 'sí', 'no')],
+            ['Latencia a LiveKit', latencyBadge(livekitHealth)],
+            ['Calidad de conexión', qualityBadge(session.connectionQuality)],
           ]) : '<div class="section-empty">no disponible</div>');
 
       document.getElementById('body-audio').innerHTML = renderAudio(data.audio, session);

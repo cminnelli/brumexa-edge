@@ -107,8 +107,11 @@ const app = express();
 // trabajo de más) sin beneficio real de diagnóstico.
 const NOISY_POLL_PATHS = new Set(['/diag/mic-level']);
 app.use((req, _res, next) => {
+  // Sin timestamp manual acá — lib/log-stream.js ya le agrega hora+ms a
+  // TODO console.log centralizado (ver _patchConsole), con más precisión
+  // (milisegundos) que el toLocaleTimeString() que había antes.
   if (!NOISY_POLL_PATHS.has(req.path)) {
-    console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url}`);
+    console.log(`${req.method} ${req.url}`);
   }
   next();
 });
@@ -211,9 +214,13 @@ app.get('/debug', (_req, res) => {
   res.json(info);
 });
 
-// ─── GET /livekit-health — verifica que el host LiveKit responde ──────────────
-app.get('/livekit-health', async (_req, res) => {
-  if (!lastKnownLivekitUrl) return res.json({ online: false, reason: 'no-config' });
+// Chequeo de latencia/salud del host LiveKit — factoreado en una función
+// aparte para poder usarlo tanto bajo demanda (GET /livekit-health, ya
+// llamado por app.js) como en el fondo cada LIVEKIT_HEALTH_POLL_MS (ver más
+// abajo), que alimenta /local con un número de latencia sin que cada carga
+// del dashboard dispare su propio fetch de red.
+async function checkLivekitHealth() {
+  if (!lastKnownLivekitUrl) return { online: false, reason: 'no-config', latency: null };
 
   const httpUrl = lastKnownLivekitUrl.replace(/^wss?:\/\//, 'https://');
   const t0      = Date.now();
@@ -223,12 +230,34 @@ app.get('/livekit-health', async (_req, res) => {
     const timer      = setTimeout(() => controller.abort(), 5000);
     await fetch(httpUrl, { method: 'GET', signal: controller.signal });
     clearTimeout(timer);
-    res.json({ online: true, latency: Date.now() - t0 });
+    return { online: true, latency: Date.now() - t0 };
   } catch (err) {
     const timedOut = err.name === 'AbortError';
-    res.json({ online: false, latency: Date.now() - t0, reason: timedOut ? 'timeout' : err.message });
+    return { online: false, latency: Date.now() - t0, reason: timedOut ? 'timeout' : err.message };
   }
+}
+
+// ─── GET /livekit-health — verifica que el host LiveKit responde ──────────────
+app.get('/livekit-health', async (_req, res) => {
+  res.json(await checkLivekitHealth());
 });
+
+// Sondeo de fondo para /local — mismo espíritu que startHealthMonitor() de
+// WiFi (lib/wifi.js): un chequeo periódico y liviano en vez de que cada
+// carga de /local dispare su propio fetch a LiveKit. 20s (no 6s, el refresh
+// de /local) porque esto sí pega contra la red real — no hace falta esa
+// frecuencia para un indicador de "¿está bien la conexión?".
+let _lastLivekitHealth = { online: null, latency: null, reason: 'sin-chequear', checkedAt: null };
+function startLivekitHealthPoll() {
+  const LIVEKIT_HEALTH_POLL_MS = 20000;
+  const tick = async () => {
+    const result = await checkLivekitHealth();
+    _lastLivekitHealth = { ...result, checkedAt: Date.now() };
+  };
+  tick();
+  const timer = setInterval(tick, LIVEKIT_HEALTH_POLL_MS);
+  if (timer.unref) timer.unref();
+}
 
 // ─── GET /token — pide un token de LiveKit nuevo al servidor central (rag-api) ─
 app.get('/token', async (_req, res) => {
@@ -1139,6 +1168,9 @@ setupLocalDebug(app, {
   getDeviceConfig: () => ({
     tokenConfigured: DEVICE_CONFIGURED,
     livekitUrl:      lastKnownLivekitUrl,
+    // Último resultado del sondeo de fondo (startLivekitHealthPoll, cada
+    // 20s) — no dispara un fetch de red nuevo por cada carga de /local.
+    livekitHealth:   _lastLivekitHealth,
   }),
 });
 setupConfiguracion(app, { lkSession, ragAuth, requestRoomToken, runCalibration, getLastCalibration, getEnvVal, leds, startMicMonitor, stopMicMonitor });
@@ -1217,6 +1249,11 @@ httpServer.listen(PORT, async () => {
   console.log(`  Setup WiFi              → http://localhost:${PORT}/setup\n`);
 
   if (DEVICE_CONFIGURED) ragAuth.initAuth();
+
+  // Arranca ya mismo, no solo si hay sesión — así /local muestra latencia al
+  // servidor LiveKit aunque nadie haya apretado "Conectar" todavía (una vez
+  // que /token trajo la URL real por primera vez).
+  startLivekitHealthPoll();
 
   // ACÁ, no antes — scripts/boot.js (systemd, corre ANTES que PM2/server.js)
   // tiene su PROPIO leds.init() y se queda con el GPIO/DMA del NeoPixel

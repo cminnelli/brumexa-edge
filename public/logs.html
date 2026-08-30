@@ -40,10 +40,21 @@
     .logs-body::-webkit-scrollbar { width: 8px; }
     .logs-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
     .log-line { white-space: pre-wrap; word-break: break-word; color: var(--text); padding: 1px 0; }
-    .log-line .ts { color: var(--text2); margin-right: 8px; }
+    .log-line .ts { color: var(--text2); margin-right: 8px; font-variant-numeric: tabular-nums; }
     .log-line.stderr { color: var(--danger); }
     .log-line.hl-gate { color: #22c55e; font-weight: 600; }
-    .log-line.hl-speak { color: var(--accent); }
+    /* Etapa del flujo LiveKit — mismos colores que la terminal (SSH/pm2 logs,
+       ver lib/log-stream.js _colorize): cian = mandando tu audio, verde =
+       recibiendo al agente, magenta = esperando/conectando. */
+    .log-line.hl-tx   { color: #22d3ee; }
+    .log-line.hl-rx   { color: #4ade80; }
+    .log-line.hl-wait { color: #c084fc; }
+    /* Origen del problema (solo warn/error) — "PI" es hardware/red local del
+       dispositivo (mic, WiFi, LEDs, Bluetooth), "RED" es el lado remoto
+       (rag-api / servidor LiveKit). Le gana el color de warn/error de arriba
+       en peso visual porque además llevan .stderr o quedan en amarillo. */
+    .log-line.origin-pi::before  { content: '🔧 PI · ';  color: var(--text2); }
+    .log-line.origin-red::before { content: '☁️ RED · '; color: var(--text2); }
     .log-line.dim { opacity: .35; }
     .logs-empty { color: var(--text2); font-size: 12px; padding: 4px 0; }
   </style>

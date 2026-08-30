@@ -27,18 +27,30 @@ const MAX_LINES = 500; // tope de <div> por panel — no queremos miles de nodos
   }
 
   function fmtTs(ts) {
-    return new Date(ts).toLocaleTimeString('es-AR', { hour12: false });
+    const d = new Date(ts);
+    const base = d.toLocaleTimeString('es-AR', { hour12: false });
+    const ms = String(d.getMilliseconds()).padStart(3, '0');
+    return `${base}.${ms}`;
   }
 
-  function classify(text) {
-    if (/Gate (ABIERTO|CERRADO)/.test(text)) return 'hl-gate';
-    if (/hablando|dejó de hablar|EMITIENDO a LiveKit|Dejó de emitir señal real/.test(text)) return 'hl-speak';
+  // stage/origin ya vienen clasificados del server (lib/log-stream.js) — acá
+  // solo se traducen a clases CSS, mismo criterio que ya usa el color ANSI
+  // de la terminal (pm2 logs), para que el panel del navegador y la
+  // consola por SSH se vean equivalentes.
+  function classify(entry) {
+    if (entry.stream === 'stderr') return 'stderr';
+    if (entry.origin === 'PI')  return 'origin-pi';
+    if (entry.origin === 'RED') return 'origin-red';
+    if (entry.stage === 'tx')   return 'hl-tx';
+    if (entry.stage === 'rx')   return 'hl-rx';
+    if (entry.stage === 'wait') return 'hl-wait';
+    if (/Gate (ABIERTO|CERRADO)/.test(entry.text)) return 'hl-gate';
     return '';
   }
 
   function appendEntry(entry) {
     const el = document.createElement('div');
-    el.className = 'log-line' + (entry.stream === 'stderr' ? ' stderr' : ' ' + classify(entry.text));
+    el.className = 'log-line ' + classify(entry);
     el.dataset.text = entry.text.toLowerCase();
     const ts = document.createElement('span');
     ts.className = 'ts';
