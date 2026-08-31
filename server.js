@@ -249,11 +249,27 @@ app.get('/livekit-health', async (_req, res) => {
 // de /local) porque esto sí pega contra la red real — no hace falta esa
 // frecuencia para un indicador de "¿está bien la conexión?".
 let _lastLivekitHealth = { online: null, latency: null, reason: 'sin-chequear', checkedAt: null };
+// Solo loguea TRANSICIONES (mismo criterio que startHealthMonitor() de WiFi,
+// ver lib/wifi.js) — pedido explícito: antes checkLivekitHealth() no
+// escribía nada, ni siquiera al fallar, así que un timeout puntual (ej.
+// "LiveKit sin respuesta: timeout" que se ve en /local o /configuracion) no
+// dejaba ningún rastro para mirar después — iba directo al final del array
+// de "hace 5 minutos, no sé por qué". Con esto queda en /logs con hora
+// exacta y el motivo.
+let _lastLoggedLivekitOnline = null;
 function startLivekitHealthPoll() {
   const LIVEKIT_HEALTH_POLL_MS = 20000;
   const tick = async () => {
     const result = await checkLivekitHealth();
     _lastLivekitHealth = { ...result, checkedAt: Date.now() };
+    if (result.online !== _lastLoggedLivekitOnline) {
+      if (result.online) {
+        console.log(`[livekit-health] ✔ Servidor LiveKit responde — ${result.latency}ms`);
+      } else if (result.reason !== 'no-config') {
+        console.warn(`[livekit-health] ✘ Servidor LiveKit sin respuesta — ${result.reason}`);
+      }
+      _lastLoggedLivekitOnline = result.online;
+    }
   };
   tick();
   const timer = setInterval(tick, LIVEKIT_HEALTH_POLL_MS);
