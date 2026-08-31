@@ -44,11 +44,11 @@
       "label": "Blanco",
       "swatch": "#f2f2f2",
       "leds": {
-        "respiracion": { "hue": 234, "sat": 0.18, "swatch": "#d1faff", "name": "Celeste pálido" },
-        "voz":         { "hue": 40,  "sat": 1,    "swatch": "#ff5500", "name": "Ámbar" },
-        "agente":      { "hue": 190, "sat": 1,    "swatch": "#002aff", "name": "Azul" },
-        "calibracion": { "hue": null, "sat": 0,   "swatch": "#ffffff", "name": "Blanco" },
-        "loading":     { "hue": 200, "sat": 1,    "swatch": "#00aaff", "name": "Cian" }
+        "respiracion": { "hue": 227.7, "sat": 0.53, "swatch": "#68c5dd", "name": "Celeste Brumelab" },
+        "voz":         { "hue": null,  "sat": 0,    "swatch": "#ffffff", "name": "Blanco mate" },
+        "agente":      { "hue": 190,   "sat": 1,    "swatch": "#002aff", "name": "Azul" },
+        "calibracion": { "hue": null,  "sat": 0,    "swatch": "#ffffff", "name": "Blanco" },
+        "loading":     { "hue": 200,   "sat": 1,    "swatch": "#00aaff", "name": "Cian" }
       }
     }
   },
