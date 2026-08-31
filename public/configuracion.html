@@ -796,36 +796,54 @@
     const chip = document.getElementById('chip-refresh');
     const txt  = document.getElementById('txt-refresh');
     let cfg = null; // declarado ACÁ afuera a propósito — lo necesita loadAlsaDevices() más abajo, en otro bloque try distinto
-    try {
-      const [cfgRes, statusRes] = await Promise.all([
-        fetch('/setup/config', { cache: 'no-store' }),
-        fetch('/configuracion/status', { cache: 'no-store' }),
-      ]);
-      cfg = await cfgRes.json();
-      const status = await statusRes.json();
 
-      document.getElementById('inp-rag-url').value    = cfg.ragApiUrl    || '';
-      document.getElementById('inp-device-id').value   = cfg.deviceId     || '';
-      document.getElementById('inp-api-key').value      = cfg.apiKey       || '';
-      await initColorPicker(cfg.brumexaColor || 'negro');
-      await CustomColors.init();
-      setLiveSliderField('inp-mic-gain',     'val-mic-gain',     cfg.micGain,     4,     v => `${parseFloat(v).toFixed(1)}x`);
-      setLiveSliderField('inp-speaker-gain', 'val-speaker-gain', cfg.speakerGain, 3,     v => `${parseFloat(v).toFixed(1)}x`);
-      setLiveSliderField('inp-silence-timeout', 'val-silence-timeout', (parseInt(cfg.silenceTimeoutMs, 10) || 20000) / 1000, 20, v => `${v} s`);
-      setLiveSliderField('inp-led-breathe',  'val-led-breathe',  cfg.ledBreathePeriodMs, 1900, v => `${v} ms`);
-      setLiveSliderField('inp-led-hangover', 'val-led-hangover', cfg.ledHangoverMs,      1100, v => `${v} ms`);
-      setLiveSliderField('inp-mic-preroll',          'val-mic-preroll',          cfg.micPrerollMs,         500, v => `${v} ms`);
-      document.getElementById('inp-mic-gate-enabled').checked = cfg.micGateEnabled !== 'false';
-      document.getElementById('inp-notification-sounds-enabled').checked = cfg.notificationSoundsEnabled !== 'false';
+    // Reintentos automáticos — pedido explícito: el servidor tarda unos
+    // segundos en volver a responder justo después de un reinicio (botón
+    // "Reiniciar Brumexa", una actualización, o WiFi cambiando de red), y
+    // antes esto mostraba "Error: Failed to fetch" y se quedaba ahí quieto
+    // para siempre — había que recargar la página a mano para que
+    // reintentara. 4 intentos cada 1.5s (~4.5s de margen) cubre ese hueco
+    // normal sin que la persona tenga que hacer nada.
+    const MAX_ATTEMPTS = 4;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const [cfgRes, statusRes] = await Promise.all([
+          fetch('/setup/config', { cache: 'no-store' }),
+          fetch('/configuracion/status', { cache: 'no-store' }),
+        ]);
+        cfg = await cfgRes.json();
+        const status = await statusRes.json();
 
-      micEnabledState = status.micEnabled !== false;
-      updateMicButton();
+        document.getElementById('inp-rag-url').value    = cfg.ragApiUrl    || '';
+        document.getElementById('inp-device-id').value   = cfg.deviceId     || '';
+        document.getElementById('inp-api-key').value      = cfg.apiKey       || '';
+        await initColorPicker(cfg.brumexaColor || 'negro');
+        await CustomColors.init();
+        setLiveSliderField('inp-mic-gain',     'val-mic-gain',     cfg.micGain,     4,     v => `${parseFloat(v).toFixed(1)}x`);
+        setLiveSliderField('inp-speaker-gain', 'val-speaker-gain', cfg.speakerGain, 3,     v => `${parseFloat(v).toFixed(1)}x`);
+        setLiveSliderField('inp-silence-timeout', 'val-silence-timeout', (parseInt(cfg.silenceTimeoutMs, 10) || 20000) / 1000, 20, v => `${v} s`);
+        setLiveSliderField('inp-led-breathe',  'val-led-breathe',  cfg.ledBreathePeriodMs, 1900, v => `${v} ms`);
+        setLiveSliderField('inp-led-hangover', 'val-led-hangover', cfg.ledHangoverMs,      1100, v => `${v} ms`);
+        setLiveSliderField('inp-mic-preroll',          'val-mic-preroll',          cfg.micPrerollMs,         500, v => `${v} ms`);
+        document.getElementById('inp-mic-gate-enabled').checked = cfg.micGateEnabled !== 'false';
+        document.getElementById('inp-notification-sounds-enabled').checked = cfg.notificationSoundsEnabled !== 'false';
 
-      chip.className = 'pill ok';
-      txt.textContent = `Actualizado ${new Date().toLocaleTimeString()}`;
-    } catch (e) {
-      chip.className = 'pill bad';
-      txt.textContent = `Error: ${e.message}`;
+        micEnabledState = status.micEnabled !== false;
+        updateMicButton();
+
+        chip.className = 'pill ok';
+        txt.textContent = `Actualizado ${new Date().toLocaleTimeString()}`;
+        break; // salió bien — no seguir reintentando
+      } catch (e) {
+        if (attempt < MAX_ATTEMPTS) {
+          chip.className = 'pill warn';
+          txt.textContent = `Reconectando… (${attempt}/${MAX_ATTEMPTS})`;
+          await new Promise(r => setTimeout(r, 1500));
+        } else {
+          chip.className = 'pill bad';
+          txt.textContent = `Error: ${e.message}`;
+        }
+      }
     }
 
     // "Actualizar Brumexa" (git pull) solo tiene sentido en la Raspberry real
