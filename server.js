@@ -81,6 +81,7 @@ const leds                                             = require('./lib/leds');
 const soundEffects                                     = require('./lib/sound-effects');
 const ragAuth                                          = require('./lib/rag-auth');
 const { requestRoomToken, setCredentials: setTokenCredentials } = require('./lib/rag-token');
+const clapConnect                                      = require('./lib/clap-connect'); // CLAP-CONNECT — pedido puntual para un evento, ver lib/clap-connect.js para sacarlo
 const { POP_SETTLE_MS: MIC_MONITOR_WARMUP_MS }         = require('./lib/mic-calibration');
 
 const {
@@ -968,6 +969,7 @@ function startMicMonitor() {
       // desactualizado hasta que _publishMic lo alcance a corregir solo.
       micGate.feed(level);
       leds.speaking(level);
+      clapConnect.feed(level); // CLAP-CONNECT
       _micLevel = { level, peak, updatedAt: Date.now(), source: 'idle-monitor' };
       peak = 0;
       last = Date.now();
@@ -1026,6 +1028,15 @@ async function startSession({ micDevice, speakerDevice }) {
 
   return { status: lkSession.getStatus(), url, roomName };
 }
+
+// CLAP-CONNECT — dispara el mismo startSession() que usa el botón "Conectar",
+// con los mismos dispositivos configurados en /configuracion (mismo criterio
+// que resuelve POST /session/start más abajo).
+clapConnect.onDoubleClap(() => {
+  const micDevice     = getEnvVal('MIC_ALSA_DEVICE')     || 'plughw:0,0';
+  const speakerDevice = getEnvVal('SPEAKER_ALSA_DEVICE') || 'plughw:0,0';
+  startSession({ micDevice, speakerDevice }).catch(e => console.warn('[clap-connect] startSession:', e.message));
+});
 
 let _sessionConnectedAt = 0;
 
