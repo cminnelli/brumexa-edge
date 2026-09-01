@@ -321,6 +321,7 @@ app.get('/setup/config', (_req, res) => {
     micPrerollMs:         getVal('MIC_PREROLL_MS')          || '500',
     // Chimes de conexión (WiFi/LiveKit) — ver lib/sound-effects.js.
     notificationSoundsEnabled: getVal('NOTIFICATION_SOUNDS_ENABLED') || 'true',
+    notificationVolume:        getVal('NOTIFICATION_VOLUME')         || '1.0',
     brumexaColor: getVal('BRUMEXA_COLOR') || 'negro',
     // Ritmo de los LEDS — ver lib/leds.js (setBreathePeriodMs, setHangoverMs,
     // setOnsetDurationMs, setOffsetDurationMs) para el porqué de cada uno.
@@ -440,7 +441,7 @@ app.post('/setup/config', express.json(), async (req, res) => {
     ledBreathePeriodMs, ledHangoverMs, ledOnsetMs, ledOffsetMs,
     alsaMicDevice, alsaSpeakerDevice,
     micGateEnabled, micGateAttenuationDb, micPrerollMs,
-    notificationSoundsEnabled,
+    notificationSoundsEnabled, notificationVolume,
     apSsid, apPass,
   } = req.body || {};
   let content = '';
@@ -482,6 +483,7 @@ app.post('/setup/config', express.json(), async (req, res) => {
     if (micGateEnabled       !== undefined) content = setEnvLine(content, 'MIC_GATE_ENABLED',        micGateEnabled);
     if (micGateAttenuationDb !== undefined) content = setEnvLine(content, 'MIC_GATE_ATTENUATION_DB', micGateAttenuationDb);
     if (notificationSoundsEnabled !== undefined) content = setEnvLine(content, 'NOTIFICATION_SOUNDS_ENABLED', notificationSoundsEnabled);
+    if (notificationVolume        !== undefined) content = setEnvLine(content, 'NOTIFICATION_VOLUME',         notificationVolume);
     if (micPrerollMs         !== undefined) content = setEnvLine(content, 'MIC_PREROLL_MS',           micPrerollMs);
     // Vacío es un valor válido acá (= "volver a usar el hostname") — se guarda
     // tal cual, no se pisa con un default. Solo si pasó la validación de arriba
@@ -523,6 +525,7 @@ app.post('/setup/config', express.json(), async (req, res) => {
     if (micGateEnabled       !== undefined) lkSession.setMicGateEnabled(micGateEnabled !== 'false' && micGateEnabled !== false);
     if (micGateAttenuationDb !== undefined) { const v = parseFloat(micGateAttenuationDb); if (!isNaN(v)) lkSession.setMicGateAttenuationDb(v); }
     if (notificationSoundsEnabled !== undefined) soundEffects.setSoundsEnabled(notificationSoundsEnabled !== 'false' && notificationSoundsEnabled !== false);
+    if (notificationVolume        !== undefined) { const v = parseFloat(notificationVolume); if (!isNaN(v)) soundEffects.setNotificationGain(v); }
     if (micPrerollMs         !== undefined) { const v = parseFloat(micPrerollMs);         if (!isNaN(v)) lkSession.setMicPrerollMs(v); }
 
     res.json({ ok: true, restarting: false, apSsid: apSsidResult, apPass: apPassResult });
@@ -1079,20 +1082,17 @@ lkSession.on('agent-audio',   () => {
   _agentConfirmed = true;
   leds.idle();
   if (!yaEstabaConfirmado) {
-    // El chime sigue, en volumen, el gain que la persona le puso a la voz
-    // del agente (POST /session/speaker-gain) — así no suena fuerte si
-    // bajaron esa voz, ni al revés. Tope en 1.6x (el audio está masterizado
-    // a ~0.6 de amplitud máxima) para no distorsionar cuando ese gain está
-    // compensando un speaker/mic débil — puede llegar hasta 32x, muy por
-    // encima de lo que hace falta para el volumen de una notificación.
+    // El chime usa su propio volumen (soundEffects._notificationGain, el
+    // slider de Configuración → Sonido) — antes seguía el gain de la VOZ
+    // del agente para no sonar desproporcionado, pero con un control propio
+    // ya no hace falta esa aproximación.
     //
     // Se escribe DIRECTO en el mismo pipe de aplay que ya usa la voz del
     // agente (lkSession.playChime), en vez de abrir un aplay propio — dos
     // aplay separados compitiendo por el mismo device ALSA (plughw:0,0) es
     // justo por qué a veces no se escuchaba: el que perdía la carrera por
     // el device fallaba en silencio con "Device or resource busy".
-    const gain  = Math.min(lkSession.getSpeakerGain(), 1.6);
-    const chime = soundEffects.buildLivekitChimePcm(gain, lkSession.getSpeakerFormat());
+    const chime = soundEffects.buildLivekitChimePcm(undefined, lkSession.getSpeakerFormat());
     if (chime) lkSession.playChime(chime);
   }
 });

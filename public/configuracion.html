@@ -357,6 +357,11 @@
         </div>
       </div>
 
+      <!-- Volúmenes agrupados: mic (entrada), agente y notificaciones (las
+           dos salidas) — antes "notificaciones" solo tenía un checkbox de
+           on/off escondido en Ajustes avanzados; ahora que tiene un slider
+           de verdad, se agrupa acá con los otros dos controles de volumen
+           en vez de quedar aparte. -->
       <div class="field-row">
         <div class="field">
           <label class="field-label" for="inp-mic-gain">Sensibilidad del micrófono</label>
@@ -375,6 +380,16 @@
               <span class="gain-val" id="val-speaker-gain">3.0x</span>
             </div>
           </div>
+        </div>
+        <div class="field">
+          <label class="field-label" for="inp-notification-volume">Volumen de notificaciones</label>
+          <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
+            <div class="gain-row" style="grid-template-columns:1fr 55px">
+              <input type="range" id="inp-notification-volume" class="gain-slider" min="0" max="3" step="0.1" value="1" />
+              <span class="gain-val" id="val-notification-volume">1.0x</span>
+            </div>
+          </div>
+          <p class="field-hint">Los chimes de WiFi/LiveKit al conectar y desconectar — arrastrá del todo a la izquierda para silenciarlos sin apagar el interruptor de abajo.</p>
         </div>
       </div>
 
@@ -410,7 +425,7 @@
               <input type="checkbox" id="inp-notification-sounds-enabled" checked style="width:auto" />
               Sonidos de notificación
             </label>
-            <p class="field-hint">Los chimes de "WiFi conectado" y "LiveKit conectado" — apagalos si te resultan molestos.</p>
+            <p class="field-hint">Los 4 chimes de conexión/desconexión (WiFi y LiveKit) — apagalos del todo acá, o solo bajales el volumen arriba en "Volumen de notificaciones".</p>
           </div>
 
           <div class="field">
@@ -821,6 +836,7 @@
         await CustomColors.init();
         setLiveSliderField('inp-mic-gain',     'val-mic-gain',     cfg.micGain,     4,     v => `${parseFloat(v).toFixed(1)}x`);
         setLiveSliderField('inp-speaker-gain', 'val-speaker-gain', cfg.speakerGain, 3,     v => `${parseFloat(v).toFixed(1)}x`);
+        setLiveSliderField('inp-notification-volume', 'val-notification-volume', cfg.notificationVolume, 1, v => `${parseFloat(v).toFixed(1)}x`);
         setLiveSliderField('inp-silence-timeout', 'val-silence-timeout', (parseInt(cfg.silenceTimeoutMs, 10) || 20000) / 1000, 20, v => `${v} s`);
         setLiveSliderField('inp-led-breathe',  'val-led-breathe',  cfg.ledBreathePeriodMs, 1900, v => `${v} ms`);
         setLiveSliderField('inp-led-hangover', 'val-led-hangover', cfg.ledHangoverMs,      1100, v => `${v} ms`);
@@ -1516,6 +1532,7 @@
   }
   wireLiveSlider('inp-mic-gain',      'val-mic-gain',      v => `${parseFloat(v).toFixed(1)}x`, v => ({ micGain: v }));
   wireLiveSlider('inp-speaker-gain',  'val-speaker-gain',  v => `${parseFloat(v).toFixed(1)}x`, v => ({ speakerGain: v }));
+  wireLiveSlider('inp-notification-volume', 'val-notification-volume', v => `${parseFloat(v).toFixed(1)}x`, v => ({ notificationVolume: v }));
   wireLiveSlider('inp-silence-timeout', 'val-silence-timeout', v => `${v} s`, v => ({ silenceTimeoutMs: Math.round(parseFloat(v) * 1000) }));
   wireLiveSlider('inp-led-breathe',   'val-led-breathe',   v => `${v} ms`, v => ({ ledBreathePeriodMs: v }));
   wireLiveSlider('inp-led-hangover',  'val-led-hangover',  v => `${v} ms`, v => ({ ledHangoverMs: v }));
