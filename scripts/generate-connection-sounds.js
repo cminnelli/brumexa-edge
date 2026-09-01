@@ -29,7 +29,16 @@
 const fs   = require('fs');
 const path = require('path');
 
-const SAMPLE_RATE = 44100;
+// 48000, NO 44100 — livekit_conectado.wav se mete DIRECTO en el pipe de
+// aplay que ya tiene abierto lib/livekit-session.js para la voz del agente
+// (ver buildLivekitChimePcm en lib/sound-effects.js), y ese pipe corre fijo
+// a SPEAKER_SAMPLE_RATE=48000 (lib/livekit-session.js). Si no coincide
+// exacto, buildLivekitChimePcm lo descarta en silencio (deja un warning en
+// el log, pero cero audio) — bug real que pasó la primera vez que se generó
+// este archivo a 44100. Los 4 quedan al mismo sample rate por consistencia
+// (a las de WiFi, que van por un aplay propio vía playSound(), no les
+// importa cuál sea).
+const SAMPLE_RATE = 48000;
 
 // Notas estándar (A440, temperamento igual) — mismo set de 3 (LiveKit) y de
 // 2 (WiFi), invertido entre conexión/desconexión.
