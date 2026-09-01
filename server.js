@@ -1118,6 +1118,12 @@ lkSession.on('disconnected',  d => {
   }
   leds.idle();
   startMicMonitor();
+  // El chime de conectado se mete en el pipe compartido de aplay (ver
+  // buildLivekitChimePcm) porque ese pipe está OCUPADO en ese momento — acá
+  // no hace falta ese rodeo: para cuando llega este evento, stop() ya cerró
+  // el aplay del agente (ver el orden en lkSession.stop()), así que el
+  // device está libre y playSound() (su propio aplay) es seguro.
+  try { soundEffects.playSound('livekit_desconectado.wav'); } catch (e) { console.warn('[lk-session-evt] playSound desconectado:', e.message); }
 });
 // Se agotaron los reintentos (agente inalcanzable) — señal clara de error
 // en vez de caer en idle como si todo estuviera bien.
