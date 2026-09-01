@@ -427,6 +427,15 @@
             <p class="field-hint">Los 4 chimes de conexión/desconexión (WiFi y LiveKit) — apagalos del todo acá, o solo bajales el volumen arriba en "Volumen de notificaciones".</p>
           </div>
 
+          <!-- CLAP-CONNECT — pedido puntual para un evento, ver lib/clap-connect.js -->
+          <div class="field">
+            <label class="field-label" style="display:flex; align-items:center; gap:8px; cursor:pointer">
+              <input type="checkbox" id="inp-clap-connect-enabled" checked style="width:auto" />
+              Conectar con doble aplauso
+            </label>
+            <p class="field-hint">Mientras está en reposo, escucha el mic buscando dos aplausos seguidos y conecta solo — pensado para un evento puntual. Apagalo si detecta de más con ruido de fondo.</p>
+          </div>
+
           <div class="field">
             <label class="field-label" for="inp-mic-preroll">Colchón antes de abrir el gate</label>
             <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
@@ -842,6 +851,7 @@
         setLiveSliderField('inp-mic-preroll',          'val-mic-preroll',          cfg.micPrerollMs,         500, v => `${v} ms`);
         document.getElementById('inp-mic-gate-enabled').checked = cfg.micGateEnabled !== 'false';
         document.getElementById('inp-notification-sounds-enabled').checked = cfg.notificationSoundsEnabled !== 'false';
+        document.getElementById('inp-clap-connect-enabled').checked = cfg.clapConnectEnabled !== 'false'; // CLAP-CONNECT
 
         micEnabledState = status.micEnabled !== false;
         updateMicButton();
@@ -1553,6 +1563,17 @@
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ notificationSoundsEnabled: e.target.checked }),
+      });
+    } catch {}
+  });
+
+  // CLAP-CONNECT — pedido puntual para un evento, ver lib/clap-connect.js
+  document.getElementById('inp-clap-connect-enabled').addEventListener('change', async (e) => {
+    try {
+      await fetch('/setup/config', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ clapConnectEnabled: e.target.checked }),
       });
     } catch {}
   });

@@ -322,6 +322,7 @@ app.get('/setup/config', (_req, res) => {
     // Chimes de conexión (WiFi/LiveKit) — ver lib/sound-effects.js.
     notificationSoundsEnabled: getVal('NOTIFICATION_SOUNDS_ENABLED') || 'true',
     notificationVolume:        getVal('NOTIFICATION_VOLUME')         || '1.0',
+    clapConnectEnabled: getVal('CLAP_CONNECT_ENABLED') || 'true', // CLAP-CONNECT
     brumexaColor: getVal('BRUMEXA_COLOR') || 'negro',
     // Ritmo de los LEDS — ver lib/leds.js (setBreathePeriodMs, setHangoverMs,
     // setOnsetDurationMs, setOffsetDurationMs) para el porqué de cada uno.
@@ -442,6 +443,7 @@ app.post('/setup/config', express.json(), async (req, res) => {
     alsaMicDevice, alsaSpeakerDevice,
     micGateEnabled, micGateAttenuationDb, micPrerollMs,
     notificationSoundsEnabled, notificationVolume,
+    clapConnectEnabled, // CLAP-CONNECT
     apSsid, apPass,
   } = req.body || {};
   let content = '';
@@ -484,6 +486,7 @@ app.post('/setup/config', express.json(), async (req, res) => {
     if (micGateAttenuationDb !== undefined) content = setEnvLine(content, 'MIC_GATE_ATTENUATION_DB', micGateAttenuationDb);
     if (notificationSoundsEnabled !== undefined) content = setEnvLine(content, 'NOTIFICATION_SOUNDS_ENABLED', notificationSoundsEnabled);
     if (notificationVolume        !== undefined) content = setEnvLine(content, 'NOTIFICATION_VOLUME',         notificationVolume);
+    if (clapConnectEnabled        !== undefined) content = setEnvLine(content, 'CLAP_CONNECT_ENABLED',        clapConnectEnabled); // CLAP-CONNECT
     if (micPrerollMs         !== undefined) content = setEnvLine(content, 'MIC_PREROLL_MS',           micPrerollMs);
     // Vacío es un valor válido acá (= "volver a usar el hostname") — se guarda
     // tal cual, no se pisa con un default. Solo si pasó la validación de arriba
@@ -526,6 +529,7 @@ app.post('/setup/config', express.json(), async (req, res) => {
     if (micGateAttenuationDb !== undefined) { const v = parseFloat(micGateAttenuationDb); if (!isNaN(v)) lkSession.setMicGateAttenuationDb(v); }
     if (notificationSoundsEnabled !== undefined) soundEffects.setSoundsEnabled(notificationSoundsEnabled !== 'false' && notificationSoundsEnabled !== false);
     if (notificationVolume        !== undefined) { const v = parseFloat(notificationVolume); if (!isNaN(v)) soundEffects.setNotificationGain(v); }
+    if (clapConnectEnabled        !== undefined) clapConnect.setEnabled(clapConnectEnabled !== 'false' && clapConnectEnabled !== false); // CLAP-CONNECT
     if (micPrerollMs         !== undefined) { const v = parseFloat(micPrerollMs);         if (!isNaN(v)) lkSession.setMicPrerollMs(v); }
 
     res.json({ ok: true, restarting: false, apSsid: apSsidResult, apPass: apPassResult });
