@@ -41,7 +41,7 @@
       }
     },
     "blanco": {
-      "label": "Blanco",
+      "label": "Brumelab",
       "swatch": "#f2f2f2",
       "leds": {
         "respiracion": { "hue": 227.7, "sat": 0.53, "swatch": "#68c5dd", "name": "Celeste Brumelab" },
