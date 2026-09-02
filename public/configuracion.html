@@ -252,21 +252,23 @@
         </div>
       </div>
 
-      <div class="field">
-        <label class="field-label" for="inp-ap-name">Nombre de esta red</label>
-        <div class="input-suffix-group">
-          <input type="text" id="inp-ap-name" class="setup-input" placeholder="Nombre del dispositivo" autocomplete="off" spellcheck="false" maxlength="29" />
-          <span class="input-suffix-group__suffix">_AP</span>
+      <div class="field-row">
+        <div class="field">
+          <label class="field-label" for="inp-ap-name">Nombre de esta red</label>
+          <div class="input-suffix-group">
+            <input type="text" id="inp-ap-name" class="setup-input" placeholder="Nombre del dispositivo" autocomplete="off" spellcheck="false" maxlength="29" />
+            <span class="input-suffix-group__suffix">_AP</span>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label" for="inp-ap-pass">Contraseña de esta red</label>
+          <div class="setup-token-row">
+            <input type="password" id="inp-ap-pass" class="setup-input" placeholder="Contraseña del AP" autocomplete="off" spellcheck="false" minlength="8" maxlength="63" />
+            <button class="btn-ghost" id="btn-toggle-ap-pass" type="button" title="Mostrar/ocultar">👁</button>
+          </div>
         </div>
       </div>
-      <div class="field">
-        <label class="field-label" for="inp-ap-pass">Contraseña de esta red</label>
-        <div class="setup-token-row">
-          <input type="password" id="inp-ap-pass" class="setup-input" placeholder="Contraseña del AP" autocomplete="off" spellcheck="false" minlength="8" maxlength="63" />
-          <button class="btn-ghost" id="btn-toggle-ap-pass" type="button" title="Mostrar/ocultar">👁</button>
-        </div>
-        <p class="field-hint">Entre 8 y 63 caracteres (mínimo que exige WiFi/WPA2). Vacío = volver a la contraseña por default.</p>
-      </div>
+      <p class="field-hint">Entre 8 y 63 caracteres (mínimo que exige WiFi/WPA2). Vacío = volver a la contraseña por default.</p>
       <div class="connect-row">
         <button class="btn-ghost" id="btn-save-ap-name" type="button" style="flex:none; padding:9px 20px">💾 Guardar cambios del AP</button>
       </div>
@@ -362,6 +364,7 @@
            on/off escondido en Ajustes avanzados; ahora que tiene un slider
            de verdad, se agrupa acá con los otros dos controles de volumen
            en vez de quedar aparte. -->
+      <div class="field-group-label">Volumen</div>
       <div class="field-row">
         <div class="field">
           <label class="field-label" for="inp-mic-gain">Sensibilidad del micrófono</label>
@@ -392,6 +395,10 @@
         </div>
       </div>
 
+      <!-- Separado de "Volumen" a propósito (pedido explícito) — esto no es
+           un nivel de audio, es comportamiento de LA CONVERSACIÓN (cuándo
+           cortar sola). -->
+      <div class="field-group-label">Conversación</div>
       <div class="field">
         <label class="field-label" for="inp-silence-timeout">Corte automático por silencio</label>
         <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
@@ -403,9 +410,17 @@
         <p class="field-hint">Se desconecta sola si nadie habla. Arrastrá del todo a la izquierda para desactivarlo.</p>
       </div>
 
+      <div class="field-group-label">Micrófono</div>
       <div class="field" style="margin-bottom:0.5rem">
-        <label class="field-label">Micrófono</label>
-        <button class="btn-ghost" id="btn-mic-toggle" type="button">Cargando…</button>
+        <div class="mic-switch-row">
+          <button class="mic-switch" id="btn-mic-toggle" type="button" role="switch" aria-checked="true">
+            <span class="mic-switch__knob"></span>
+          </button>
+          <span>
+            <span class="mic-switch-label" id="mic-switch-label">Cargando…</span><br>
+            <span class="mic-switch-label__sub" id="mic-switch-sub"></span>
+          </span>
+        </div>
       </div>
 
       <details class="tech-details">
@@ -437,14 +452,14 @@
           </div>
 
           <div class="field">
-            <label class="field-label" for="inp-mic-preroll">Colchón antes de abrir el gate</label>
+            <label class="field-label" for="inp-mic-preroll">Margen antes de confirmar tu voz</label>
             <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
               <div class="gain-row" style="grid-template-columns:1fr 65px">
                 <input type="range" id="inp-mic-preroll" class="gain-slider" min="300" max="2000" step="50" value="500" />
                 <span class="gain-val" id="val-mic-preroll">500 ms</span>
               </div>
             </div>
-            <p class="field-hint">Audio previo que guarda para no perder el arranque de la palabra.</p>
+            <p class="field-hint">El sistema tarda ~300ms en confirmar que estás hablando de verdad (así un ruido corto no dispara nada) — este es el audio "de respaldo" que guarda mientras tanto, para que no se pierda el arranque de tu primera palabra. 500ms ya cubre esos 300ms con margen de sobra.</p>
           </div>
 
           <div>
@@ -1517,16 +1532,29 @@
   // request por cada pixel que se mueve el mouse, solo cuando hace una
   // pausa de 400ms). formatLabel/buildBody son funciones porque cada campo
   // necesita su propia unidad (ms, x, dBFS, s) y su propia forma de request.
+  // Relleno visual del slider (ver .gain-slider en style.css — la pista se
+  // pinta con el acento hasta este % vía la variable --pct). Puramente
+  // cosmético: un slider sin esto igual funciona, solo se ve con la pista
+  // vacía.
+  function _updateSliderFill(el) {
+    const min = parseFloat(el.min) || 0;
+    const max = parseFloat(el.max) || 100;
+    const pct = max > min ? ((parseFloat(el.value) - min) / (max - min)) * 100 : 0;
+    el.style.setProperty('--pct', `${Math.max(0, Math.min(100, pct))}%`);
+  }
   function setLiveSliderField(inputId, valId, cfgValue, fallback, formatLabel) {
     const v = parseFloat(cfgValue);
     const val = isNaN(v) ? fallback : v;
-    document.getElementById(inputId).value = val;
+    const el = document.getElementById(inputId);
+    el.value = val;
     document.getElementById(valId).textContent = formatLabel(val);
+    _updateSliderFill(el);
   }
   function wireLiveSlider(inputId, valId, formatLabel, buildBody) {
     let timer = null;
     document.getElementById(inputId).addEventListener('input', (e) => {
       document.getElementById(valId).textContent = formatLabel(e.target.value);
+      _updateSliderFill(e.target);
       clearTimeout(timer);
       timer = setTimeout(async () => {
         try {
@@ -1607,8 +1635,10 @@
 
   function updateMicButton() {
     const btn = document.getElementById('btn-mic-toggle');
-    btn.className = 'btn-ghost' + (micEnabledState ? '' : ' btn-ghost--accent');
-    btn.textContent = micEnabledState ? '🎤 Mic ACTIVADO — tocar para desactivar' : '🚫 Mic DESACTIVADO — tocar para activar';
+    btn.classList.toggle('on', micEnabledState);
+    btn.setAttribute('aria-checked', String(micEnabledState));
+    document.getElementById('mic-switch-label').textContent = micEnabledState ? 'Mic activado' : 'Mic desactivado';
+    document.getElementById('mic-switch-sub').textContent = micEnabledState ? 'Tocá para desactivar' : 'Tocá para activar';
   }
 
   document.getElementById('btn-mic-toggle').addEventListener('click', toggleMic);

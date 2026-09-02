@@ -898,20 +898,42 @@ body {
   font-size: 11px; color: var(--muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* Rediseño pedido explícito ("los sliders son feos") — antes era una línea
+   flaca de 3px + un puntito de 14px, sin nada que muestre el progreso.
+   Ahora la pista se rellena con el color de acento hasta el valor actual
+   (mismo lenguaje visual que Spotify/iOS) vía la variable --pct, que
+   updateSliderFill() en el <script> de cada página recalcula en cada
+   'input' y al cargar — un slider sin JS que la setee simplemente muestra
+   la pista vacía (degrada bien, no rompe nada). El thumb es más grande
+   (16px) con un anillo del color de fondo de la card alrededor — se
+   despega mejor de la pista rellena que un círculo liso del mismo acento. */
 .gain-slider {
   -webkit-appearance: none; appearance: none;
   width: 100%; min-width: 0;
-  height: 3px; border-radius: 2px;
-  background: var(--border2);
+  height: 6px; border-radius: 3px;
+  background: linear-gradient(to right, var(--accent) var(--pct, 0%), var(--border2) var(--pct, 0%));
   outline: none; cursor: pointer;
 }
 .gain-slider::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
-  width: 14px; height: 14px; border-radius: 50%;
-  background: var(--accent); cursor: pointer;
-  transition: background .15s;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--accent);
+  border: 3px solid var(--surface);
+  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+  cursor: pointer;
+  margin-top: -8px; /* centra el thumb (22px con el borde) sobre la pista de 6px */
+  transition: background .15s, transform .15s;
 }
-.gain-slider:hover::-webkit-slider-thumb { background: var(--accent-h); }
+.gain-slider:hover::-webkit-slider-thumb   { background: var(--accent-h); transform: scale(1.1); }
+.gain-slider:active::-webkit-slider-thumb  { transform: scale(1.2); }
+.gain-slider::-moz-range-track    { height: 6px; border-radius: 3px; background: var(--border2); }
+.gain-slider::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--accent); }
+.gain-slider::-moz-range-thumb {
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--accent); border: 3px solid var(--surface);
+  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+  cursor: pointer;
+}
 .gain-val {
   font-size: 11px; font-weight: 700; color: var(--text);
   text-align: right;
@@ -1394,8 +1416,41 @@ body {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
+  /* Colapsa con el margin-bottom de .card-section-hdr (1.125rem) cuando es
+     el primer grupo justo debajo del header — el resultado real es el
+     mayor de los dos (1.5rem), no la suma, así que no hace falta un caso
+     aparte para "primer grupo de la card". */
+  margin-top: 1.5rem;
   margin-bottom: 0.75rem;
 }
+
+/* ─── Switch de mic (on/off) — pedido explícito, reemplaza el botón de texto
+   plano de antes por un toggle real (pill + círculo que desliza). ── */
+.mic-switch-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 2px 0;
+}
+.mic-switch {
+  position: relative;
+  width: 44px; height: 24px; flex-shrink: 0;
+  border-radius: 999px;
+  border: none;
+  background: var(--border2);
+  cursor: pointer;
+  transition: background var(--tr);
+  padding: 0;
+}
+.mic-switch.on { background: var(--accent); }
+.mic-switch__knob {
+  position: absolute; top: 3px; left: 3px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.3);
+  transition: transform var(--tr);
+}
+.mic-switch.on .mic-switch__knob { transform: translateX(20px); }
+.mic-switch-label { font-size: 13px; font-weight: 600; color: var(--text); }
+.mic-switch-label__sub { font-size: 11px; color: var(--muted); }
 
 .setup-actions {
   display: flex;
