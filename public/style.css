@@ -422,7 +422,9 @@ body {
 .field-hint {
   font-size: 11px;
   color: var(--muted);
-  line-height: 1.5;
+  line-height: 1.4; /* bajado de 1.5 — pedido explícito, los párrafos largos se sentían "un choclo" de texto */
+  margin-top: 4px;
+  max-width: 62ch; /* corta el ancho de línea en pantallas grandes — un renglón demasiado largo también se lee más pesado */
 }
 
 .divider {
@@ -1483,15 +1485,24 @@ body {
 .kv-row .v { color: var(--text); font-weight: 600; text-align: right; }
 
 /* Estado de WiFi en una sola línea (pedido explícito, antes eran 2-3
-   kv-row apiladas — red / señal / IP cada una en su propia fila) — se
-   ajusta solo (flex-wrap) en vez de recortar si no entra todo junto. */
+   kv-row apiladas — red / señal / IP cada una en su propia fila). Reusa el
+   MISMO puntito de estado que ya usa la barra de arriba (.stat-chip__dot)
+   en vez de separadores de texto ("·") — más prolijo, mismo lenguaje
+   visual que el resto de la página. flex-wrap: se acomoda solo en vez de
+   recortar si no entra todo junto en una pantalla angosta. */
 .wifi-inline-status {
   display: flex; align-items: center; flex-wrap: wrap;
-  gap: 6px; font-size: 13px; padding: 4px 0;
+  gap: 10px; font-size: 13px; padding: 6px 0;
 }
-.wifi-inline-status__name { font-weight: 700; color: var(--text); }
-.wifi-inline-status__ip   { color: var(--text2); font-variant-numeric: tabular-nums; }
-.wifi-inline-status__sep  { color: var(--muted); }
+.wifi-inline-status__name {
+  font-weight: 700; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px;
+}
+.wifi-inline-status__signal { display: flex; align-items: center; gap: 5px; }
+.wifi-inline-status__ip {
+  color: var(--text2); font-variant-numeric: tabular-nums; font-size: 12px;
+  margin-left: auto; /* empuja la IP al extremo derecho de la fila */
+}
 
 .pill {
   display: inline-block;

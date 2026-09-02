@@ -946,11 +946,12 @@
       if (!s.available) {
         kv.innerHTML = '<div class="field-hint">No disponible — este server no está corriendo en la Raspberry.</div>';
       } else if (s.apActive) {
-        // Todo en una línea (pedido explícito, antes eran 2-3 kv-row apiladas)
+        // Todo en una línea (pedido explícito, antes eran 2-3 kv-row
+        // apiladas) — mismo puntito de estado que ya usa la barra de arriba
+        // (.stat-chip__dot) en vez de separadores "·" sueltos.
         kv.innerHTML = `
           <div class="wifi-inline-status">
-            <span class="pill warn">Modo configuración (AP)</span>
-            <span class="wifi-inline-status__sep">·</span>
+            <span class="stat-chip__dot connecting"></span>
             <span class="wifi-inline-status__name">${esc(s.apSsid)}</span>
             <span class="wifi-inline-status__ip">${esc(s.apIp)}</span>
           </div>
@@ -958,10 +959,9 @@
       } else if (s.connectedSSID) {
         kv.innerHTML = `
           <div class="wifi-inline-status">
+            <span class="stat-chip__dot connected"></span>
             <span class="wifi-inline-status__name">${esc(s.connectedSSID)}</span>
-            <span class="wifi-inline-status__sep">·</span>
-            ${signalBarsWifi(s.signal)}
-            <span class="wifi-inline-status__sep">·</span>
+            <span class="wifi-inline-status__signal">${signalBarsWifi(s.signal)}</span>
             <span class="wifi-inline-status__ip">${esc(s.ipAddress || '—')}</span>
           </div>
         `;
