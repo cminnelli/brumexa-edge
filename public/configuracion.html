@@ -314,7 +314,11 @@
       </details>
     </div>
 
-    <!-- § Ritmo de LEDs — velocidad de la respiración y paciencia con pausas -->
+    <!-- § Ritmo de LEDs — velocidad de la respiración únicamente. "Paciencia
+         con las pausas" se movió a Sonido → Conversación (renombrada
+         "Margen antes de darte por terminado") — no era solo cosmético, es
+         el mismo mecanismo real que decide cuándo se corta el audio que se
+         manda al agente, no solo la animación del LED. -->
     <div class="card" id="card-led-rhythm">
       <div class="card-section-hdr">
         <span class="card-section-icon"><svg viewBox="0 0 24 24"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.5.4.8 1 .8 1.6v.5h5.4v-.5c0-.6.3-1.2.8-1.6A6 6 0 0 0 12 3Z"/></svg></span>
@@ -324,7 +328,7 @@
         </div>
       </div>
 
-      <div class="field">
+      <div class="field" style="margin-bottom:0">
         <label class="field-label" for="inp-led-breathe">Ritmo de la respiración</label>
         <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
           <div class="gain-row" style="grid-template-columns:1fr 70px">
@@ -333,17 +337,6 @@
           </div>
         </div>
         <p class="field-hint">Cuánto dura un ciclo completo de inhalar+exhalar. Menos ms = respiración más rápida.</p>
-      </div>
-
-      <div class="field">
-        <label class="field-label" for="inp-led-hangover">Paciencia con las pausas al hablar</label>
-        <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
-          <div class="gain-row" style="grid-template-columns:1fr 70px">
-            <input type="range" id="inp-led-hangover" class="gain-slider" min="300" max="6000" step="100" value="1100" />
-            <span class="gain-val" id="val-led-hangover">1100 ms</span>
-          </div>
-        </div>
-        <p class="field-hint">Si te quedás en silencio más de este tiempo (por ejemplo, pensando qué decir), Brumexa asume que terminaste de hablar y los LEDs vuelven a respirar. Más alto = tolera pausas más largas antes de "darte por terminado".</p>
       </div>
     </div>
 
@@ -402,6 +395,28 @@
            cortar sola). -->
       <div class="field-group-label">Conversación</div>
       <div class="field">
+        <label class="field-label" for="inp-mic-preroll">Margen antes de confirmar tu voz</label>
+        <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
+          <div class="gain-row" style="grid-template-columns:1fr 65px">
+            <input type="range" id="inp-mic-preroll" class="gain-slider" min="300" max="2000" step="50" value="500" />
+            <span class="gain-val" id="val-mic-preroll">500 ms</span>
+          </div>
+        </div>
+        <p class="field-hint">El sistema tarda ~300ms en confirmar que estás hablando de verdad (así un ruido corto no dispara nada) — este es el audio "de respaldo" que guarda mientras tanto, para que no se pierda el arranque de tu primera palabra. 500ms ya cubre esos 300ms con margen de sobra.</p>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="inp-led-hangover">Margen antes de darte por terminado</label>
+        <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
+          <div class="gain-row" style="grid-template-columns:1fr 70px">
+            <input type="range" id="inp-led-hangover" class="gain-slider" min="300" max="6000" step="100" value="1100" />
+            <span class="gain-val" id="val-led-hangover">1100 ms</span>
+          </div>
+        </div>
+        <p class="field-hint">Cuánto silencio tolera antes de asumir que terminaste (por ejemplo, si te quedás pensando qué decir a mitad de una frase) — retomar antes de que se cumpla este tiempo sigue contando como "seguís hablando", sin cortes. Más alto = tolera pausas más largas.</p>
+      </div>
+
+      <div class="field">
         <label class="field-label" for="inp-silence-timeout">Corte automático por silencio</label>
         <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
           <div class="gain-row" style="grid-template-columns:1fr 55px">
@@ -451,17 +466,6 @@
               Conectar con doble aplauso
             </label>
             <p class="field-hint">Mientras está en reposo, escucha el mic buscando dos aplausos seguidos y conecta solo — pensado para un evento puntual. Apagalo si detecta de más con ruido de fondo.</p>
-          </div>
-
-          <div class="field">
-            <label class="field-label" for="inp-mic-preroll">Margen antes de confirmar tu voz</label>
-            <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
-              <div class="gain-row" style="grid-template-columns:1fr 65px">
-                <input type="range" id="inp-mic-preroll" class="gain-slider" min="300" max="2000" step="50" value="500" />
-                <span class="gain-val" id="val-mic-preroll">500 ms</span>
-              </div>
-            </div>
-            <p class="field-hint">El sistema tarda ~300ms en confirmar que estás hablando de verdad (así un ruido corto no dispara nada) — este es el audio "de respaldo" que guarda mientras tanto, para que no se pierda el arranque de tu primera palabra. 500ms ya cubre esos 300ms con margen de sobra.</p>
           </div>
 
           <div>
@@ -942,15 +946,24 @@
       if (!s.available) {
         kv.innerHTML = '<div class="field-hint">No disponible — este server no está corriendo en la Raspberry.</div>';
       } else if (s.apActive) {
+        // Todo en una línea (pedido explícito, antes eran 2-3 kv-row apiladas)
         kv.innerHTML = `
-          <div class="kv-row"><span class="k">Estado</span><span class="v"><span class="pill warn">Modo configuración (AP)</span></span></div>
-          <div class="kv-row"><span class="k">Red del AP</span><span class="v">${esc(s.apSsid)} — ${esc(s.apIp)}</span></div>
+          <div class="wifi-inline-status">
+            <span class="pill warn">Modo configuración (AP)</span>
+            <span class="wifi-inline-status__sep">·</span>
+            <span class="wifi-inline-status__name">${esc(s.apSsid)}</span>
+            <span class="wifi-inline-status__ip">${esc(s.apIp)}</span>
+          </div>
         `;
       } else if (s.connectedSSID) {
         kv.innerHTML = `
-          <div class="kv-row"><span class="k">Red</span><span class="v">${esc(s.connectedSSID)}</span></div>
-          <div class="kv-row"><span class="k">Señal</span><span class="v">${signalBarsWifi(s.signal)}</span></div>
-          <div class="kv-row"><span class="k">IP</span><span class="v">${esc(s.ipAddress || '—')}</span></div>
+          <div class="wifi-inline-status">
+            <span class="wifi-inline-status__name">${esc(s.connectedSSID)}</span>
+            <span class="wifi-inline-status__sep">·</span>
+            ${signalBarsWifi(s.signal)}
+            <span class="wifi-inline-status__sep">·</span>
+            <span class="wifi-inline-status__ip">${esc(s.ipAddress || '—')}</span>
+          </div>
         `;
       } else {
         kv.innerHTML = '<div class="field-hint">Sin WiFi configurado todavía.</div>';

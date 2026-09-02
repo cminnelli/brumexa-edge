@@ -1482,6 +1482,17 @@ body {
 .kv-row .k { color: var(--text2); }
 .kv-row .v { color: var(--text); font-weight: 600; text-align: right; }
 
+/* Estado de WiFi en una sola línea (pedido explícito, antes eran 2-3
+   kv-row apiladas — red / señal / IP cada una en su propia fila) — se
+   ajusta solo (flex-wrap) en vez de recortar si no entra todo junto. */
+.wifi-inline-status {
+  display: flex; align-items: center; flex-wrap: wrap;
+  gap: 6px; font-size: 13px; padding: 4px 0;
+}
+.wifi-inline-status__name { font-weight: 700; color: var(--text); }
+.wifi-inline-status__ip   { color: var(--text2); font-variant-numeric: tabular-nums; }
+.wifi-inline-status__sep  { color: var(--muted); }
+
 .pill {
   display: inline-block;
   font-size: 12px; font-weight: 600;
