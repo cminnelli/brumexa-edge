@@ -261,7 +261,7 @@
           <label class="field-label" for="inp-ap-name">Nombre de esta red</label>
           <div class="input-suffix-group">
             <input type="text" id="inp-ap-name" class="setup-input" placeholder="Nombre del dispositivo" autocomplete="off" spellcheck="false" maxlength="29" />
-            <span class="input-suffix-group__suffix">_AP</span>
+            <span class="input-suffix-group__suffix">-AP</span>
           </div>
         </div>
         <div class="field">
@@ -1020,17 +1020,32 @@
         🚫 Red olvidada — Access Point activo<br>
         Conectate a la red <strong>"${esc(apSsid)}"</strong> y entrá a
         <strong>http://${esc(apIp)}</strong> para elegir una red nueva.
-        <div style="margin-top:8px"><img src="/wifi/ap-qr?t=${Date.now()}" alt="QR para conectarte al Access Point" style="width:160px;height:160px;border-radius:8px" /></div>
+        <div style="margin-top:8px"><img id="wifi-forget-qr" src="/wifi/ap-qr?t=${Date.now()}" alt="QR para conectarte al Access Point" style="width:160px;height:160px;border-radius:8px" /></div>
       </div>
     `;
     btn.disabled = false;
     btn.textContent = '🚫 Olvidar red / Forzar AP';
 
-    // Refresca el estado varias veces — el AP puede tardar unos segundos en
-    // subir del todo (ver startAP() en lib/wifi.js), sin esperar a que la
-    // persona recargue la página a mano.
+    // El pedido de la imagen puede perder la carrera contra el propio corte
+    // de red — justo acá el dispositivo está bajando el WiFi cliente para
+    // levantar el AP (borrar el perfil viejo + "nmcli device wifi hotspot",
+    // que solo del lado del server ya tiene timeout de 20s), así que si el
+    // navegador estaba conectado por ESA misma red, se queda sin conexión
+    // un rato y la imagen falla. Los <img> no reintentan solos, así que lo
+    // hacemos a mano: onerror pide de nuevo con un timestamp nuevo (evita
+    // el caché del pedido fallido), cada 2s, hasta 25 intentos (~50s — con
+    // margen de sobra sobre el peor caso del lado del server).
+    const qrImg = document.getElementById('wifi-forget-qr');
+    let qrTries = 0;
+    qrImg.addEventListener('error', () => {
+      if (++qrTries > 25) return;
+      setTimeout(() => { qrImg.src = `/wifi/ap-qr?t=${Date.now()}`; }, 2000);
+    });
+
+    // Refresca el estado varias veces — mismo margen (~50s) que el QR de
+    // arriba, por el mismo motivo: el AP puede tardar en subir del todo.
     let tries = 0;
-    const poll = setInterval(() => { loadWifiCurrent(); if (++tries >= 12) clearInterval(poll); }, 2000);
+    const poll = setInterval(() => { loadWifiCurrent(); if (++tries >= 25) clearInterval(poll); }, 2000);
   });
 
   // Filtra por nombre la lista YA cargada (no dispara un escaneo nuevo) —
