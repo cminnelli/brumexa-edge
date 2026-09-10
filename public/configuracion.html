@@ -20,7 +20,7 @@
        emergencia, sin internet real, y un <link rel=stylesheet> normal a
        un dominio externo sin ruta a internet traba el render entero. -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
-  <link rel="stylesheet" href="style.css?v=22" />
+  <link rel="stylesheet" href="/style.css?v=22" />
   <style>
     #card-update.highlight-pulse {
       animation: card-highlight-pulse 1.3s ease-out;
@@ -202,6 +202,8 @@
       <div class="kv" id="kv-wifi-current"><div class="field-hint">Consultando…</div></div>
 
       <button class="btn-ghost" id="btn-wifi-toggle" type="button" style="margin-top:12px">🔄 Cambiar red</button>
+      <button class="btn-ghost" id="btn-wifi-forget" type="button" style="margin-top:8px; display:none">🚫 Olvidar red / Forzar AP</button>
+      <div id="wifi-forget-result" style="margin-top:10px"></div>
 
       <div id="wifi-change-panel" class="wifi-change-panel" style="display:none">
         <div class="divider" style="margin:14px 0"></div>
@@ -541,9 +543,9 @@
 
 </main>
 
-<script src="theme.js?v=1"></script>
-<script src="session-quick.js?v=1"></script>
-<script src="admin-link.js?v=1"></script>
+<script src="/theme.js?v=1"></script>
+<script src="/session-quick.js?v=1"></script>
+<script src="/admin-link.js?v=1"></script>
 <script>
   function esc(s) {
     return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
@@ -941,8 +943,15 @@
 
   async function loadWifiCurrent() {
     const kv = document.getElementById('kv-wifi-current');
+    const forgetBtn = document.getElementById('btn-wifi-forget');
     try {
       const s = await fetch('/wifi/status', { cache: 'no-store' }).then(r => r.json());
+      // Mostrar "Olvidar red" si hay una red conectada, O si ya estamos en
+      // AP pero por una red que sigue "guardada" (_lastKnownSSID) — ese es
+      // justo el caso atrapado en loop que motivó este botón: sin esto, la
+      // única forma de soltarla de verdad era esperar los reintentos de
+      // fondo o entrar por SSH.
+      forgetBtn.style.display = (s.available && (s.connectedSSID || (s.apActive && s.lastKnownSSID))) ? '' : 'none';
       if (!s.available) {
         kv.innerHTML = '<div class="field-hint">No disponible — este server no está corriendo en la Raspberry.</div>';
       } else if (s.apActive) {
@@ -970,6 +979,7 @@
       }
     } catch (e) {
       kv.innerHTML = `<div class="field-hint">Error: ${esc(e.message)}</div>`;
+      forgetBtn.style.display = 'none';
     }
   }
 
@@ -983,6 +993,45 @@
     if (opening && !_wifiScanned) { _wifiScanned = true; scanWifiNetworks(); }
   });
   document.getElementById('btn-wifi-rescan').addEventListener('click', scanWifiNetworks);
+
+  document.getElementById('btn-wifi-forget').addEventListener('click', async () => {
+    const btn    = document.getElementById('btn-wifi-forget');
+    const result = document.getElementById('wifi-forget-result');
+    if (!confirm('¿Olvidar esta red y forzar el Access Point de respaldo? Vas a tener que volver a elegir una red desde "Cambiar red".')) return;
+
+    btn.disabled = true;
+    btn.textContent = '🚫 Olvidando red…';
+    result.innerHTML = '';
+
+    // apSsid/apIp son config fija (no dependen de si el AP ya está activo
+    // en este instante) — los pedimos ANTES de disparar /wifi/forget:
+    // si el navegador está en la misma red que se está por olvidar, la
+    // respuesta de /wifi/forget puede no llegar nunca.
+    let apSsid = '', apIp = '10.42.0.1';
+    try {
+      const s = await fetch('/wifi/status', { cache: 'no-store' }).then(r => r.json());
+      apSsid = s.apSsid || ''; apIp = s.apIp || apIp;
+    } catch {}
+
+    fetch('/wifi/forget', { method: 'POST' }).catch(() => {});
+
+    result.innerHTML = `
+      <div class="flow-note ok">
+        🚫 Red olvidada — Access Point activo<br>
+        Conectate a la red <strong>"${esc(apSsid)}"</strong> y entrá a
+        <strong>http://${esc(apIp)}</strong> para elegir una red nueva.
+        <div style="margin-top:8px"><img src="/wifi/ap-qr?t=${Date.now()}" alt="QR para conectarte al Access Point" style="width:160px;height:160px;border-radius:8px" /></div>
+      </div>
+    `;
+    btn.disabled = false;
+    btn.textContent = '🚫 Olvidar red / Forzar AP';
+
+    // Refresca el estado varias veces — el AP puede tardar unos segundos en
+    // subir del todo (ver startAP() en lib/wifi.js), sin esperar a que la
+    // persona recargue la página a mano.
+    let tries = 0;
+    const poll = setInterval(() => { loadWifiCurrent(); if (++tries >= 12) clearInterval(poll); }, 2000);
+  });
 
   // Filtra por nombre la lista YA cargada (no dispara un escaneo nuevo) —
   // útil ahora que el fix de Polkit hace que aparezcan bastantes más redes
