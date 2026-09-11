@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brumexa — Instalación</title>
+  <!-- Red de seguridad contra íconos SVG "gigantes" antes de que cargue
+       style.css — ver el mismo comentario en public/index.html. -->
+  <style>svg { width: 1em; height: 1em; }</style>
+  <script>
+    (function () {
+      var t = localStorage.getItem('brumexa-theme');
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- No-bloqueante (media=print + onload) — esta página también se ve
+       conectado al AP de emergencia, sin internet real, ver public/local.html. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+  <link rel="stylesheet" href="/style.css?v=22" />
+</head>
+<body>
+
+<header class="site-header">
+  <div class="site-header__inner">
+    <div class="site-header__brand">
+      <span class="brand-name">Brumexa</span>
+    </div>
+    <nav class="tab-nav">
+      <a class="tab-btn" href="/" title="Panel"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg><span class="tab-btn__label">Panel</span></a>
+      <a class="tab-btn" href="/configuracion" title="Configuración"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="tab-btn__label">Configuración</span></a>
+      <a class="tab-btn" href="/diagnostico" title="Diagnóstico"><svg viewBox="0 0 24 24"><path d="M3 12h4l2-7 4 14 2-7h6"/></svg><span class="tab-btn__label">Diagnóstico</span></a>
+      <a class="tab-btn" href="/logs" title="Logs"><svg viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h10"/></svg><span class="tab-btn__label">Logs</span></a>
+      <a class="tab-btn" href="/terminal" title="Terminal Pi"><svg viewBox="0 0 24 24"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg><span class="tab-btn__label">Terminal Pi</span></a>
+      <a class="tab-btn" href="/local" title="Local"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8"/><path d="M12 16v4"/></svg><span class="tab-btn__label">Local</span></a>
+      <a class="tab-btn active" href="/instalacion" title="Instalación"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"/></svg><span class="tab-btn__label">Instalación</span></a>
+      <a class="tab-btn" href="#" id="nav-admin" title="Admin"><svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5l-8-3Z"/></svg><span class="tab-btn__label">Admin</span></a>
+    </nav>
+    <div class="site-header__actions">
+      <button id="nav-session-btn" class="btn-ghost" type="button" title="Conectar/desconectar la sesión de voz">▶ Conectar</button>
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambiar tema" title="Cambiar tema"></button>
+    </div>
+  </div>
+</header>
+
+<main class="page-wrap" style="max-width:760px">
+  <div class="section-group">
+    <div class="section-group-label">Instalación</div>
+    <p class="field-hint" style="margin:-6px 0 14px">
+      Arreglos puntuales del sistema que el botón "Actualizar" de
+      <a href="/configuracion" style="color:var(--accent)">Configuración</a>
+      no aplica solo, porque tocan cosas fuera del código (servicios,
+      archivos de configuración de audio, etc). Cada uno se puede aplicar
+      las veces que haga falta sin romper nada — no instalan paquetes
+      nuevos ni tocan Node/PM2.
+    </p>
+
+    <div id="fixes-list"></div>
+  </div>
+</main>
+
+<script src="/theme.js?v=1"></script>
+<script src="/session-quick.js?v=1"></script>
+<script src="/admin-link.js?v=1"></script>
+<script>
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+
+  async function loadFixes() {
+    const list = document.getElementById('fixes-list');
+    list.innerHTML = '<div class="field-hint">Consultando…</div>';
+    try {
+      const { fixes } = await fetch('/instalacion/fixes', { cache: 'no-store' }).then(r => r.json());
+      renderFixes(fixes);
+    } catch (e) {
+      list.innerHTML = `<div class="flow-note bad">✘ No se pudo consultar: ${esc(e.message)}</div>`;
+    }
+  }
+
+  function renderFixes(fixes) {
+    const list = document.getElementById('fixes-list');
+    if (!fixes.length) { list.innerHTML = '<div class="field-hint">No hay arreglos disponibles.</div>'; return; }
+
+    list.innerHTML = fixes.map(f => `
+      <div class="card" id="fix-${esc(f.id)}">
+        <div class="card-section-hdr">
+          <span class="card-section-icon"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"/></svg></span>
+          <div>
+            <div class="card-section-title">${esc(f.title)}</div>
+            <div class="card-section-desc">${esc(f.description)}</div>
+          </div>
+        </div>
+        <div class="kv" style="margin-top:10px">
+          <div class="wifi-inline-status">
+            <span class="stat-chip__dot ${f.applied ? 'connected' : ''}"></span>
+            <span>${f.applied ? 'Ya aplicado' : 'No aplicado todavía'}</span>
+          </div>
+        </div>
+        <button class="btn-ghost" type="button" style="margin-top:12px" data-fix-id="${esc(f.id)}">
+          ${f.applied ? '↻ Volver a aplicar' : '⚙ Aplicar'}
+        </button>
+        <div class="fix-result" style="margin-top:10px"></div>
+      </div>
+    `).join('');
+
+    list.querySelectorAll('button[data-fix-id]').forEach(btn => {
+      btn.addEventListener('click', () => applyFix(btn.dataset.fixId));
+    });
+  }
+
+  async function applyFix(id) {
+    const card   = document.getElementById(`fix-${id}`);
+    const btn    = card.querySelector('button[data-fix-id]');
+    const result = card.querySelector('.fix-result');
+    const prevText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Aplicando…';
+    result.innerHTML = '';
+    let res;
+    try {
+      res = await fetch(`/instalacion/fixes/${encodeURIComponent(id)}/apply`, { method: 'POST' }).then(r => r.json());
+    } catch (e) {
+      result.innerHTML = `<div class="flow-note bad">✘ ${esc(e.message)}</div>`;
+      btn.disabled = false;
+      btn.textContent = prevText;
+      return;
+    }
+    if (!res.ok) {
+      result.innerHTML = `<div class="flow-note bad">✘ ${esc(res.error || 'No se pudo aplicar')}</div>`;
+      btn.disabled = false;
+      btn.textContent = prevText;
+      return;
+    }
+
+    if (!res.needsRestart) {
+      result.innerHTML = '<div class="flow-note ok">✔ Aplicado</div>';
+      btn.disabled = false;
+      btn.textContent = prevText;
+      loadFixes();
+      return;
+    }
+
+    // El fix quedó escrito (asound.conf, servicio, .env), pero recién se
+    // usa de verdad cuando Node vuelve a arrancar (dotenv solo lee .env al
+    // boot) — mismo endpoint/patrón que ya usa el botón "Reiniciar Brumexa"
+    // de /configuracion, encadenado acá para que sea un solo click.
+    btn.textContent = 'Reiniciando Brumexa…';
+    result.innerHTML = '<div class="flow-note ok">✔ Aplicado — reiniciando Brumexa para que tome el cambio…</div>';
+    try {
+      await fetch('/configuracion/restart', { method: 'POST' });
+    } catch {}
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      try {
+        const r = await fetch('/configuracion/status', { cache: 'no-store' });
+        if (r.ok) { location.reload(); return; }
+      } catch {}
+    }
+    result.innerHTML = `
+      <div class="flow-note bad">
+        ⚠ Se aplicó, pero el servidor no volvió solo tras reiniciar — probá
+        recargar la página en unos segundos, o revisá <code>pm2 list</code>
+        desde /terminal.
+      </div>`;
+    btn.disabled = false;
+    btn.textContent = prevText;
+  }
+
+  loadFixes();
+</script>
+
+</body>
+</html>

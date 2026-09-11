@@ -51,6 +51,7 @@ const { startRecording, stopRecording, getStatus,
         deleteRecording, boostCaptureGain } = require('./lib/recorder');
 const { setupWifi, autoStartAP, startHealthMonitor, getStatus: getWifiStatus, getStatusAsync: getWifiStatusAsync, setApSsid, setApPass, DEFAULT_AP_PASS } = require('./lib/wifi');
 const { setupLocalDebug, getSystemInfo }                = require('./lib/local-debug');
+const { setupSystemFixes }                              = require('./lib/system-fixes');
 
 // lib/configuracion.js se carga con red de seguridad: si el archivo llegó
 // corrupto (pasó de verdad -- un git pull/fetch interrumpido lo dejó en
@@ -1278,6 +1279,7 @@ setupLocalDebug(app, {
   }),
 });
 setupConfiguracion(app, { lkSession, ragAuth, requestRoomToken, runCalibration, getLastCalibration, getEnvVal, leds, startMicMonitor, stopMicMonitor });
+setupSystemFixes(app);
 
 // Antes esto dependía de "fuser -k", un binario externo (paquete psmisc)
 // que puede no estar instalado en la Pi -- si fallaba, reintentaba en
