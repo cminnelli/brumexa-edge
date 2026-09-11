@@ -211,6 +211,39 @@ else
 fi
 ok "SPEAKER_ALSA_DEVICE=brumexa_speaker en .env"
 
+# Permisos para que /instalacion (lib/system-fixes.js) pueda re-aplicar este
+# mismo arreglo desde el panel web, sin terminal — Node corre sin ninguna
+# sesión/TTY, así que un "sudo" normal ahí SIEMPRE pide contraseña y falla.
+# En vez de darle sudo sin restricciones (inseguro), un archivo de sudoers
+# ACOTADO a los comandos exactos que necesita ese fix puntual — nada de
+# "ALL". Si el día de mañana se suma otro fix a esa lista que necesite sudo,
+# hay que agregarle su propia línea acá (comando exacto, no un permiso
+# genérico).
+echo ""
+info "Configurando permisos para /instalacion (sudoers acotado)..."
+TEE_BIN=$(command -v tee)
+CP_BIN=$(command -v cp)
+SYSTEMCTL_BIN=$(command -v systemctl)
+SUDOERS_TMP=$(mktemp)
+cat > "$SUDOERS_TMP" <<EOF
+# Brumexa — /instalacion (ver lib/system-fixes.js). Comandos exactos, no ALL.
+${CURRENT_USER} ALL=(root) NOPASSWD: ${TEE_BIN} -a /etc/asound.conf
+${CURRENT_USER} ALL=(root) NOPASSWD: ${CP_BIN} ${REPO_DIR}/scripts/brumexa-audio-keepalive.service /etc/systemd/system/brumexa-audio-keepalive.service
+${CURRENT_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} daemon-reload
+${CURRENT_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} enable --now brumexa-audio-keepalive
+EOF
+if sudo visudo -cf "$SUDOERS_TMP" > /dev/null; then
+  sudo cp "$SUDOERS_TMP" /etc/sudoers.d/brumexa-system-fixes
+  sudo chmod 0440 /etc/sudoers.d/brumexa-system-fixes
+  ok "Permisos de /instalacion configurados"
+else
+  # No usar err() acá — aborta TODO install.sh con exit 1, y esto no es
+  # crítico para que Brumexa funcione (solo para que /instalacion no
+  # necesite terminal). visudo ya validó y rechazó antes de tocar nada real.
+  echo -e "${RED}✘ El archivo de sudoers generado no pasó la validación — no se instaló nada (visudo lo rechazó, no se rompió el sudoers real)${NC}"
+fi
+rm -f "$SUDOERS_TMP"
+
 # ─── 13. Arranque automático con PM2 ─────────────────────────────────────────
 echo ""
 read -p "¿Configurar arranque automático al boot con PM2? (s/n): " AUTOSTART
