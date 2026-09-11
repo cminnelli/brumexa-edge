@@ -39,7 +39,7 @@ ok "Dependencias instaladas"
 # Encontrado real (dos veces, dos acciones de Polkit distintas): nmcli/
 # NetworkManager delega en Polkit varios permisos que por default exigen una
 # sesión de login activa en consola. El server de Brumexa corre como
-# servicio de systemd (PM2 al boot, ver paso 12 — a propósito SIN root, así
+# servicio de systemd (PM2 al boot, ver paso 13 — a propósito SIN root, así
 # que tampoco lo salva ser root), sin ninguna sesión — sin esta regla:
 #   - org.freedesktop.NetworkManager.wifi.scan: nmcli no podía FORZAR un
 #     escaneo nuevo (--rescan yes) y SIEMPRE devolvía apenas la red ya
@@ -153,7 +153,65 @@ else
   ok "SPI (NeoPixel) agregado al config.txt"
 fi
 
-# ─── 12. Arranque automático con PM2 ─────────────────────────────────────────
+# ─── 12. Audio: mantener el reloj I2S vivo (evita el "pum" al abrir mic/speaker) ─
+# El HAT (Google AIY Voice HAT / MAX98357A) hace un pop audible cada vez que
+# arecord/aplay abren el dispositivo de cero — el reloj I2S tiene que
+# arrancar desde parado. Confirmado leyendo el driver del kernel
+# (googlevoicehat-codec.c): no hay ningún control de ALSA que la app pueda
+# tocar desde afuera para arreglarlo. El arreglo que usa toda la comunidad
+# de HATs I2S parecidos (ReSpeaker/seeed-voicecard, Adafruit, Volumio) es
+# mantener un stream de reproducción corriendo SIEMPRE, para que el reloj
+# compartido nunca se pare — así cuando la app abre su propio aplay/arecord
+# por sesión, el hardware ya estaba prendido, sin arranque en frío. dmix
+# deja que ese stream permanente y los aplay normales de la app compartan
+# el dispositivo sin pelearse por él (ver brumexa_speaker más abajo).
+echo ""
+info "Configurando mantenimiento de reloj I2S (evita pop del HAT)..."
+
+ASOUND=/etc/asound.conf
+if grep -q "pcm.brumexa_speaker" "$ASOUND" 2>/dev/null; then
+  ok "asound.conf ya tiene el device brumexa_speaker"
+else
+  sudo tee -a "$ASOUND" > /dev/null <<'EOF'
+
+pcm.dmix_brumexa {
+    type dmix
+    ipc_key 1027
+    slave {
+        pcm "hw:0,0"
+        rate 48000
+        channels 1
+        format S16_LE
+        period_size 1024
+        buffer_size 8192
+    }
+}
+pcm.brumexa_speaker {
+    type plug
+    slave.pcm "dmix_brumexa"
+}
+EOF
+  ok "asound.conf configurado (device brumexa_speaker)"
+fi
+
+sudo cp scripts/brumexa-audio-keepalive.service /etc/systemd/system/brumexa-audio-keepalive.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now brumexa-audio-keepalive.service
+ok "Servicio de keepalive de audio activo — brumexa-audio-keepalive"
+
+# La app tiene que reproducir por brumexa_speaker (no el hw crudo) para que
+# el pop no vuelva — se fuerza en .env sí o sí, incluso si .env ya existía
+# de antes (ej. autoDetectAlsaDevices en server.js ya había guardado la
+# tarjeta cruda en una instalación previa a este fix — ver ese comentario
+# en server.js, se salta la autodetección si la variable ya está seteada).
+if grep -q "^SPEAKER_ALSA_DEVICE=" .env; then
+  sed -i "s|^SPEAKER_ALSA_DEVICE=.*|SPEAKER_ALSA_DEVICE=brumexa_speaker|" .env
+else
+  echo "SPEAKER_ALSA_DEVICE=brumexa_speaker" >> .env
+fi
+ok "SPEAKER_ALSA_DEVICE=brumexa_speaker en .env"
+
+# ─── 13. Arranque automático con PM2 ─────────────────────────────────────────
 echo ""
 read -p "¿Configurar arranque automático al boot con PM2? (s/n): " AUTOSTART
 if [ "$AUTOSTART" = "s" ] || [ "$AUTOSTART" = "S" ]; then
@@ -172,7 +230,7 @@ if [ "$AUTOSTART" = "s" ] || [ "$AUTOSTART" = "S" ]; then
   ok "PM2 configurado — el server arranca solo al boot"
 fi
 
-# ─── 13. Arranque temprano (scripts/boot.js) ─────────────────────────────────
+# ─── 14. Arranque temprano (scripts/boot.js) ─────────────────────────────────
 # Entre que prende la Pi y que PM2/Node terminan de bootear y llegan a
 # leds.init() dentro de server.js, pasan varios segundos sin ninguna luz. Este
 # servicio systemd corre ANTES que PM2 (DefaultDependencies=no + sysinit.target,

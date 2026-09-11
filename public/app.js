@@ -719,7 +719,7 @@ function getSelectedSpeakerDest() {
 }
 
 function getSelectedAlsaSpeaker() {
-  return state.alsaSpeakerDevice || 'plughw:0,0';
+  return state.alsaSpeakerDevice || 'brumexa_speaker';
 }
 
 // ============================================================
@@ -906,7 +906,7 @@ const PiNativeModule = {
 
     // Leer dispositivos ALSA elegidos en los dropdowns
     const micDevice     = getSelectedAlsaDevice() || 'plughw:0,0';
-    const speakerDevice = getSelectedAlsaSpeaker() || 'plughw:0,0';
+    const speakerDevice = getSelectedAlsaSpeaker() || 'brumexa_speaker';
     log(`[pi-native] mic=${micDevice}  speaker=${speakerDevice}`, 'info');
 
     const r = await fetch('/session/start', {
@@ -1720,7 +1720,7 @@ const DebugModule = {
       log(`Debug: platform=${cfg.server.platform} arch=${cfg.server.arch} isLinux=${isLinux} isRaspberry=${isRaspberry}`, 'info');
       if (cfg.micGain) state.micGain = cfg.micGain;
       state.alsaMicDevice     = cfg.alsaMicDevice     || 'default';
-      state.alsaSpeakerDevice = cfg.alsaSpeakerDevice || 'plughw:0,0';
+      state.alsaSpeakerDevice = cfg.alsaSpeakerDevice || 'brumexa_speaker';
     }
 
     // cfg.livekitUrl es dinámico — llega recién tras la primera conexión

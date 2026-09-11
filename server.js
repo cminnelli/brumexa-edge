@@ -174,7 +174,7 @@ app.get('/config', (_req, res) => {
     // en app.js). Default 'default'/'plughw:0,0': mismo fallback que ya
     // usaba el selector viejo cuando no había nada elegido.
     alsaMicDevice:      getEnvVal('MIC_ALSA_DEVICE')     || 'default',
-    alsaSpeakerDevice:  getEnvVal('SPEAKER_ALSA_DEVICE') || 'plughw:0,0',
+    alsaSpeakerDevice:  getEnvVal('SPEAKER_ALSA_DEVICE') || 'brumexa_speaker',
     server: {
       hostname: os.hostname(),
       platform: process.platform,
@@ -331,7 +331,7 @@ app.get('/setup/config', (_req, res) => {
     ledOnsetMs:         getVal('LED_ONSET_MS')          || '536',
     ledOffsetMs:        getVal('LED_OFFSET_MS')         || '965',
     alsaMicDevice:      getVal('MIC_ALSA_DEVICE')     || 'default',
-    alsaSpeakerDevice:  getVal('SPEAKER_ALSA_DEVICE') || 'plughw:0,0',
+    alsaSpeakerDevice:  getVal('SPEAKER_ALSA_DEVICE') || 'brumexa_speaker',
     // Vacío/no seteado = usa el hostname del dispositivo (ver lib/wifi.js) —
     // se manda tal cual (sin default acá) para que el front distinga "nunca
     // se tocó" (mostrar el hostname como placeholder) de "se puso a mano".
@@ -681,7 +681,7 @@ function killAplay() {
 // POST /recordings/play — espera que el aplay previo muera antes de iniciar uno nuevo
 app.post('/recordings/play', express.json(), async (req, res) => {
   const { filename, device } = req.body || {};
-  const playDevice = device || getEnvVal('SPEAKER_ALSA_DEVICE') || 'plughw:0,0';
+  const playDevice = device || getEnvVal('SPEAKER_ALSA_DEVICE') || 'brumexa_speaker';
   if (!filename || typeof filename !== 'string') {
     return res.status(400).json({ ok: false, error: 'filename requerido' });
   }
@@ -1041,7 +1041,7 @@ async function startSession({ micDevice, speakerDevice }) {
 // que resuelve POST /session/start más abajo).
 clapConnect.onDoubleClap(() => {
   const micDevice     = getEnvVal('MIC_ALSA_DEVICE')     || 'plughw:0,0';
-  const speakerDevice = getEnvVal('SPEAKER_ALSA_DEVICE') || 'plughw:0,0';
+  const speakerDevice = getEnvVal('SPEAKER_ALSA_DEVICE') || 'brumexa_speaker';
   startSession({ micDevice, speakerDevice }).catch(e => console.warn('[clap-connect] startSession:', e.message));
 });
 
@@ -1139,7 +1139,7 @@ app.post('/session/start', express.json(), async (req, res) => {
   console.log(`\n[session/start:${reqId}] ▶ BEGIN`);
   try {
     const micDevice     = req.body?.micDevice     || getEnvVal('MIC_ALSA_DEVICE')     || 'plughw:0,0';
-    const speakerDevice = req.body?.speakerDevice || getEnvVal('SPEAKER_ALSA_DEVICE') || 'plughw:0,0';
+    const speakerDevice = req.body?.speakerDevice || getEnvVal('SPEAKER_ALSA_DEVICE') || 'brumexa_speaker';
     console.log(`[session/start:${reqId}]   mic=${micDevice}  speaker=${speakerDevice}`);
 
     const result = await startSession({ micDevice, speakerDevice });

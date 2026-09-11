@@ -1,0 +1,15 @@
+[Unit]
+Description=Brumexa - mantiene el reloj I2S vivo (evita el pop del HAT al abrir mic/speaker)
+After=sound.target alsa-restore.service
+Wants=sound.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/aplay -D brumexa_speaker -f S16_LE -r 48000 -c 1 -t raw /dev/zero
+Restart=always
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
