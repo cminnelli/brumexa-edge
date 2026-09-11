@@ -194,9 +194,12 @@ EOF
   ok "asound.conf configurado (device brumexa_speaker)"
 fi
 
-sudo cp scripts/brumexa-audio-keepalive.service /etc/systemd/system/brumexa-audio-keepalive.service
+sed -e "s|^User=brumelab|User=${CURRENT_USER}|" \
+    scripts/brumexa-audio-keepalive.service \
+  | sudo tee /etc/systemd/system/brumexa-audio-keepalive.service > /dev/null
 sudo systemctl daemon-reload
-sudo systemctl enable --now brumexa-audio-keepalive.service
+sudo systemctl enable brumexa-audio-keepalive.service
+sudo systemctl restart brumexa-audio-keepalive.service
 ok "Servicio de keepalive de audio activo — brumexa-audio-keepalive"
 
 # La app tiene que reproducir por brumexa_speaker (no el hw crudo) para que
@@ -222,15 +225,15 @@ ok "SPEAKER_ALSA_DEVICE=brumexa_speaker en .env"
 echo ""
 info "Configurando permisos para /instalacion (sudoers acotado)..."
 TEE_BIN=$(command -v tee)
-CP_BIN=$(command -v cp)
 SYSTEMCTL_BIN=$(command -v systemctl)
 SUDOERS_TMP=$(mktemp)
 cat > "$SUDOERS_TMP" <<EOF
 # Brumexa — /instalacion (ver lib/system-fixes.js). Comandos exactos, no ALL.
 ${CURRENT_USER} ALL=(root) NOPASSWD: ${TEE_BIN} -a /etc/asound.conf
-${CURRENT_USER} ALL=(root) NOPASSWD: ${CP_BIN} ${REPO_DIR}/scripts/brumexa-audio-keepalive.service /etc/systemd/system/brumexa-audio-keepalive.service
+${CURRENT_USER} ALL=(root) NOPASSWD: ${TEE_BIN} /etc/systemd/system/brumexa-audio-keepalive.service
 ${CURRENT_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} daemon-reload
-${CURRENT_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} enable --now brumexa-audio-keepalive
+${CURRENT_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} enable brumexa-audio-keepalive
+${CURRENT_USER} ALL=(root) NOPASSWD: ${SYSTEMCTL_BIN} restart brumexa-audio-keepalive
 EOF
 if sudo visudo -cf "$SUDOERS_TMP" > /dev/null; then
   sudo cp "$SUDOERS_TMP" /etc/sudoers.d/brumexa-system-fixes

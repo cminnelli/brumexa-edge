@@ -5,6 +5,7 @@ Wants=sound.target
 
 [Service]
 Type=simple
+User=brumelab
 ExecStart=/usr/bin/aplay -D brumexa_speaker -f S16_LE -r 48000 -c 1 -t raw /dev/zero
 Restart=always
 RestartSec=2
