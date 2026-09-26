@@ -84,6 +84,7 @@ const ragAuth                                          = require('./lib/rag-auth
 const { requestRoomToken, setCredentials: setTokenCredentials } = require('./lib/rag-token');
 const clapConnect                                      = require('./lib/clap-connect'); // CLAP-CONNECT — pedido puntual para un evento, ver lib/clap-connect.js para sacarlo
 const { POP_SETTLE_MS: MIC_MONITOR_WARMUP_MS }         = require('./lib/mic-calibration');
+const wakewordGate                                     = require('./lib/wakeword-gate'); // WAKEWORD — detecta "ei brúmexa", ver lib/wakeword-gate.js
 
 const {
   PORT = 3000,
@@ -963,6 +964,10 @@ function startMicMonitor() {
     // en pleno silencio.
     if (Date.now() - startedAt < MIC_MONITOR_WARMUP_MS) return;
 
+    // WAKEWORD — necesita el PCM crudo de cada chunk (no el level, que acá
+    // abajo se calcula cada ~100ms), por eso va afuera de ese throttle.
+    wakewordGate.feed(chunk);
+
     // Mismo gain que usa la sesión real de LiveKit (_publishMic en
     // lib/livekit-session.js) — sin esto, el nivel en reposo quedaba fijo a
     // la señal cruda del mic, sin importar qué gain configures.
@@ -1048,6 +1053,14 @@ clapConnect.onDoubleClap(() => {
   const micDevice     = getEnvVal('MIC_ALSA_DEVICE')     || 'plughw:0,0';
   const speakerDevice = getEnvVal('SPEAKER_ALSA_DEVICE') || 'brumexa_speaker';
   startSession({ micDevice, speakerDevice }).catch(e => console.warn('[clap-connect] startSession:', e.message));
+});
+
+// WAKEWORD — mismo criterio que CLAP-CONNECT: dispara el mismo startSession()
+// que usa el botón "Conectar", al detectar "ei brúmexa".
+wakewordGate.onWake(() => {
+  const micDevice     = getEnvVal('MIC_ALSA_DEVICE')     || 'plughw:0,0';
+  const speakerDevice = getEnvVal('SPEAKER_ALSA_DEVICE') || 'brumexa_speaker';
+  startSession({ micDevice, speakerDevice }).catch(e => console.warn('[wakeword-gate] startSession:', e.message));
 });
 
 let _sessionConnectedAt = 0;
