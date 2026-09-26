@@ -750,6 +750,10 @@ app.get('/diag/audio', (_req, res) => {
     amixer_Master:  run('amixer sget Master'),
     amixer_controls:run('amixer scontrols'),
     asound_state:   run('cat /proc/asound/cards'),
+    mem_total_mb:   Math.round(os.totalmem() / 1024 / 1024),
+    mem_free_mb:    Math.round(os.freemem() / 1024 / 1024),
+    node_arch:      process.arch,        // arquitectura del build de Node (arm vs arm64)
+    os_arch:        run('uname -m'),     // arquitectura real del kernel/OS (armv7l vs aarch64)
   });
 });
 
