@@ -1030,12 +1030,34 @@ const { runCalibration, getLastCalibration, runBootCalibrationIfNeeded } = creat
 // de sobra para un pedido de token + conexión normal.
 const CONNECT_TIMEOUT_MS = 30000;
 
+// Un fallo puntual (backend con un hipo, red que titubeó) no debería mandar
+// derecho al rojo de error — reintentar una vez más suele alcanzar. Recién
+// si los 2 intentos fallan se muestra el error de verdad.
+const MAX_CONNECT_ATTEMPTS = 2;
+const RETRY_DELAY_MS = 800;
+
 function _withTimeout(promise, ms, message) {
   let timer;
   const timeout = new Promise((_, reject) => {
     timer = setTimeout(() => reject(new Error(message)), ms);
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function _connectOnce({ micDevice, speakerDevice }) {
+  const { token, roomName, serverUrl: url } = await _withTimeout(
+    requestRoomToken(), CONNECT_TIMEOUT_MS, 'Timeout pidiendo token (30s)'
+  );
+  lastKnownLivekitUrl = url;
+
+  await _withTimeout(
+    lkSession.start({ token, url, roomName, micDevice, speakerDevice }),
+    CONNECT_TIMEOUT_MS, 'Timeout conectando a LiveKit (30s)'
+  );
+
+  return { status: lkSession.getStatus(), url, roomName };
 }
 
 // ─── startSession(): la misma lógica que corría inline en POST /session/start,
@@ -1054,28 +1076,31 @@ async function startSession({ micDevice, speakerDevice }) {
   // antes de que lkSession tome el mic más abajo.
   await stopMicMonitor();
   _agentConfirmed = false;
-  leds.connecting();  // cometa cian mientras se pide token y conecta a LiveKit
+  leds.connecting();  // cometa cian mientras se pide token y conecta a LiveKit — se mantiene durante los reintentos, sin cortes visuales
 
-  try {
-    const { token, roomName, serverUrl: url } = await _withTimeout(
-      requestRoomToken(), CONNECT_TIMEOUT_MS, 'Timeout pidiendo token (30s)'
-    );
-    lastKnownLivekitUrl = url;
-
-    await _withTimeout(
-      lkSession.start({ token, url, roomName, micDevice, speakerDevice }),
-      CONNECT_TIMEOUT_MS, 'Timeout conectando a LiveKit (30s)'
-    );
-
-    return { status: lkSession.getStatus(), url, roomName };
-  } catch (e) {
-    // Sin esto, un fallo acá (token rechazado, timeout, lo que sea) dejaba
-    // las luces en "conectando" para siempre y el mic idle nunca se
-    // reanudaba — visto en producción de verdad, no es hipotético.
-    leds.brumexaError(4000);
-    startMicMonitor();
-    throw e;
+  let lastError;
+  for (let attempt = 1; attempt <= MAX_CONNECT_ATTEMPTS; attempt++) {
+    try {
+      return await _connectOnce({ micDevice, speakerDevice });
+    } catch (e) {
+      lastError = e;
+      console.warn(`[session/start] intento ${attempt}/${MAX_CONNECT_ATTEMPTS} falló:`, e.message);
+      // Si el intento fallido alcanzó a dejar la sesión a medio armar, hay
+      // que soltarla antes de reintentar — lkSession.start() rechaza de
+      // nuevo si ya está "activa".
+      if (lkSession.isActive()) { try { await lkSession.stop('retry'); } catch {} }
+      if (attempt < MAX_CONNECT_ATTEMPTS) await _sleep(RETRY_DELAY_MS);
+    }
   }
+
+  // Los MAX_CONNECT_ATTEMPTS intentos fallaron — sin esto, un fallo acá
+  // (token rechazado, timeout, lo que sea) dejaba las luces en "conectando"
+  // para siempre y el mic idle nunca se reanudaba — visto en producción de
+  // verdad, no es hipotético. brumexaError() ya hace la vuelta suave sola
+  // (pulso rojo, después funde a la respiración normal).
+  leds.brumexaError(4000);
+  startMicMonitor();
+  throw lastError;
 }
 
 // CLAP-CONNECT — dispara el mismo startSession() que usa el botón "Conectar",
