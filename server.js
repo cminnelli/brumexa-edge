@@ -450,6 +450,15 @@ app.post('/setup/config', express.json(), async (req, res) => {
     wakewordEnabled, // WAKEWORD
     apSsid, apPass,
   } = req.body || {};
+
+  // Log genérico de qué se pidió cambiar — sin esto, la única forma de saber
+  // qué configuración se tocó era mirar el .env a mano. Oculta apiKey/apPass
+  // (no queremos esos valores sueltos en los logs).
+  const _logBody = { ...req.body };
+  if (_logBody.apiKey !== undefined) _logBody.apiKey = '(oculta)';
+  if (_logBody.apPass !== undefined) _logBody.apPass = '(oculta)';
+  console.log('[setup/config] cambios recibidos:', JSON.stringify(_logBody));
+
   let content = '';
   try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
 
@@ -535,7 +544,11 @@ app.post('/setup/config', express.json(), async (req, res) => {
     if (notificationSoundsEnabled !== undefined) soundEffects.setSoundsEnabled(notificationSoundsEnabled !== 'false' && notificationSoundsEnabled !== false);
     if (notificationVolume        !== undefined) { const v = parseFloat(notificationVolume); if (!isNaN(v)) soundEffects.setNotificationGain(v); }
     if (clapConnectEnabled        !== undefined) clapConnect.setEnabled(clapConnectEnabled !== 'false' && clapConnectEnabled !== false); // CLAP-CONNECT
-    if (wakewordEnabled           !== undefined) wakewordGate.setEnabled(wakewordEnabled === 'true' || wakewordEnabled === true); // WAKEWORD
+    if (wakewordEnabled           !== undefined) { // WAKEWORD
+      const on = wakewordEnabled === 'true' || wakewordEnabled === true;
+      wakewordGate.setEnabled(on);
+      console.log(`[wakeword-gate] toggle → ${on ? 'ACTIVADO' : 'desactivado'} desde /configuracion`);
+    }
     if (micPrerollMs         !== undefined) { const v = parseFloat(micPrerollMs);         if (!isNaN(v)) lkSession.setMicPrerollMs(v); }
 
     res.json({ ok: true, restarting: false, apSsid: apSsidResult, apPass: apPassResult });
