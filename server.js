@@ -38,6 +38,41 @@ setInterval(() => {
   }
 }, 16);
 
+// ─── Instrumentación: QUÉ bloqueó el hilo, no solo QUE algo lo bloqueó ──────
+// El monitor de arriba solo sabe que hubo un atraso — nunca dice la causa.
+// execSync (correr un comando de shell) y las escrituras síncronas a disco
+// (fs.writeFileSync, ej. guardar el .env) son las dos formas más comunes de
+// bloquear el hilo en este código. Parcheados ACÁ ARRIBA DE TODO — antes de
+// que cualquier lib/*.js haga su propio require('child_process')/require('fs')
+// — porque Node cachea el módulo: el resto de la app termina usando estas
+// mismas versiones envueltas sin que haya que tocar cada archivo.
+const SLOW_MS = 20; // mismo umbral de "se nota" que ya usa el monitor de arriba
+{
+  const cp = require('child_process');
+  const _execSync = cp.execSync;
+  cp.execSync = function (cmd, opts) {
+    const t0 = Date.now();
+    try {
+      return _execSync.call(cp, cmd, opts);
+    } finally {
+      const ms = Date.now() - t0;
+      if (ms > SLOW_MS) console.warn(`[event-loop] execSync lento (${ms}ms): ${cmd}`);
+    }
+  };
+
+  const fsSync = require('fs');
+  const _writeFileSync = fsSync.writeFileSync;
+  fsSync.writeFileSync = function (file, data, opts) {
+    const t0 = Date.now();
+    try {
+      return _writeFileSync.call(fsSync, file, data, opts);
+    } finally {
+      const ms = Date.now() - t0;
+      if (ms > SLOW_MS) console.warn(`[event-loop] writeFileSync lento (${ms}ms): ${file}`);
+    }
+  };
+}
+
 const http    = require('http');
 const express = require('express');
 const path    = require('path');
