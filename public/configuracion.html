@@ -471,6 +471,15 @@
             <p class="field-hint">Mientras está en reposo, escucha el mic buscando dos aplausos seguidos y conecta solo — pensado para un evento puntual. Apagalo si detecta de más con ruido de fondo.</p>
           </div>
 
+          <!-- WAKEWORD — apagado por default, ver lib/wakeword-gate.js -->
+          <div class="field">
+            <label class="field-label" style="display:flex; align-items:center; gap:8px; cursor:pointer">
+              <input type="checkbox" id="inp-wakeword-enabled" style="width:auto" />
+              Conectar diciendo "ei brúmexa" (experimental)
+            </label>
+            <p class="field-hint">Detector de wake word en prueba — puede consumir bastante procesador en la Pi. Dejalo apagado salvo que estés probándolo activamente.</p>
+          </div>
+
           <div>
             <label class="field-label" for="sel-alsa-mic">Dispositivo de micrófono</label>
             <select id="sel-alsa-mic" class="select-input"></select>
@@ -876,6 +885,7 @@
         document.getElementById('inp-mic-gate-enabled').checked = cfg.micGateEnabled !== 'false';
         document.getElementById('inp-notification-sounds-enabled').checked = cfg.notificationSoundsEnabled !== 'false';
         document.getElementById('inp-clap-connect-enabled').checked = cfg.clapConnectEnabled !== 'false'; // CLAP-CONNECT
+        document.getElementById('inp-wakeword-enabled').checked = cfg.wakewordEnabled === 'true'; // WAKEWORD
 
         micEnabledState = status.micEnabled !== false;
         updateMicButton();
@@ -1682,6 +1692,17 @@
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ clapConnectEnabled: e.target.checked }),
+      });
+    } catch {}
+  });
+
+  // WAKEWORD — ver lib/wakeword-gate.js
+  document.getElementById('inp-wakeword-enabled').addEventListener('change', async (e) => {
+    try {
+      await fetch('/setup/config', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ wakewordEnabled: e.target.checked }),
       });
     } catch {}
   });

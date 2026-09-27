@@ -325,6 +325,7 @@ app.get('/setup/config', (_req, res) => {
     notificationSoundsEnabled: getVal('NOTIFICATION_SOUNDS_ENABLED') || 'true',
     notificationVolume:        getVal('NOTIFICATION_VOLUME')         || '1.0',
     clapConnectEnabled: getVal('CLAP_CONNECT_ENABLED') || 'true', // CLAP-CONNECT
+    wakewordEnabled: getVal('WAKEWORD_ENABLED') || 'false', // WAKEWORD — apagado por default, ver lib/wakeword-gate.js
     brumexaColor: getVal('BRUMEXA_COLOR') || 'negro',
     // Ritmo de los LEDS — ver lib/leds.js (setBreathePeriodMs, setHangoverMs,
     // setOnsetDurationMs, setOffsetDurationMs) para el porqué de cada uno.
@@ -446,6 +447,7 @@ app.post('/setup/config', express.json(), async (req, res) => {
     micGateEnabled, micGateAttenuationDb, micPrerollMs,
     notificationSoundsEnabled, notificationVolume,
     clapConnectEnabled, // CLAP-CONNECT
+    wakewordEnabled, // WAKEWORD
     apSsid, apPass,
   } = req.body || {};
   let content = '';
@@ -489,6 +491,7 @@ app.post('/setup/config', express.json(), async (req, res) => {
     if (notificationSoundsEnabled !== undefined) content = setEnvLine(content, 'NOTIFICATION_SOUNDS_ENABLED', notificationSoundsEnabled);
     if (notificationVolume        !== undefined) content = setEnvLine(content, 'NOTIFICATION_VOLUME',         notificationVolume);
     if (clapConnectEnabled        !== undefined) content = setEnvLine(content, 'CLAP_CONNECT_ENABLED',        clapConnectEnabled); // CLAP-CONNECT
+    if (wakewordEnabled           !== undefined) content = setEnvLine(content, 'WAKEWORD_ENABLED',             wakewordEnabled); // WAKEWORD
     if (micPrerollMs         !== undefined) content = setEnvLine(content, 'MIC_PREROLL_MS',           micPrerollMs);
     // Vacío es un valor válido acá (= "volver a usar el hostname") — se guarda
     // tal cual, no se pisa con un default. Solo si pasó la validación de arriba
@@ -532,6 +535,7 @@ app.post('/setup/config', express.json(), async (req, res) => {
     if (notificationSoundsEnabled !== undefined) soundEffects.setSoundsEnabled(notificationSoundsEnabled !== 'false' && notificationSoundsEnabled !== false);
     if (notificationVolume        !== undefined) { const v = parseFloat(notificationVolume); if (!isNaN(v)) soundEffects.setNotificationGain(v); }
     if (clapConnectEnabled        !== undefined) clapConnect.setEnabled(clapConnectEnabled !== 'false' && clapConnectEnabled !== false); // CLAP-CONNECT
+    if (wakewordEnabled           !== undefined) wakewordGate.setEnabled(wakewordEnabled === 'true' || wakewordEnabled === true); // WAKEWORD
     if (micPrerollMs         !== undefined) { const v = parseFloat(micPrerollMs);         if (!isNaN(v)) lkSession.setMicPrerollMs(v); }
 
     res.json({ ok: true, restarting: false, apSsid: apSsidResult, apPass: apPassResult });
