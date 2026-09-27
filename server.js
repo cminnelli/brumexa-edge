@@ -1024,6 +1024,20 @@ const { runCalibration, getLastCalibration, runBootCalibrationIfNeeded } = creat
   startMicMonitor, stopMicMonitor,
 });
 
+// Si pedir el token o conectar a LiveKit se cuelga (red lenta, backend que
+// no responde nunca en vez de fallar rápido), antes se quedaba en
+// "conectando" para siempre — ni error, ni vuelta a reposo. 30s es tiempo
+// de sobra para un pedido de token + conexión normal.
+const CONNECT_TIMEOUT_MS = 30000;
+
+function _withTimeout(promise, ms, message) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 // ─── startSession(): la misma lógica que corría inline en POST /session/start,
 // separada para más claridad — hoy la usa solo esa ruta HTTP ────────────────
 async function startSession({ micDevice, speakerDevice }) {
@@ -1042,12 +1056,26 @@ async function startSession({ micDevice, speakerDevice }) {
   _agentConfirmed = false;
   leds.connecting();  // cometa cian mientras se pide token y conecta a LiveKit
 
-  const { token, roomName, serverUrl: url } = await requestRoomToken();
-  lastKnownLivekitUrl = url;
+  try {
+    const { token, roomName, serverUrl: url } = await _withTimeout(
+      requestRoomToken(), CONNECT_TIMEOUT_MS, 'Timeout pidiendo token (30s)'
+    );
+    lastKnownLivekitUrl = url;
 
-  await lkSession.start({ token, url, roomName, micDevice, speakerDevice });
+    await _withTimeout(
+      lkSession.start({ token, url, roomName, micDevice, speakerDevice }),
+      CONNECT_TIMEOUT_MS, 'Timeout conectando a LiveKit (30s)'
+    );
 
-  return { status: lkSession.getStatus(), url, roomName };
+    return { status: lkSession.getStatus(), url, roomName };
+  } catch (e) {
+    // Sin esto, un fallo acá (token rechazado, timeout, lo que sea) dejaba
+    // las luces en "conectando" para siempre y el mic idle nunca se
+    // reanudaba — visto en producción de verdad, no es hipotético.
+    leds.brumexaError(4000);
+    startMicMonitor();
+    throw e;
+  }
 }
 
 // CLAP-CONNECT — dispara el mismo startSession() que usa el botón "Conectar",
