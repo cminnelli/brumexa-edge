@@ -20,11 +20,19 @@ const EMBEDDING_STRIDE = 8;  // paso entre ventanas
 const MIN_EMBEDDINGS = 16;   // cuántos embeddings necesita el clasificador
 const MEL_BINS = 32;
 
+// Sin esto, onnxruntime usa TODOS los núcleos del chip para cada corrida —
+// en una Pi Zero 2W (4 núcleos) eso deja al hilo principal (audio, LEDs,
+// HTTP) sin margen real de CPU aunque el modelo corra en un worker thread
+// aparte. Un solo núcleo alcanza de sobra para este modelo chico, y deja el
+// resto libre para todo lo demás. Mismo criterio que ya usa la versión
+// Python de referencia (livekit-wakeword) al cargar el clasificador ONNX.
+const SESSION_OPTIONS = { executionMode: 'sequential', intraOpNumThreads: 1, interOpNumThreads: 1 };
+
 class WakeWordModel {
   async load({ melPath, embeddingPath, classifierPath }) {
-    this._mel = await ort.InferenceSession.create(melPath);
-    this._embedding = await ort.InferenceSession.create(embeddingPath);
-    this._classifier = await ort.InferenceSession.create(classifierPath);
+    this._mel = await ort.InferenceSession.create(melPath, SESSION_OPTIONS);
+    this._embedding = await ort.InferenceSession.create(embeddingPath, SESSION_OPTIONS);
+    this._classifier = await ort.InferenceSession.create(classifierPath, SESSION_OPTIONS);
   }
 
   // audioInt16: Int16Array de ~2 segundos a 16kHz. El modelo es "stateless"
