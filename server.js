@@ -1108,6 +1108,21 @@ async function _connectOnce({ micDevice, speakerDevice }) {
   return { status: lkSession.getStatus(), url, roomName };
 }
 
+// Cronómetro de mano para acorralar bloqueos puntuales en el tramo
+// detección→conectando (ver instrumentación de execSync/writeFileSync más
+// arriba — esto es lo mismo pero para el camino específico de arrancar una
+// sesión, que no pasa por ninguna de esas dos cosas). Solo loguea pasos que
+// de verdad tardaron algo.
+function _stepTimer(label) {
+  let last = process.hrtime.bigint();
+  return function step(stepLabel) {
+    const now = process.hrtime.bigint();
+    const ms = Number(now - last) / 1e6;
+    last = now;
+    if (ms > 8) console.warn(`[startSession] "${label}" → "${stepLabel}" tardó ${ms.toFixed(1)}ms`);
+  };
+}
+
 // ─── startSession(): la misma lógica que corría inline en POST /session/start,
 // separada para más claridad — hoy la usa solo esa ruta HTTP ────────────────
 async function startSession({ micDevice, speakerDevice }) {
@@ -1117,18 +1132,25 @@ async function startSession({ micDevice, speakerDevice }) {
     throw err;
   }
 
+  const step = _stepTimer('inicio');
+
   // Frenar el monitor de mic ambiente ANTES de mostrar el cometa: si sigue
   // vivo durante el pedido de token (red, puede tardar), cualquier ruido
   // ambiente dispara leds.speaking() y pisa la animación de "conectando" con
   // ámbar. Frenarlo acá además le da más margen a ALSA para quedar libre
   // antes de que lkSession tome el mic más abajo.
   await stopMicMonitor();
+  step('stopMicMonitor');
   _agentConfirmed = false;
   leds.connecting();  // cometa cian mientras se pide token y conecta a LiveKit — se mantiene durante los reintentos, sin cortes visuales
+  step('leds.connecting');
 
   let lastError;
   for (let attempt = 1; attempt <= MAX_CONNECT_ATTEMPTS; attempt++) {
     try {
+      // OJO: _connectOnce espera de red (fetch a RAG API + LiveKit) — un
+      // tiempo largo acá es esperar, no bloquear. Por eso no se lo mide con
+      // step() como a lo de arriba (daría falsos positivos todo el tiempo).
       return await _connectOnce({ micDevice, speakerDevice });
     } catch (e) {
       lastError = e;
