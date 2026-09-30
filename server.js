@@ -1117,7 +1117,27 @@ function startMicMonitor() {
       last = Date.now();
     }
   });
-  proc.on('error', () => {});
+  // Antes: proc.on('error', () => {}) no hacía nada. Si arecord fallaba al
+  // abrir el device (ej. "device or resource busy" — una carrera típica
+  // justo después de que la sesión anterior soltó el mic) o moría por
+  // cualquier otro motivo, _micMonitor quedaba apuntando a un proceso
+  // muerto para siempre: monitorActive seguía reportando true en
+  // /diag/mic-level, pero ningún chunk volvía a llegar — ni al wake word,
+  // ni al nivel de /diagnostico — en silencio total, sin ningún log.
+  // Confirmado en producción: ~6 minutos de audio congelado con
+  // "monitorActive":true. Mismo patrón que el fix de _busy en
+  // wakeword-gate.js — limpiar el estado y reintentar, no tragarse el error.
+  const onDown = (reason) => {
+    if (_micMonitor !== proc) return; // ya se limpió por otra vía (stop manual, sesión que arrancó, etc.)
+    _micMonitor = null;
+    console.warn(`[mic-monitor] ✘ se cayó (${reason}) — reintentando en 2s`);
+    setTimeout(() => {
+      if (!_micMonitor && !lkSession.isActive()) startMicMonitor();
+    }, 2000);
+  };
+  proc.on('error', e => onDown(`error: ${e.message}`));
+  proc.on('close', code => onDown(`exit code=${code}`));
+
   _micMonitor = proc;
   console.log('[mic-monitor] iniciado');
 }
