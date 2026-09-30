@@ -1616,11 +1616,16 @@
   });
 
   // ─── Presets de credenciales ──────────────────────────────────────────────
-  // Dinámico: solo se muestran los slots que tienen algo guardado — máximo 3,
-  // pero si hay menos, no se ven filas vacías. "+ Guardar..." aparece
-  // mientras quede algún slot libre y crea uno nuevo (pide el nombre con un
-  // prompt, no hace falta un input de texto permanente en pantalla).
+  // Dinámico: solo se muestran los slots que tienen algo guardado — máximo 3.
+  // Todo inline, nada de prompt()/confirm()/alert() nativos del navegador —
+  // "Nuevo preset" abre un input ahí mismo, y borrar pide confirmación con
+  // un "¿Seguro? Sí/No" que reemplaza el botón en el momento, en vez de un
+  // cartel del sistema operativo encima de la página.
   function _presetIsEmpty(p) { return !(p.name || p.ragApiUrl || p.deviceId || p.apiKey); }
+
+  let _presetAdding        = false; // mostrando el input de "nombre" para agregar uno
+  let _presetConfirmDelete = null;  // slot esperando el "¿Seguro?", o null
+  let _presetError         = '';
 
   async function loadCredsPresets() {
     const list = document.getElementById('creds-presets-list');
@@ -1632,24 +1637,51 @@
       return;
     }
 
-    const filled     = presets.filter(p => !_presetIsEmpty(p));
-    const freeSlot    = presets.find(_presetIsEmpty);
+    const filled   = presets.filter(p => !_presetIsEmpty(p));
+    const freeSlot = presets.find(_presetIsEmpty);
 
     const rowsHtml = filled.length
-      ? filled.map(p => `
-          <div class="field-row" style="align-items:center; gap:6px; margin:0">
-            <span style="flex:1; font-size:12.5px; color:var(--text2)">${esc(p.name) || `(sin nombre)`}</span>
-            <button class="btn-ghost" type="button" style="flex:none" data-preset-use="${p.slot}">Usar</button>
-            <button class="btn-ghost" type="button" style="flex:none; color:var(--danger)" data-preset-delete="${p.slot}" title="Borrar">✕</button>
-          </div>
-        `).join('')
+      ? filled.map(p => {
+          if (String(p.slot) === String(_presetConfirmDelete)) {
+            return `
+              <div class="field-row" style="align-items:center; gap:6px; margin:0">
+                <span style="flex:1; font-size:12.5px; color:var(--danger)">¿Borrar "${esc(p.name) || 'sin nombre'}"?</span>
+                <button class="btn-ghost" type="button" style="flex:none; color:var(--danger); border-color:var(--danger)" data-preset-confirm-delete="${p.slot}">Sí, borrar</button>
+                <button class="btn-ghost" type="button" style="flex:none" data-preset-cancel-delete="${p.slot}">Cancelar</button>
+              </div>`;
+          }
+          return `
+            <div class="field-row" style="align-items:center; gap:6px; margin:0">
+              <span style="flex:1; font-size:12.5px; color:var(--text2)">${esc(p.name) || '(sin nombre)'}</span>
+              <button class="btn-ghost" type="button" style="flex:none" data-preset-use="${p.slot}">Usar</button>
+              <button class="btn-ghost" type="button" style="flex:none; color:var(--muted)" data-preset-delete="${p.slot}" title="Borrar">✕</button>
+            </div>`;
+        }).join('')
       : '<div class="field-hint" style="margin:0">Todavía no guardaste ningún preset.</div>';
 
-    const addHtml = freeSlot
-      ? `<button class="btn-ghost" type="button" id="btn-preset-add" style="margin-top:6px">+ Guardar credenciales actuales como preset</button>`
-      : '<div class="field-hint" style="margin-top:6px">Ya tenés los 3 slots usados — borrá uno para guardar otro.</div>';
+    let addHtml;
+    if (!freeSlot) {
+      addHtml = '<div class="field-hint" style="margin-top:6px">Ya tenés los 3 slots usados — borrá uno para guardar otro.</div>';
+    } else if (_presetAdding) {
+      addHtml = `
+        <div class="field-row" style="align-items:center; gap:6px; margin-top:6px">
+          <input type="text" class="setup-input" style="flex:1" id="inp-preset-new-name"
+                 placeholder="Nombre (ej. Local, Producción)" autocomplete="off" spellcheck="false" />
+          <button class="btn-ghost btn-ghost--accent" type="button" style="flex:none" id="btn-preset-confirm-add">Guardar</button>
+          <button class="btn-ghost" type="button" style="flex:none" id="btn-preset-cancel-add">Cancelar</button>
+        </div>`;
+    } else {
+      addHtml = `<button class="btn-ghost" type="button" id="btn-preset-add" style="margin-top:6px">+ Nuevo preset</button>`;
+    }
 
-    list.innerHTML = rowsHtml + addHtml;
+    const errorHtml = _presetError
+      ? `<div class="flow-note bad" style="margin-top:6px">${esc(_presetError)}</div>`
+      : '';
+
+    list.innerHTML = rowsHtml + addHtml + errorHtml;
+    _presetError = ''; // se muestra una vez, no se re-imprime en cada render
+
+    if (_presetAdding) document.getElementById('inp-preset-new-name')?.focus();
 
     list.querySelectorAll('[data-preset-use]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -1663,12 +1695,17 @@
       });
     });
 
+    list.querySelectorAll('[data-preset-delete]').forEach(btn => {
+      btn.addEventListener('click', () => { _presetConfirmDelete = btn.dataset.presetDelete; loadCredsPresets(); });
+    });
+    list.querySelectorAll('[data-preset-cancel-delete]').forEach(btn => {
+      btn.addEventListener('click', () => { _presetConfirmDelete = null; loadCredsPresets(); });
+    });
     // Borrar = guardar el mismo slot con todo vacío — no hace falta un
     // endpoint aparte, el POST ya sabe sobreescribir.
-    list.querySelectorAll('[data-preset-delete]').forEach(btn => {
+    list.querySelectorAll('[data-preset-confirm-delete]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const slot = btn.dataset.presetDelete;
-        if (!confirm('¿Borrar este preset? No se puede deshacer.')) return;
+        const slot = btn.dataset.presetConfirmDelete;
         btn.disabled = true;
         try {
           const res = await fetch('/setup/creds-presets', {
@@ -1677,19 +1714,21 @@
             body: JSON.stringify({ slot, name: '', ragApiUrl: '', deviceId: '', apiKey: '' }),
           }).then(r => r.json());
           if (!res.ok) throw new Error(res.error || 'error desconocido');
-          await loadCredsPresets();
+          _presetConfirmDelete = null;
         } catch (e) {
-          btn.disabled = false;
-          alert(`No se pudo borrar el preset: ${e.message}`);
+          _presetError = `No se pudo borrar: ${e.message}`;
         }
+        loadCredsPresets();
       });
     });
 
-    document.getElementById('btn-preset-add')?.addEventListener('click', async () => {
+    document.getElementById('btn-preset-add')?.addEventListener('click', () => { _presetAdding = true; loadCredsPresets(); });
+    document.getElementById('btn-preset-cancel-add')?.addEventListener('click', () => { _presetAdding = false; loadCredsPresets(); });
+    document.getElementById('btn-preset-confirm-add')?.addEventListener('click', async () => {
       if (!freeSlot) return; // no debería poder pasar (el botón no aparece sin slot libre), por las dudas
-      const name = prompt('Nombre para este preset (ej. "Local", "Producción"):');
-      if (name === null) return; // canceló
-      const btn = document.getElementById('btn-preset-add');
+      const nameInput = document.getElementById('inp-preset-new-name');
+      const name = nameInput.value.trim();
+      const btn = document.getElementById('btn-preset-confirm-add');
       btn.disabled = true;
       try {
         const res = await fetch('/setup/creds-presets', {
@@ -1697,18 +1736,22 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             slot: freeSlot.slot,
-            name: name.trim(),
+            name,
             ragApiUrl: document.getElementById('inp-rag-url').value.trim(),
             deviceId:  document.getElementById('inp-device-id').value.trim(),
             apiKey:    document.getElementById('inp-api-key').value.trim(),
           }),
         }).then(r => r.json());
         if (!res.ok) throw new Error(res.error || 'error desconocido');
-        await loadCredsPresets();
+        _presetAdding = false;
       } catch (e) {
-        btn.disabled = false;
-        alert(`No se pudo guardar el preset: ${e.message}`);
+        _presetError = `No se pudo guardar: ${e.message}`;
       }
+      loadCredsPresets();
+    });
+    // Enter en el input = mismo que tocar "Guardar".
+    document.getElementById('inp-preset-new-name')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('btn-preset-confirm-add')?.click();
     });
   }
   loadCredsPresets();
