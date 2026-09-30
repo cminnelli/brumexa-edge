@@ -172,7 +172,7 @@
       <div class="field">
         <label class="field-label" for="inp-api-key">Clave de acceso (API key)</label>
         <div class="setup-token-row">
-          <input type="password" id="inp-api-key" class="setup-input" placeholder="brx_..." autocomplete="off" spellcheck="false" />
+          <input type="password" id="inp-api-key" name="brumexa-device-secret" class="setup-input" placeholder="brx_..." autocomplete="new-password" spellcheck="false" data-lpignore="true" data-1p-ignore="true" />
           <button class="btn-ghost" id="btn-toggle-key" type="button" title="Mostrar/ocultar">👁</button>
           <button class="btn-ghost" id="btn-copy-key" type="button" title="Copiar">⧉</button>
         </div>
@@ -1556,6 +1556,18 @@
   // ─── Guardado segmentado — cada card manda solo SUS campos; el backend
   // (/setup/config) aplica en caliente lo que puede y solo reinicia si
   // cambió el color de la carcasa (ver comentario en server.js). ──────────
+  // Mensajes de resultado que se borran solos — antes quedaban pegados en
+  // pantalla para siempre hasta la próxima acción, lo que se sentía "sucio"
+  // (pedido explícito: "los alerts... no se borran"). 4s alcanza para leerlo
+  // sin que se sienta apurado. Cancela el timer anterior si hay uno
+  // (guardado en el propio elemento) para no pisarse si se dispara dos veces
+  // seguidas.
+  function flash(el, html, ms = 4000) {
+    el.innerHTML = html;
+    clearTimeout(el._flashTimer);
+    el._flashTimer = setTimeout(() => { el.innerHTML = ''; }, ms);
+  }
+
   async function saveFields(body, { btn, result, okMsg, restartLabel }) {
     const restoreText = btn.textContent;
     btn.disabled = true;
@@ -1573,11 +1585,11 @@
         result.innerHTML = `<div class="flow-note ok">✔ Guardado — ${restartLabel || 'reiniciando el servidor'}…</div>`;
         pollServerBack(result, btn, restoreText);
       } else {
-        result.innerHTML = `<div class="flow-note ok">✔ ${okMsg || 'Guardado y aplicado, sin reiniciar'}</div>`;
+        flash(result, `<div class="flow-note ok">✔ ${okMsg || 'Guardado y aplicado, sin reiniciar'}</div>`);
         btn.disabled = false;
       }
     } catch (e) {
-      result.innerHTML = `<div class="flow-note bad">✘ ${esc(e.message)}</div>`;
+      flash(result, `<div class="flow-note bad">✘ ${esc(e.message)}</div>`);
       btn.disabled = false;
     }
   }
@@ -1606,9 +1618,9 @@
       if (!auth.ok) throw new Error(auth.error || 'falló la autenticación');
       const token = await fetch('/configuracion/force-token', { method: 'POST' }).then(r => r.json());
       if (!token.ok) throw new Error(token.error || 'falló el token de LiveKit');
-      result.innerHTML = `<div class="flow-note ok">✔ Conecta OK — negocio "${esc(auth.status?.businessId || '—')}"</div>`;
+      flash(result, `<div class="flow-note ok">✔ Conecta OK — negocio "${esc(auth.status?.businessId || '—')}"</div>`);
     } catch (e) {
-      result.innerHTML = `<div class="flow-note bad">✘ ${esc(e.message)}</div>`;
+      flash(result, `<div class="flow-note bad">✘ ${esc(e.message)}</div>`);
     } finally {
       btn.disabled = false;
       btn.textContent = restoreText;
@@ -1693,6 +1705,7 @@
       : '';
 
     list.innerHTML = rowsHtml + addHtml + errorHtml;
+    if (errorHtml) setTimeout(loadCredsPresets, 4000); // se borra solo, mismo criterio que flash()
     _presetError = ''; // se muestra una vez, no se re-imprime en cada render
 
     if (_presetAdding) document.getElementById('inp-preset-new-name')?.focus();
@@ -1720,12 +1733,12 @@
           document.getElementById('inp-rag-url').value   = p.ragApiUrl;
           document.getElementById('inp-device-id').value = p.deviceId;
           document.getElementById('inp-api-key').value    = p.apiKey;
-          result.innerHTML = `<div class="flow-note ok">✔ Usando "${esc(p.name) || 'preset sin nombre'}" — probá "Probar conexión" para confirmar</div>`;
+          flash(result, `<div class="flow-note ok">✔ Usando "${esc(p.name) || 'preset sin nombre'}"</div>`, 3000);
           loadCredsPresets(); // re-renderiza para marcar esta fila como "activa"
         } catch (e) {
           btn.disabled = false;
           btn.textContent = restoreText;
-          result.innerHTML = `<div class="flow-note bad">✘ ${esc(e.message)}</div>`;
+          flash(result, `<div class="flow-note bad">✘ ${esc(e.message)}</div>`);
         }
       });
     });
