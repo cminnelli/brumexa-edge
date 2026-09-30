@@ -1626,11 +1626,14 @@
       return;
     }
     list.innerHTML = presets.map(p => `
-      <div class="field-row" style="align-items:center; gap:8px; margin:0">
+      <div class="field-row" style="align-items:center; gap:6px; margin:0">
         <input type="text" class="setup-input" style="flex:1" placeholder="Slot ${p.slot} — sin nombre"
                value="${esc(p.name)}" data-preset-name="${p.slot}" />
-        <button class="btn-ghost" type="button" style="flex:none" data-preset-use="${p.slot}">▶ Usar</button>
-        <button class="btn-ghost" type="button" style="flex:none" data-preset-save="${p.slot}">💾 Guardar acá</button>
+        <button class="btn-ghost" type="button" style="flex:none" data-preset-use="${p.slot}" title="Cargar en los campos de arriba">Usar</button>
+        <button class="btn-ghost" type="button" style="flex:none" data-preset-save="${p.slot}" title="Guardar lo tipeado arriba en este slot">Guardar</button>
+        ${p.name || p.ragApiUrl || p.deviceId || p.apiKey
+          ? `<button class="btn-ghost" type="button" style="flex:none; color:var(--danger)" data-preset-delete="${p.slot}" title="Borrar este preset">✕</button>`
+          : ''}
       </div>
     `).join('');
 
@@ -1672,6 +1675,28 @@
           btn.disabled = false;
           btn.textContent = restoreText;
           alert(`No se pudo guardar el preset: ${e.message}`);
+        }
+      });
+    });
+
+    // Borrar = guardar el mismo slot con todo vacío — no hace falta un
+    // endpoint aparte, el POST ya sabe sobreescribir.
+    list.querySelectorAll('[data-preset-delete]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const slot = btn.dataset.presetDelete;
+        if (!confirm('¿Borrar este preset? No se puede deshacer.')) return;
+        btn.disabled = true;
+        try {
+          const res = await fetch('/setup/creds-presets', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slot, name: '', ragApiUrl: '', deviceId: '', apiKey: '' }),
+          }).then(r => r.json());
+          if (!res.ok) throw new Error(res.error || 'error desconocido');
+          await loadCredsPresets();
+        } catch (e) {
+          btn.disabled = false;
+          alert(`No se pudo borrar el preset: ${e.message}`);
         }
       });
     });

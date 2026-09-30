@@ -392,6 +392,19 @@
     <div id="leds-live-result" style="margin-top:8px"></div>
   </div>
 
+  <!-- § Procesos — "administrador de tareas" chico, qué se está comiendo el
+       CPU/RAM ahora mismo, sin ir a buscar `top`/`ps` por SSH. -->
+  <div class="card">
+    <div class="card-section-hdr">
+      <span class="card-section-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M8 13h8"/><path d="M8 16.5h5"/></svg></span>
+      <div>
+        <div class="card-section-title">Procesos</div>
+        <div class="card-section-desc">Qué está usando CPU/RAM ahora mismo — se actualiza solo</div>
+      </div>
+    </div>
+    <div id="processes-table"><div class="field-hint">Cargando…</div></div>
+  </div>
+
   <!-- § Grabaciones -->
   <div class="card" id="recordings-card">
     <div class="card-section-hdr">

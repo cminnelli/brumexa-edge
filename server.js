@@ -865,6 +865,29 @@ app.get('/diag/leds', (_req, res) => {
   res.json(leds.getDiagnostics());
 });
 
+// GET /diag/processes — top procesos por CPU/RAM ahora mismo, tipo "admin-
+// istrador de tareas" chico — para ver de un vistazo qué se está comiendo el
+// CPU sin ir a buscar `top`/`ps` por SSH (ver /diagnostico, sección Procesos).
+app.get('/diag/processes', (_req, res) => {
+  if (process.platform !== 'linux') {
+    return res.json({ processes: [], error: 'Solo disponible en la Raspberry (Linux)' });
+  }
+  const { execSync } = require('child_process');
+  let out;
+  try {
+    out = execSync('ps -eo pid,%cpu,%mem,etime,comm --sort=-%cpu --no-headers', { timeout: 3000, encoding: 'utf8' });
+  } catch (e) {
+    return res.status(500).json({ processes: [], error: e.message });
+  }
+  const processes = out.trim().split('\n').slice(0, 10).map(line => {
+    const m = line.trim().match(/^(\d+)\s+([\d.]+)\s+([\d.]+)\s+(\S+)\s+(.+)$/);
+    if (!m) return null;
+    const [, pid, cpu, mem, etime, comm] = m;
+    return { pid: Number(pid), cpu: Number(cpu), mem: Number(mem), etime, comm };
+  }).filter(Boolean);
+  res.json({ processes });
+});
+
 // GET /diag/leds/live — auto-diagnóstico del "se tilda la respiración",
 // pensado para pedirse EN EL MOMENTO que se ve algo raro, sin ir a buscar
 // pm2 logs a mano por SSH. Junta tres fuentes en una sola respuesta:

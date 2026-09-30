@@ -665,24 +665,24 @@ body {
 
 .btn-connect {
   flex: 1;
-  padding: 11px 0;
+  padding: 9px 0;
   border: none;
   border-radius: var(--r-sm);
   background: var(--accent);
   color: #fff;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  letter-spacing: .03em;
+  letter-spacing: .02em;
   transition: background var(--tr), transform var(--tr), opacity var(--tr);
-  box-shadow: 0 2px 12px rgba(91,106,240,.3);
+  box-shadow: 0 1px 4px rgba(91,106,240,.22);
 }
 .btn-connect:hover:not(:disabled)  { background: var(--accent-h); }
 .btn-connect:active:not(:disabled) { transform: scale(.98); }
 .btn-connect:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
 .btn-connect.recording {
   background: var(--danger);
-  box-shadow: 0 2px 12px rgba(224,85,85,.3);
+  box-shadow: 0 1px 4px rgba(224,85,85,.22);
 }
 
 .btn-reconnect {
@@ -770,8 +770,8 @@ body {
 ══════════════════════════════════════════════════════════ */
 .btn-ghost {
   font-size: 11px;
-  font-weight: 600;
-  padding: 5px 10px;
+  font-weight: 500;
+  padding: 4px 9px;
   border: 1px solid var(--border2);
   border-radius: var(--r-sm);
   background: transparent;

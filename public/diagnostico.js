@@ -1296,4 +1296,55 @@ const GuidedDiag = {
   LedsLab.init();
   SensitivityControls.init();
   await Recorder.show();
+  startProcessesPoll();
 })();
+
+// ─── Procesos — tabla chica de CPU/RAM, tipo administrador de tareas ────────
+// Se actualiza sola cada 3s mientras la página esté abierta (mismo criterio
+// que MicMeter: nada de polling si nadie está mirando la pestaña).
+function startProcessesPoll() {
+  const el = document.getElementById('processes-table');
+  if (!el) return;
+
+  async function tick() {
+    let data;
+    try {
+      data = await fetch('/diag/processes', { cache: 'no-store' }).then(r => r.json());
+    } catch {
+      el.innerHTML = '<div class="field-hint">No se pudo consultar.</div>';
+      return;
+    }
+    if (data.error) {
+      el.innerHTML = `<div class="field-hint">${esc(data.error)}</div>`;
+      return;
+    }
+    const rows = data.processes.map(p => `
+      <tr>
+        <td style="text-align:right; font-variant-numeric:tabular-nums">${p.cpu.toFixed(1)}%</td>
+        <td style="text-align:right; font-variant-numeric:tabular-nums">${p.mem.toFixed(1)}%</td>
+        <td>${esc(p.comm)}</td>
+        <td style="color:var(--muted); font-size:11px">${esc(p.etime)}</td>
+      </tr>
+    `).join('');
+    el.innerHTML = `
+      <table style="width:100%; font-size:12px; border-collapse:collapse">
+        <thead>
+          <tr style="color:var(--muted); font-size:11px; text-align:left">
+            <th style="text-align:right; font-weight:500">CPU</th>
+            <th style="text-align:right; font-weight:500">RAM</th>
+            <th style="font-weight:500">Proceso</th>
+            <th style="font-weight:500">Tiempo</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  }
+
+  tick();
+  const iv = setInterval(() => {
+    if (document.hidden) return; // no gastar si la pestaña no está visible
+    tick();
+  }, 3000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
+}
