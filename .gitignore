@@ -2,6 +2,7 @@ node_modules/
 .env
 logs/
 recordings/
+data/
 
 # Core dumps — si node/algún addon nativo (ej. onnxruntime-node) crashea,
 # Linux los tira en el cwd del proceso (esta carpeta). No son código, pero
