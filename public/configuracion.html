@@ -20,7 +20,7 @@
        emergencia, sin internet real, y un <link rel=stylesheet> normal a
        un dominio externo sin ruta a internet traba el render entero. -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
-  <link rel="stylesheet" href="/style.css?v=23" />
+  <link rel="stylesheet" href="/style.css?v=24" />
   <style>
     #card-update.highlight-pulse {
       animation: card-highlight-pulse 1.3s ease-out;
@@ -1665,7 +1665,7 @@
       ? filled.map(p => {
           if (String(p.slot) === String(_presetConfirmDelete)) {
             return `
-              <div class="field-row" style="align-items:center; gap:6px; margin:0">
+              <div class="preset-row">
                 <span style="flex:1; font-size:12.5px; color:var(--danger)">¿Borrar "${esc(p.name) || 'sin nombre'}"?</span>
                 <button class="btn-ghost" type="button" style="flex:none; color:var(--danger); border-color:var(--danger)" data-preset-confirm-delete="${p.slot}">Sí, borrar</button>
                 <button class="btn-ghost" type="button" style="flex:none" data-preset-cancel-delete="${p.slot}">Cancelar</button>
@@ -1673,13 +1673,14 @@
           }
           const active = isActive(p);
           return `
-            <div class="field-row" style="align-items:center; gap:6px; margin:0">
-              <span style="flex:1; font-size:12.5px; color:${active ? 'var(--success)' : 'var(--text2)'}">
+            <div class="preset-row"${active ? ' style="border-color:var(--success)"' : ''}>
+              <span style="flex:1; font-size:12.5px; color:${active ? 'var(--success)' : 'var(--text2)'}; font-weight:${active ? 600 : 400}">
                 ${esc(p.name) || '(sin nombre)'}${active ? ' · activa' : ''}
               </span>
               ${active
-                ? `<span class="btn-ghost" style="flex:none; opacity:.5; cursor:default">En uso</span>`
+                ? `<span style="flex:none; font-size:11px; color:var(--success); opacity:.8">En uso</span>`
                 : `<button class="btn-ghost btn-ghost--accent" type="button" style="flex:none" data-preset-use="${p.slot}">Usar</button>`}
+              <button class="btn-ghost" type="button" style="flex:none" data-preset-update="${p.slot}" title="Pisar este preset con lo que hay tipeado arriba ahora">↻</button>
               <button class="btn-ghost" type="button" style="flex:none; color:var(--muted)" data-preset-delete="${p.slot}" title="Borrar">✕</button>
             </div>`;
         }).join('')
@@ -1690,7 +1691,7 @@
       addHtml = '<div class="field-hint" style="margin-top:6px">Ya tenés los 3 slots usados — borrá uno para guardar otro.</div>';
     } else if (_presetAdding) {
       addHtml = `
-        <div class="field-row" style="align-items:center; gap:6px; margin-top:6px">
+        <div class="preset-row" style="margin-top:6px; background:transparent">
           <input type="text" class="setup-input" style="flex:1" id="inp-preset-new-name"
                  placeholder="Nombre (ej. Local, Producción)" autocomplete="off" spellcheck="false" />
           <button class="btn-ghost btn-ghost--accent" type="button" style="flex:none" id="btn-preset-confirm-add">Guardar</button>
@@ -1740,6 +1741,36 @@
           btn.textContent = restoreText;
           flash(result, `<div class="flow-note bad">✘ ${esc(e.message)}</div>`);
         }
+      });
+    });
+
+    // Actualizar = mismo slot, mismo nombre, pero con los valores que haya
+    // AHORA en los 3 campos de arriba — para cambiar un preset sin borrar y
+    // recrearlo.
+    list.querySelectorAll('[data-preset-update]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const p = presets.find(x => String(x.slot) === btn.dataset.presetUpdate);
+        if (!p) return;
+        const result = document.getElementById('creds-save-result');
+        btn.disabled = true;
+        try {
+          const res = await fetch('/setup/creds-presets', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              slot: p.slot,
+              name: p.name,
+              ragApiUrl: document.getElementById('inp-rag-url').value.trim(),
+              deviceId:  document.getElementById('inp-device-id').value.trim(),
+              apiKey:    document.getElementById('inp-api-key').value.trim(),
+            }),
+          }).then(r => r.json());
+          if (!res.ok) throw new Error(res.error || 'error desconocido');
+          flash(result, `<div class="flow-note ok">✔ "${esc(p.name) || 'preset'}" actualizado con lo de arriba</div>`, 3000);
+        } catch (e) {
+          flash(result, `<div class="flow-note bad">✘ ${esc(e.message)}</div>`);
+        }
+        loadCredsPresets();
       });
     });
 

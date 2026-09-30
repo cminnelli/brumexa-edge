@@ -1410,6 +1410,21 @@ body {
 }
 .field-row .field { margin-bottom: 0; }
 
+/* Fila compacta de "etiqueta + un par de botones chicos" — a diferencia de
+   .field-row (que es un grid pensado para pares label+input, no para
+   esto), esta es un flex simple con tarjeta sutil para que cada preset se
+   sienta como un item de lista, no un formulario suelto. */
+.preset-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border: 1px solid var(--border2);
+  border-radius: 7px;
+  background: var(--bg);
+}
+.preset-row + .preset-row { margin-top: 6px; }
+
 /* Subtítulo chico DENTRO de una card, para separar clusters de campos
    relacionados sin necesitar una card nueva (ej. "Voz" vs "Hardware" vs
    "Calibración" adentro de Sonido) — más liviano que .section-group-label,
