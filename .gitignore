@@ -2,3 +2,11 @@ node_modules/
 .env
 logs/
 recordings/
+
+# Core dumps — si node/algún addon nativo (ej. onnxruntime-node) crashea,
+# Linux los tira en el cwd del proceso (esta carpeta). No son código, pero
+# "Actualizar Brumexa" se niega a actualizar si hay CUALQUIER archivo sin
+# trackear — sin esto, un crash silencioso (PM2 reinicia solo, no se nota)
+# deja el equipo sin poder actualizar hasta limpiar a mano. Visto en
+# producción el 2026-09-30 — server.js crasheó 3 veces seguidas.
+core.*
