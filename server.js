@@ -419,6 +419,56 @@ app.post('/setup/custom-colors', express.json(), (req, res) => {
   }
 });
 
+// ─── Presets de credenciales — 2-3 sets guardados (ej. "Local"/"Prod") para
+// switchear rápido sin tener que volver a tipear servidor/device/API key
+// cada vez. Guardar un preset NO aplica nada — solo lo deja disponible para
+// cargar en los campos de arriba; recién "Guardar credenciales" (el botón
+// que ya existe) lo hace la credencial activa. Mismo criterio de .env que
+// el resto de /setup/config, 3 slots fijos (CREDS_PRESET_1/2/3_*).
+const CREDS_PRESET_SLOTS = 3;
+
+app.get('/setup/creds-presets', (_req, res) => {
+  const envFile = path.join(__dirname, '.env');
+  let content = '';
+  try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
+  const getVal = (key) => {
+    const m = content.match(new RegExp(`^${key}=(.*)$`, 'm'));
+    return m ? m[1].trim() : '';
+  };
+  const presets = [];
+  for (let slot = 1; slot <= CREDS_PRESET_SLOTS; slot++) {
+    presets.push({
+      slot,
+      name:      getVal(`CREDS_PRESET_${slot}_NAME`),
+      ragApiUrl: getVal(`CREDS_PRESET_${slot}_URL`),
+      deviceId:  getVal(`CREDS_PRESET_${slot}_DEVICE`),
+      apiKey:    getVal(`CREDS_PRESET_${slot}_KEY`),
+    });
+  }
+  res.json({ presets });
+});
+
+app.post('/setup/creds-presets', express.json(), (req, res) => {
+  const { slot, name, ragApiUrl, deviceId, apiKey } = req.body || {};
+  const slotNum = parseInt(slot, 10);
+  if (!(slotNum >= 1 && slotNum <= CREDS_PRESET_SLOTS)) {
+    return res.status(400).json({ ok: false, error: `slot inválido (1-${CREDS_PRESET_SLOTS})` });
+  }
+  const envFile = path.join(__dirname, '.env');
+  let content = '';
+  try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
+  content = setEnvLine(content, `CREDS_PRESET_${slotNum}_NAME`,   name      || '');
+  content = setEnvLine(content, `CREDS_PRESET_${slotNum}_URL`,    ragApiUrl || '');
+  content = setEnvLine(content, `CREDS_PRESET_${slotNum}_DEVICE`, deviceId  || '');
+  content = setEnvLine(content, `CREDS_PRESET_${slotNum}_KEY`,    apiKey    || '');
+  try {
+    require('fs').writeFileSync(envFile, content, 'utf8');
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // Escribe/reemplaza una línea KEY=value en el contenido de un .env — usado
 // por /setup/config (todos los campos, reinicia) y /setup/config/live (solo
 // los que ya se aplican en caliente, no reinicia).

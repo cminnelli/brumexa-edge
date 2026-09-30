@@ -184,6 +184,16 @@
       </div>
       <div id="creds-save-result" style="margin-top:10px"></div>
       <div id="creds-test-result" style="margin-top:10px"></div>
+
+      <!-- § Presets — 2-3 sets de credenciales guardados (ej. "Local"/"Prod")
+           para switchear rápido sin retipear. "Usar" solo CARGA los 3 campos
+           de arriba — no aplica nada hasta que tocás "Guardar credenciales".
+           "Guardar acá" toma lo que hay tipeado AHORA arriba y lo guarda en
+           ese slot, con el nombre puesto al lado. -->
+      <details class="tech-details" style="margin-top:14px">
+        <summary>Presets de credenciales (para probar/switchear rápido)</summary>
+        <div id="creds-presets-list" style="display:flex; flex-direction:column; gap:8px; margin-top:0.75rem"></div>
+      </details>
     </div>
 
     <!-- § WiFi — antes solo se podía ver/cambiar entrando a /setup (pensado
@@ -1604,6 +1614,69 @@
       btn.textContent = restoreText;
     }
   });
+
+  // ─── Presets de credenciales ──────────────────────────────────────────────
+  async function loadCredsPresets() {
+    const list = document.getElementById('creds-presets-list');
+    let presets;
+    try {
+      ({ presets } = await fetch('/setup/creds-presets').then(r => r.json()));
+    } catch {
+      list.innerHTML = '<div class="field-hint">No se pudieron cargar los presets.</div>';
+      return;
+    }
+    list.innerHTML = presets.map(p => `
+      <div class="field-row" style="align-items:center; gap:8px; margin:0">
+        <input type="text" class="setup-input" style="flex:1" placeholder="Slot ${p.slot} — sin nombre"
+               value="${esc(p.name)}" data-preset-name="${p.slot}" />
+        <button class="btn-ghost" type="button" style="flex:none" data-preset-use="${p.slot}">▶ Usar</button>
+        <button class="btn-ghost" type="button" style="flex:none" data-preset-save="${p.slot}">💾 Guardar acá</button>
+      </div>
+    `).join('');
+
+    list.querySelectorAll('[data-preset-use]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const slot = btn.dataset.presetUse;
+        const p = presets.find(x => String(x.slot) === slot);
+        if (!p) return;
+        document.getElementById('inp-rag-url').value   = p.ragApiUrl;
+        document.getElementById('inp-device-id').value = p.deviceId;
+        document.getElementById('inp-api-key').value    = p.apiKey;
+        document.getElementById('creds-save-result').innerHTML =
+          '<div class="flow-note">Cargado en los campos de arriba — tocá "Guardar credenciales" para aplicarlo.</div>';
+      });
+    });
+
+    list.querySelectorAll('[data-preset-save]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const slot = btn.dataset.presetSave;
+        const nameInput = list.querySelector(`[data-preset-name="${slot}"]`);
+        const restoreText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Guardando…';
+        try {
+          const res = await fetch('/setup/creds-presets', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              slot,
+              name:      nameInput.value.trim(),
+              ragApiUrl: document.getElementById('inp-rag-url').value.trim(),
+              deviceId:  document.getElementById('inp-device-id').value.trim(),
+              apiKey:    document.getElementById('inp-api-key').value.trim(),
+            }),
+          }).then(r => r.json());
+          if (!res.ok) throw new Error(res.error || 'error desconocido');
+          await loadCredsPresets(); // refresca — toma lo recién guardado como nuevo estado base
+        } catch (e) {
+          btn.disabled = false;
+          btn.textContent = restoreText;
+          alert(`No se pudo guardar el preset: ${e.message}`);
+        }
+      });
+    });
+  }
+  loadCredsPresets();
 
   document.getElementById('btn-save-color').addEventListener('click', () => {
     saveFields({
