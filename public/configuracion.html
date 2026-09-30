@@ -1640,6 +1640,15 @@
     const filled   = presets.filter(p => !_presetIsEmpty(p));
     const freeSlot = presets.find(_presetIsEmpty);
 
+    // "Activa" = coincide EXACTO con lo que hay ahora mismo en los 3 campos
+    // de arriba (que reflejan la credencial realmente en uso, no un
+    // borrador) — así se ve de un vistazo cuál es la que está aplicada,
+    // sin necesitar un flag de "predeterminada" aparte.
+    const curUrl    = document.getElementById('inp-rag-url').value.trim();
+    const curDevice = document.getElementById('inp-device-id').value.trim();
+    const curKey    = document.getElementById('inp-api-key').value.trim();
+    const isActive = (p) => p.ragApiUrl === curUrl && p.deviceId === curDevice && p.apiKey === curKey;
+
     const rowsHtml = filled.length
       ? filled.map(p => {
           if (String(p.slot) === String(_presetConfirmDelete)) {
@@ -1650,10 +1659,15 @@
                 <button class="btn-ghost" type="button" style="flex:none" data-preset-cancel-delete="${p.slot}">Cancelar</button>
               </div>`;
           }
+          const active = isActive(p);
           return `
             <div class="field-row" style="align-items:center; gap:6px; margin:0">
-              <span style="flex:1; font-size:12.5px; color:var(--text2)">${esc(p.name) || '(sin nombre)'}</span>
-              <button class="btn-ghost" type="button" style="flex:none" data-preset-use="${p.slot}">Usar</button>
+              <span style="flex:1; font-size:12.5px; color:${active ? 'var(--success)' : 'var(--text2)'}">
+                ${esc(p.name) || '(sin nombre)'}${active ? ' · activa' : ''}
+              </span>
+              ${active
+                ? `<span class="btn-ghost" style="flex:none; opacity:.5; cursor:default">En uso</span>`
+                : `<button class="btn-ghost btn-ghost--accent" type="button" style="flex:none" data-preset-use="${p.slot}">Usar</button>`}
               <button class="btn-ghost" type="button" style="flex:none; color:var(--muted)" data-preset-delete="${p.slot}" title="Borrar">✕</button>
             </div>`;
         }).join('')
@@ -1683,15 +1697,36 @@
 
     if (_presetAdding) document.getElementById('inp-preset-new-name')?.focus();
 
+    // "Usar" APLICA de una — antes solo cargaba los campos y había que
+    // tocar "Guardar credenciales" aparte; eso hacía que pareciera que
+    // seguía usando la conexión vieja (nunca se llegaba a guardar la
+    // nueva). Ahora es un solo click: mismo POST que ya usa "Guardar
+    // credenciales", y después re-renderiza para marcar esta como activa.
     list.querySelectorAll('[data-preset-use]').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const p = presets.find(x => String(x.slot) === btn.dataset.presetUse);
         if (!p) return;
-        document.getElementById('inp-rag-url').value   = p.ragApiUrl;
-        document.getElementById('inp-device-id').value = p.deviceId;
-        document.getElementById('inp-api-key').value    = p.apiKey;
-        document.getElementById('creds-save-result').innerHTML =
-          '<div class="flow-note">Cargado en los campos de arriba — tocá "Guardar credenciales" para aplicarlo.</div>';
+        const result = document.getElementById('creds-save-result');
+        const restoreText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Aplicando…';
+        try {
+          const res = await fetch('/setup/config', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ragApiUrl: p.ragApiUrl, deviceId: p.deviceId, apiKey: p.apiKey }),
+          }).then(r => r.json());
+          if (!res.ok) throw new Error(res.error || 'error desconocido');
+          document.getElementById('inp-rag-url').value   = p.ragApiUrl;
+          document.getElementById('inp-device-id').value = p.deviceId;
+          document.getElementById('inp-api-key').value    = p.apiKey;
+          result.innerHTML = `<div class="flow-note ok">✔ Usando "${esc(p.name) || 'preset sin nombre'}" — probá "Probar conexión" para confirmar</div>`;
+          loadCredsPresets(); // re-renderiza para marcar esta fila como "activa"
+        } catch (e) {
+          btn.disabled = false;
+          btn.textContent = restoreText;
+          result.innerHTML = `<div class="flow-note bad">✘ ${esc(e.message)}</div>`;
+        }
       });
     });
 
