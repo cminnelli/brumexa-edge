@@ -109,6 +109,7 @@ const MicMeter = {
       effectiveThresholdDbfs: mic.effectiveThresholdDbfs,
       voiceActive: !!mic.voiceActive,
       sensing:  !!mic.sensing,
+      vadScore: typeof mic.vadScore === 'number' ? mic.vadScore : null,
     });
     if (this._history.length > this.MAX_SAMPLES) this._history.shift();
     this._calibratedThresholdDbfs = mic.calibratedThresholdDbfs;
@@ -116,6 +117,7 @@ const MicMeter = {
     this._renderChart();
     this._renderStatus(mic);
     this._renderNumbers(mic, dbfs);
+    this._renderVad(mic);
   },
 
   // Los únicos 2 números que quedan como texto (todo lo demás —
@@ -308,6 +310,96 @@ const MicMeter = {
       out.push(`${this._xFor(i, n).toFixed(1)},${this._yFor(v).toFixed(1)}`);
     }
     return out.join(' ');
+  },
+
+  // ── Silero VAD — "¿esto es voz?", aparte del volumen de arriba. Mismo
+  // historial (this._history, ya tiene vadScore de cada tick), mismo eje X,
+  // pero escala 0-1 (probabilidad) en vez de dBFS -- por eso un SVG aparte
+  // en vez de una tercera línea en el gráfico de volumen (unidades
+  // distintas, mezclarlas confunde más de lo que ayuda).
+  VAD_THRESHOLD: 0.5, // mismo valor que VAD_SPEECH_THRESHOLD en lib/mic-speech-gate.js -- si se cambia allá, cambiar acá
+  VAD_CHART_H: 110,
+
+  _renderVad(mic) {
+    const alertEl = document.getElementById('vad-alert');
+    const numEl   = document.getElementById('stat-vad-num');
+    const readyEl = document.getElementById('stat-vad-ready');
+    if (numEl)   numEl.textContent   = typeof mic.vadScore === 'number' ? mic.vadScore.toFixed(3) : '—';
+    if (readyEl) readyEl.textContent = mic.vadReady ? '✅ listo' : '⏳ cargando…';
+
+    if (alertEl) {
+      if (!mic.vadReady) {
+        alertEl.className = 'sound-alert warn';
+        alertEl.textContent = '⏳ El modelo de VAD todavía no cargó — el gate está funcionando SOLO por volumen mientras tanto (fail-safe)';
+      } else if (typeof mic.vadScore === 'number' && mic.vadScore >= this.VAD_THRESHOLD) {
+        alertEl.className = 'sound-alert live';
+        alertEl.textContent = `🗣️ Esto suena a voz (score ${mic.vadScore.toFixed(2)})`;
+      } else {
+        alertEl.className = 'sound-alert muted';
+        alertEl.textContent = `Esto no suena a voz (score ${(mic.vadScore ?? 0).toFixed(2)})`;
+      }
+    }
+    this._renderVadChart();
+  },
+
+  _yForVad(score) {
+    const usable = this.VAD_CHART_H - this.PAD_T - this.PAD_B;
+    return this.PAD_T + (1 - Math.max(0, Math.min(1, score))) * usable;
+  },
+
+  _renderVadChart() {
+    const wrap = document.getElementById('vad-chart-wrap');
+    if (!wrap) return;
+    const hist = this._history, n = hist.length;
+    if (!n) { wrap.innerHTML = '<p class="field-hint">Esperando datos…</p>'; return; }
+
+    const step = n > 1 ? (this.CHART_W - this.PAD_L - this.PAD_R) / (n - 1) : (this.CHART_W - this.PAD_L - this.PAD_R);
+    // Banda ámbar: igual que el gráfico de volumen, marca "hablando
+    // confirmado" (voiceActive) -- así se ve de un vistazo si el score de
+    // VAD de verdad coincidió con el momento en que el gate se abrió.
+    let bands = '';
+    for (let i = 0; i < n; i++) {
+      if (!hist[i].voiceActive) continue;
+      const x = this._xFor(i, n) - step / 2;
+      bands += `<rect x="${x.toFixed(1)}" y="${this.PAD_T}" width="${(step + 0.6).toFixed(1)}" height="${this.VAD_CHART_H - this.PAD_T - this.PAD_B}" fill="rgba(224,160,50,0.22)" />`;
+    }
+
+    // Línea de umbral fija en 0.5 — a diferencia del gráfico de volumen, acá
+    // no es adaptativo, así que es una sola línea horizontal.
+    const threshY = this._yForVad(this.VAD_THRESHOLD);
+    const threshLine = `<line x1="${this.PAD_L}" y1="${threshY.toFixed(1)}" x2="${this.CHART_W - this.PAD_R}" y2="${threshY.toFixed(1)}" stroke="var(--text2)" stroke-width="1.3" stroke-dasharray="4,3" opacity="0.85" />`;
+    const threshLabel = `<text x="${this.CHART_W - this.PAD_R - 3}" y="${(threshY - 5).toFixed(1)}" font-size="10" text-anchor="end" fill="var(--text2)">es voz a partir de acá (${this.VAD_THRESHOLD})</text>`;
+
+    let grid = '';
+    for (let v = 0; v <= 1; v += 0.5) {
+      const y = this._yForVad(v);
+      grid += `<line x1="${this.PAD_L}" y1="${y.toFixed(1)}" x2="${this.CHART_W - this.PAD_R}" y2="${y.toFixed(1)}" stroke="var(--border)" stroke-width="1" />`;
+      grid += `<text x="2" y="${(y + 3).toFixed(1)}" font-size="9" fill="var(--text2)">${v}</text>`;
+    }
+
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const v = hist[i].vadScore;
+      if (v === null || v === undefined || isNaN(v)) continue;
+      pts.push(`${this._xFor(i, n).toFixed(1)},${this._yForVad(v).toFixed(1)}`);
+    }
+    const line = pts.join(' ');
+
+    const lastScore = hist[n - 1].vadScore;
+    const endDot = (typeof lastScore === 'number')
+      ? `<circle cx="${this._xFor(n - 1, n).toFixed(1)}" cy="${this._yForVad(lastScore).toFixed(1)}" r="4.5" fill="var(--accent)" stroke="var(--bg)" stroke-width="2" />`
+      : '';
+
+    wrap.innerHTML = `
+      <svg viewBox="0 0 ${this.CHART_W} ${this.VAD_CHART_H}" style="display:block; width:100%; height:${this.VAD_CHART_H}px; min-width:420px; background:var(--bg); border-radius:8px">
+        ${bands}
+        ${grid}
+        ${threshLine}
+        <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+        ${endDot}
+        ${threshLabel}
+      </svg>
+    `;
   },
 
 };
