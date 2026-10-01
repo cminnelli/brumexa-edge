@@ -369,6 +369,27 @@
     </div>
 
     <div id="vad-chart-wrap" style="overflow-x:auto"></div>
+
+    <div class="divider" style="margin:14px 0"></div>
+
+    <div class="field-group-label" style="margin-top:0">Modo de detección</div>
+    <p class="field-hint" style="margin:0 0 8px">Para comparar en caliente cuál anda mejor — "Volumen" es el de siempre, "Volumen + VAD" exige además que Silero confirme que es voz.</p>
+    <div class="gain-row" style="grid-template-columns:1fr 1fr; gap:8px">
+      <button class="btn-ghost" id="btn-mode-volume" type="button" style="flex:none">Volumen</button>
+      <button class="btn-ghost" id="btn-mode-vad" type="button" style="flex:none">Volumen + VAD</button>
+    </div>
+    <div id="detection-mode-result" style="margin-top:8px"></div>
+
+    <div class="field" style="margin-top:14px">
+      <label class="field-label" for="inp-vad-threshold">Umbral de Silero</label>
+      <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
+        <div class="gain-row" style="grid-template-columns:1fr 65px">
+          <input type="range" id="inp-vad-threshold" class="gain-slider" min="0" max="1" step="0.05" value="0.5" />
+          <span class="gain-val" id="val-vad-threshold">0.50</span>
+        </div>
+      </div>
+      <p class="field-hint">Más a la derecha = más exigente (menos falsos positivos con ruido, pero más riesgo de no detectar voz bajita). Mirá la línea punteada del gráfico moverse mientras ajustás.</p>
+    </div>
   </div>
 
   <!-- § Parlante -->
@@ -455,7 +476,7 @@
 
 </main>
 
-<script src="/diagnostico.js?v=5"></script>
+<script src="/diagnostico.js?v=7"></script>
 <script src="/theme.js?v=1"></script>
 <script src="/session-quick.js?v=1"></script>
 <script src="/admin-link.js?v=1"></script>

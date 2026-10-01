@@ -327,16 +327,63 @@ const MicMeter = {
     if (numEl)   numEl.textContent   = typeof mic.vadScore === 'number' ? mic.vadScore.toFixed(3) : '—';
     if (readyEl) readyEl.textContent = mic.vadReady ? '✅ listo' : '⏳ cargando…';
 
+    // Resalta el botón del modo activo — se actualiza en cada tick (no solo
+    // al clickear) para que si se cambia desde OTRO lugar (ej. /configuracion)
+    // esta página lo refleje igual, sin recargar.
+    const volBtn = document.getElementById('btn-mode-volume');
+    const vadBtn = document.getElementById('btn-mode-vad');
+    if (volBtn && vadBtn) {
+      const isVad = mic.micDetectionMode === 'vad';
+      volBtn.classList.toggle('btn-ghost--accent', !isVad);
+      vadBtn.classList.toggle('btn-ghost--accent', isVad);
+    }
+
+    // Umbral: lo manda el server (/diag/mic-level ya lo trae) — se sincroniza
+    // acá en cada tick, salvo que el usuario esté arrastrando el slider en
+    // este mismo instante (document.activeElement), para no pelearle la
+    // posición mientras ajusta.
+    if (typeof mic.vadThreshold === 'number') {
+      this.VAD_THRESHOLD = mic.vadThreshold;
+      const slider = document.getElementById('inp-vad-threshold');
+      const label  = document.getElementById('val-vad-threshold');
+      if (slider && document.activeElement !== slider) {
+        slider.value = mic.vadThreshold;
+        if (label) label.textContent = mic.vadThreshold.toFixed(2);
+      }
+    }
+
+    // El texto dice, en criollo, si ESTO que se escucha ahora mismo se está
+    // mandando de verdad a LiveKit -- no solo si el score cruza el umbral.
+    // Tres cosas distintas que antes no se distinguían: (1) el modo actual
+    // (en 'volume', el VAD corre y se ve en el gráfico pero NO decide nada),
+    // (2) si el gate ya CONFIRMÓ activo (mic.voiceActive -- streak de onset
+    // cumplido, no solo el score instantáneo), (3) si hay sesión real a la
+    // que mandarle algo (mic.sessionActive -- en el monitor idle el gate
+    // igual se mueve, pero no hay nadie escuchando del otro lado).
     if (alertEl) {
+      const score = typeof mic.vadScore === 'number' ? mic.vadScore : 0;
+      const soundsLikeVoice = score >= this.VAD_THRESHOLD;
+      const emitting = mic.voiceActive && mic.sessionActive;
+
       if (!mic.vadReady) {
         alertEl.className = 'sound-alert warn';
         alertEl.textContent = '⏳ El modelo de VAD todavía no cargó — el gate está funcionando SOLO por volumen mientras tanto (fail-safe)';
-      } else if (typeof mic.vadScore === 'number' && mic.vadScore >= this.VAD_THRESHOLD) {
+      } else if (mic.micDetectionMode !== 'vad') {
+        alertEl.className = mic.voiceActive ? 'sound-alert live' : 'sound-alert muted';
+        alertEl.textContent = mic.voiceActive
+          ? `🎙️ Modo Volumen — gate abierto${emitting ? ', emitiendo a LiveKit' : ' (sin sesión activa)'} (score VAD ${score.toFixed(2)}, no decide en este modo)`
+          : `Modo Volumen — gate cerrado (score VAD ${score.toFixed(2)}, no decide en este modo)`;
+      } else if (soundsLikeVoice && mic.voiceActive) {
         alertEl.className = 'sound-alert live';
-        alertEl.textContent = `🗣️ Esto suena a voz (score ${mic.vadScore.toFixed(2)})`;
+        alertEl.textContent = emitting
+          ? `🗣️ Voz confirmada — emitiendo a LiveKit (score ${score.toFixed(2)})`
+          : `🗣️ Voz confirmada (sin sesión activa, nada para emitir) (score ${score.toFixed(2)})`;
+      } else if (soundsLikeVoice) {
+        alertEl.className = 'sound-alert warn';
+        alertEl.textContent = `🗣️ Suena a voz, confirmando… (score ${score.toFixed(2)})`;
       } else {
         alertEl.className = 'sound-alert muted';
-        alertEl.textContent = `Esto no suena a voz (score ${(mic.vadScore ?? 0).toFixed(2)})`;
+        alertEl.textContent = `No suena a voz — no se emite (score ${score.toFixed(2)})`;
       }
     }
     this._renderVadChart();
@@ -403,6 +450,28 @@ const MicMeter = {
   },
 
 };
+
+// ── Modo de detección de voz (volumen / volumen+VAD) — ver
+// lib/mic-speech-gate.js. POST al mismo /setup/config que ya usa
+// Configuración, para que quede persistido en .env (sobrevive reiniclos),
+// no solo aplicado en caliente.
+async function setDetectionMode(mode) {
+  const result = document.getElementById('detection-mode-result');
+  try {
+    const res = await fetch('/setup/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ micDetectionMode: mode }),
+    }).then(r => r.json());
+    if (!res.ok) throw new Error(res.error || 'error desconocido');
+    if (result) {
+      result.innerHTML = `<div class="pill ok">✔ Modo → ${mode === 'vad' ? 'Volumen + VAD' : 'Volumen'}</div>`;
+      setTimeout(() => { result.innerHTML = ''; }, 3000);
+    }
+  } catch (e) {
+    if (result) result.innerHTML = `<div class="pill bad">⚠ ${esc(e.message)}</div>`;
+  }
+}
 
 // ============================================================
 // PARLANTE — mismo endpoint que ya usaba Configuración. Toggle: si ya
@@ -1343,6 +1412,30 @@ const GuidedDiag = {
   document.getElementById('btn-test-connection')?.addEventListener('click', testConnection);
   document.getElementById('btn-rec-start')?.addEventListener('click', () => Recorder.start());
   document.getElementById('btn-rec-stop')?.addEventListener('click', () => Recorder.stop());
+  document.getElementById('btn-mode-volume')?.addEventListener('click', () => setDetectionMode('volume'));
+  document.getElementById('btn-mode-vad')?.addEventListener('click', () => setDetectionMode('vad'));
+
+  // Umbral de Silero — mismo patrón que el slider de volumen (SensitivityControls
+  // más abajo): aplica en vivo con debounce, persiste en .env (vía /setup/config,
+  // a diferencia del de volumen que tiene su propio endpoint de solo-aplicar).
+  (() => {
+    const slider = document.getElementById('inp-vad-threshold');
+    const label  = document.getElementById('val-vad-threshold');
+    if (!slider) return;
+    let timer = null;
+    slider.addEventListener('input', (e) => {
+      const v = parseFloat(e.target.value);
+      label.textContent = v.toFixed(2);
+      MicMeter.VAD_THRESHOLD = v; // refleja en el gráfico ya mismo, sin esperar el próximo poll
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        fetch('/setup/config', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ vadThreshold: v }),
+        }).catch(() => {});
+      }, 400);
+    });
+  })();
 
   // Popup de detalles técnicos — dialog nativo, cerrado por default. Se
   // rellena recién al abrir (no hace falta que esté en vivo mientras nadie

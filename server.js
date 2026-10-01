@@ -358,6 +358,10 @@ app.get('/setup/config', (_req, res) => {
     micGateEnabled:       getVal('MIC_GATE_ENABLED')       || 'true',
     micGateAttenuationDb: getVal('MIC_GATE_ATTENUATION_DB') || '-90',
     micPrerollMs:         getVal('MIC_PREROLL_MS')          || '500',
+    // Modo de detección de voz — 'volume' (siempre, probado) o 'vad'
+    // (volumen + Silero VAD) — ver lib/mic-speech-gate.js.
+    micDetectionMode: getVal('MIC_DETECTION_MODE') || 'volume',
+    vadThreshold: getVal('VAD_SPEECH_THRESHOLD') || '0.5',
     // Chimes de conexión (WiFi/LiveKit) — ver lib/sound-effects.js.
     notificationSoundsEnabled: getVal('NOTIFICATION_SOUNDS_ENABLED') || 'true',
     notificationVolume:        getVal('NOTIFICATION_VOLUME')         || '1.0',
@@ -531,7 +535,7 @@ app.post('/setup/config', express.json(), async (req, res) => {
     ragApiUrl, deviceId, apiKey, micGain, speakerGain, talkThreshold, silenceTimeoutMs, brumexaColor,
     ledBreathePeriodMs, ledHangoverMs, ledOnsetMs, ledOffsetMs,
     alsaMicDevice, alsaSpeakerDevice,
-    micGateEnabled, micGateAttenuationDb, micPrerollMs,
+    micGateEnabled, micGateAttenuationDb, micPrerollMs, micDetectionMode, vadThreshold,
     notificationSoundsEnabled, notificationVolume,
     clapConnectEnabled, // CLAP-CONNECT
     wakewordEnabled, // WAKEWORD
@@ -584,6 +588,8 @@ app.post('/setup/config', express.json(), async (req, res) => {
     if (alsaSpeakerDevice !== undefined) content = setEnvLine(content, 'SPEAKER_ALSA_DEVICE', alsaSpeakerDevice);
     if (micGateEnabled       !== undefined) content = setEnvLine(content, 'MIC_GATE_ENABLED',        micGateEnabled);
     if (micGateAttenuationDb !== undefined) content = setEnvLine(content, 'MIC_GATE_ATTENUATION_DB', micGateAttenuationDb);
+    if (micDetectionMode     !== undefined) content = setEnvLine(content, 'MIC_DETECTION_MODE',       micDetectionMode);
+    if (vadThreshold         !== undefined) content = setEnvLine(content, 'VAD_SPEECH_THRESHOLD',     vadThreshold);
     if (notificationSoundsEnabled !== undefined) content = setEnvLine(content, 'NOTIFICATION_SOUNDS_ENABLED', notificationSoundsEnabled);
     if (notificationVolume        !== undefined) content = setEnvLine(content, 'NOTIFICATION_VOLUME',         notificationVolume);
     if (clapConnectEnabled        !== undefined) content = setEnvLine(content, 'CLAP_CONNECT_ENABLED',        clapConnectEnabled); // CLAP-CONNECT
@@ -628,6 +634,8 @@ app.post('/setup/config', express.json(), async (req, res) => {
     if (ledOffsetMs        !== undefined) { const v = parseFloat(ledOffsetMs);        if (!isNaN(v)) leds.setOffsetDurationMs(v); }
     if (micGateEnabled       !== undefined) lkSession.setMicGateEnabled(micGateEnabled !== 'false' && micGateEnabled !== false);
     if (micGateAttenuationDb !== undefined) { const v = parseFloat(micGateAttenuationDb); if (!isNaN(v)) lkSession.setMicGateAttenuationDb(v); }
+    if (micDetectionMode     !== undefined) micGate.setDetectionMode(micDetectionMode);
+    if (vadThreshold         !== undefined) { const v = parseFloat(vadThreshold); if (!isNaN(v)) micGate.setVadThreshold(v); }
     if (notificationSoundsEnabled !== undefined) soundEffects.setSoundsEnabled(notificationSoundsEnabled !== 'false' && notificationSoundsEnabled !== false);
     if (notificationVolume        !== undefined) { const v = parseFloat(notificationVolume); if (!isNaN(v)) soundEffects.setNotificationGain(v); }
     if (clapConnectEnabled        !== undefined) clapConnect.setEnabled(clapConnectEnabled !== 'false' && clapConnectEnabled !== false); // CLAP-CONNECT
@@ -1042,6 +1050,8 @@ app.get('/diag/mic-level', (_req, res) => {
     // comportamiento de antes de este cambio a simple vista.
     vadReady:                  vadGate.isReady(),
     vadScore:                  vadGate.getScore(),
+    vadThreshold:              micGate.getVadThreshold(),
+    micDetectionMode:          micGate.getDetectionMode(),
   });
 });
 
