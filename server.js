@@ -1055,6 +1055,13 @@ app.get('/diag/mic-level', (_req, res) => {
   });
 });
 
+// GET /diag/vad-history — volcado crudo de los últimos ~20s de scores de
+// Silero (ver vad-gate.js), para calibrar umbral/cantidad de bloques con
+// datos reales (hablar + golpe en una sola prueba) en vez de a ciegas.
+app.get('/diag/vad-history', (_req, res) => {
+  res.json({ history: vadGate.getHistoryDump() });
+});
+
 // GET /diag/calibration-history — todas las corridas guardadas (boot +
 // manuales + guiadas), más viejas primero, para graficar la tendencia del
 // umbral en /diagnostico. Liviano: solo lee un archivo local, nada de shell.
