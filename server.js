@@ -120,6 +120,8 @@ const { requestRoomToken, setCredentials: setTokenCredentials } = require('./lib
 const clapConnect                                      = require('./lib/clap-connect'); // CLAP-CONNECT — pedido puntual para un evento, ver lib/clap-connect.js para sacarlo
 const { POP_SETTLE_MS: MIC_MONITOR_WARMUP_MS }         = require('./lib/mic-calibration');
 const wakewordGate                                     = require('./lib/wakeword-gate'); // WAKEWORD — detecta "ei brúmexa", ver lib/wakeword-gate.js
+const vadGate                                           = require('./lib/vad-gate'); // VAD — "¿esto es voz humana?", ver lib/vad-gate.js y lib/mic-speech-gate.js
+vadGate.setEnabled(true);
 
 const {
   PORT = 3000,
@@ -1080,6 +1082,7 @@ function startMicMonitor() {
   const startedAt = Date.now();
   let peak = 0;
   let last = Date.now();
+  vadGate.reset(); // arecord nuevo = stream de audio nuevo, no arrastrar contexto viejo del modelo
 
   proc.stdout.on('data', chunk => {
     // arecord suele meter un pop/click de inicialización en los primeros
@@ -1092,6 +1095,10 @@ function startMicMonitor() {
     // WAKEWORD — necesita el PCM crudo de cada chunk (no el level, que acá
     // abajo se calcula cada ~100ms), por eso va afuera de ese throttle.
     wakewordGate.feed(chunk);
+
+    // VAD — "¿esto es voz humana?", mismo PCM crudo. Alimenta la
+    // probabilidad que lee mic-speech-gate.js para confirmar _active.
+    vadGate.feed(chunk);
 
     // Mismo gain que usa la sesión real de LiveKit (_publishMic en
     // lib/livekit-session.js) — sin esto, el nivel en reposo quedaba fijo a
