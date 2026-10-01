@@ -1036,6 +1036,12 @@ app.get('/diag/mic-level', (_req, res) => {
     // conexión a la que mandarle nada.
     sessionActive:             lkSession.isActive(),
     micGateEnabled:            lkSession.getMicGateEnabled(),
+    // Diagnóstico temporal para la puesta a punto del VAD (ver vad-gate.js)
+    // — si vadReady es false, mic-speech-gate.js cae al fail-safe (solo
+    // volumen, sin pedirle confirmación al VAD), que es indistinguible del
+    // comportamiento de antes de este cambio a simple vista.
+    vadReady:                  vadGate.isReady(),
+    vadScore:                  vadGate.getScore(),
   });
 });
 
