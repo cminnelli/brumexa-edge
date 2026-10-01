@@ -1059,7 +1059,7 @@ app.get('/diag/mic-level', (_req, res) => {
 // Silero (ver vad-gate.js), para calibrar umbral/cantidad de bloques con
 // datos reales (hablar + golpe en una sola prueba) en vez de a ciegas.
 app.get('/diag/vad-history', (_req, res) => {
-  res.json({ history: vadGate.getHistoryDump() });
+  res.json({ history: vadGate.getHistoryDump(), debug: vadGate.getDebugState() });
 });
 
 // GET /diag/calibration-history — todas las corridas guardadas (boot +
