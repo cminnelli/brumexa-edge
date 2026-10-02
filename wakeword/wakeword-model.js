@@ -20,6 +20,15 @@ const EMBEDDING_STRIDE = 8;  // paso entre ventanas
 const MIN_EMBEDDINGS = 16;   // cuántos embeddings necesita el clasificador
 const MEL_BINS = 32;
 
+// Streaming (feed): el mel usa ventanas de 512 muestras con paso de 160
+// (10ms), sin padding. Un pedazo de 1280 muestras (80ms) + 480 de contexto
+// del pedazo anterior da EXACTAMENTE 8 frames nuevos (= EMBEDDING_STRIDE),
+// idénticos a los que salen calculando la ventana entera de una — medido
+// contra predict(), diferencia ~1e-4 (ruido de float). Así cada 80ms de
+// audio produce 1 embedding nuevo, sin huecos ni frames repetidos.
+const CHUNK_SAMPLES = 1280;
+const MEL_CONTEXT   = 480;
+
 // Sin esto, onnxruntime usa TODOS los núcleos del chip para cada corrida —
 // en una Pi Zero 2W (4 núcleos) eso deja al hilo principal (audio, LEDs,
 // HTTP) sin margen real de CPU aunque el modelo corra en un worker thread
@@ -33,11 +42,53 @@ class WakeWordModel {
     this._mel = await ort.InferenceSession.create(melPath, SESSION_OPTIONS);
     this._embedding = await ort.InferenceSession.create(embeddingPath, SESSION_OPTIONS);
     this._classifier = await ort.InferenceSession.create(classifierPath, SESSION_OPTIONS);
+    this.reset();
   }
 
-  // audioInt16: Int16Array de ~2 segundos a 16kHz. El modelo es "stateless"
-  // (sin memoria entre llamadas) — una ventana corta simplemente da 0, igual
-  // que en la versión Python.
+  // Olvida todo el audio anterior — llamar cuando el stream se corta (arecord
+  // nuevo), para no mezclar audio viejo con el nuevo en la misma ventana.
+  reset() {
+    this._pending = new Float32Array(0);           // muestras que todavía no llegan a un pedazo entero
+    this._context = new Float32Array(MEL_CONTEXT); // cola del pedazo anterior (arranca en silencio)
+    this._melRows = [];                            // últimos EMBEDDING_WINDOW frames
+    this._embeddings = [];                         // últimos MIN_EMBEDDINGS embeddings
+  }
+
+  // STREAMING — lo que usa la Pi. Recibe audio NUEVO (cualquier largo) y
+  // devuelve un score por cada pedazo completo de 80ms procesado. Por
+  // pedazo solo corre 1 mel chico + 1 embedding + el clasificador, en vez
+  // de recalcular 2s enteros (16 embeddings) como predict(): en la Pi Zero
+  // eso tardaba ~680ms y obligaba a evaluar cada ~800ms, salteándose el
+  // instante justo en que la frase cae bien en la ventana.
+  async feed(audioInt16) {
+    const merged = new Float32Array(this._pending.length + audioInt16.length);
+    merged.set(this._pending);
+    for (let i = 0; i < audioInt16.length; i++) merged[this._pending.length + i] = audioInt16[i] / 32768;
+
+    const scores = [];
+    let offset = 0;
+    for (; offset + CHUNK_SAMPLES <= merged.length; offset += CHUNK_SAMPLES) {
+      const input = new Float32Array(MEL_CONTEXT + CHUNK_SAMPLES);
+      input.set(this._context);
+      input.set(merged.subarray(offset, offset + CHUNK_SAMPLES), MEL_CONTEXT);
+      this._context = input.slice(input.length - MEL_CONTEXT);
+
+      this._melRows.push(...await this._runMel(input));
+      if (this._melRows.length > EMBEDDING_WINDOW) this._melRows.splice(0, this._melRows.length - EMBEDDING_WINDOW);
+
+      if (this._melRows.length === EMBEDDING_WINDOW) {
+        this._embeddings.push(await this._runEmbedding(this._melRows));
+        if (this._embeddings.length > MIN_EMBEDDINGS) this._embeddings.shift();
+      }
+      scores.push(this._embeddings.length === MIN_EMBEDDINGS ? await this._runClassifier(this._embeddings) : 0);
+    }
+    this._pending = merged.slice(offset);
+    return scores;
+  }
+
+  // REFERENCIA — versión "stateless" original (ventana de ~2s entera por
+  // llamada, igual que la clase Python de livekit-wakeword). La Pi ya no la
+  // usa (ver feed()); queda para comparar que feed() da lo mismo.
   async predict(audioInt16) {
     const audioFloat = new Float32Array(audioInt16.length);
     for (let i = 0; i < audioInt16.length; i++) audioFloat[i] = audioInt16[i] / 32768;
@@ -104,4 +155,4 @@ class WakeWordModel {
   }
 }
 
-module.exports = { WakeWordModel };
+module.exports = { WakeWordModel, CHUNK_SAMPLES };

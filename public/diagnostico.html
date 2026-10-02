@@ -423,7 +423,7 @@
     <p class="field-hint" id="ww-coverage" style="margin:6px 0 10px"></p>
 
     <div id="ww-chart-wrap" style="overflow-x:auto"></div>
-    <p class="field-hint" style="margin:6px 0 0">Cada punto = una evaluación (mira los últimos 2s de audio). Franja ámbar = estabas hablando. Si dijiste la frase y no hay puntos en esa franja, la Pi no la evaluó; si hay puntos pero bajos, el modelo no la reconoció.</p>
+    <p class="field-hint" style="margin:6px 0 0">La línea es el score del modelo (se evalúa cada 80 ms de audio). Franja ámbar = estabas hablando. Si dijiste la frase y la línea no se despegó del piso dentro de la franja, el modelo no la reconoció.</p>
 
     <div class="divider" style="margin:14px 0"></div>
     <div class="field-group-label" style="margin-top:0">Picos recientes (último minuto)</div>
@@ -514,7 +514,7 @@
 
 </main>
 
-<script src="/diagnostico.js?v=9"></script>
+<script src="/diagnostico.js?v=10"></script>
 <script src="/theme.js?v=1"></script>
 <script src="/session-quick.js?v=1"></script>
 <script src="/admin-link.js?v=1"></script>

@@ -1127,6 +1127,7 @@ function startMicMonitor() {
   let peak = 0;
   let last = Date.now();
   vadGate.reset(); // arecord nuevo = stream de audio nuevo, no arrastrar contexto viejo del modelo
+  wakewordGate.reset(); // ídem — el wake word ahora también guarda estado entre pedazos (streaming)
 
   proc.stdout.on('data', chunk => {
     // arecord suele meter un pop/click de inicialización en los primeros

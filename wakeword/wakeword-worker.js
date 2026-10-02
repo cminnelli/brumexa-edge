@@ -4,16 +4,16 @@
  * wakeword/wakeword-worker.js
  *
  * Corre wakeword-model.js en un worker thread — un hilo de Node
- * completamente aparte del principal. Cada corrida real del modelo puede
- * tardar varios segundos en una Pi Zero 2W; si eso pasara en el hilo
- * principal, bloquearía TODO lo demás (HTTP, audio, LEDs) — confirmado en
- * producción, no es una precaución de más. Acá adentro puede tardar lo que
- * tarde sin afectar al resto de la app.
+ * completamente aparte del principal. Aunque ahora cada pedazo de audio es
+ * barato (streaming, ver feed() en wakeword-model.js), sigue siendo trabajo
+ * de CPU continuo: acá adentro no le roba tiempo al hilo principal (HTTP,
+ * audio, LEDs).
  *
  * Protocolo simple por mensajes:
- *   afuera -> adentro: { type: 'predict', buffer: ArrayBuffer }
+ *   afuera -> adentro: { type: 'feed', buffer: ArrayBuffer }  (Int16 PCM NUEVO, múltiplo de 80ms)
+ *                       { type: 'reset' }                      (stream de audio nuevo)
  *   adentro -> afuera: { type: 'ready' }
- *                       { type: 'score', score: number, inferMs: number }
+ *                       { type: 'score', scores: number[], inferMs: number }  (un score por pedazo de 80ms)
  *                       { type: 'error', error: string }
  */
 
@@ -26,14 +26,15 @@ async function main() {
   parentPort.postMessage({ type: 'ready' });
 
   parentPort.on('message', async (msg) => {
-    if (msg.type !== 'predict') return;
+    if (msg.type === 'reset') { model.reset(); return; }
+    if (msg.type !== 'feed') return;
     try {
       // inferMs = solo lo que tarda el modelo, medido acá adentro — para
       // /diag/wakeword-history (ver lib/wakeword-gate.js).
       const startedAt = performance.now();
-      const score = await model.predict(new Int16Array(msg.buffer));
+      const scores = await model.feed(new Int16Array(msg.buffer));
       const inferMs = performance.now() - startedAt;
-      parentPort.postMessage({ type: 'score', score, inferMs });
+      parentPort.postMessage({ type: 'score', scores, inferMs });
     } catch (e) {
       parentPort.postMessage({ type: 'error', error: e.message });
     }

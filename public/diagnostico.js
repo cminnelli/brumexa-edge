@@ -522,7 +522,6 @@ const WakewordDiag = {
   SPAN_MS: 60000,      // mismo HISTORY_MS que lib/wakeword-gate.js
   PEAK_MIN: 0.05,      // por debajo de esto es "nada", no cuenta como pico
   PEAK_GAP_MS: 3000,   // evaluaciones más separadas que esto = picos distintos
-  PHRASE_MS: 1000,     // lo que tarda en decirse "ei brúmexa", aprox
   CHART_H: 130,
 
   start() {
@@ -603,14 +602,13 @@ const WakewordDiag = {
     const period = this._avgPeriodMs(history);
     if (perEl) perEl.textContent = period === null ? '—' : `${(period / 1000).toFixed(2)} s`;
 
-    // Cada evaluación mira los últimos windowMs. Para que una frase de
-    // ~PHRASE_MS caiga ENTERA en al menos una ventana, dos ventanas
-    // seguidas tienen que solaparse por lo menos eso.
+    // Streaming (ver lib/wakeword-gate.js): cada pedazo de chunkMs se evalúa
+    // una vez, en orden — la única forma de "perderse" audio es que el
+    // worker no dé abasto y se tire backlog (droppedMsLastMinute).
     if (covEl) {
-      if (period === null) covEl.textContent = '';
-      else if (period <= debug.windowMs - this.PHRASE_MS) covEl.textContent = `✅ Ventanas de ${debug.windowMs / 1000}s bien solapadas — la frase siempre cae entera en alguna.`;
-      else if (period < debug.windowMs) covEl.textContent = `⚠ Las ventanas se solapan poco — según en qué momento la digas, la frase puede quedar cortada entre dos evaluaciones.`;
-      else covEl.textContent = `✘ Evalúa más lento que el largo de la ventana (${debug.windowMs / 1000}s) — hay tramos de audio que el modelo nunca mira.`;
+      if (!debug.armed) covEl.textContent = '';
+      else if (debug.droppedMsLastMinute > 0) covEl.textContent = `⚠ Se perdieron ${debug.droppedMsLastMinute} ms de audio en el último minuto — el modelo no dio abasto en algún momento.`;
+      else covEl.textContent = `✅ Se evalúa todo el audio, cada ${debug.chunkMs} ms, sin huecos${debug.backlogMs > 0 ? ` (en cola: ${debug.backlogMs} ms)` : ''}.`;
     }
   },
 
@@ -644,7 +642,9 @@ const WakewordDiag = {
       + `<text x="${W - PR - 3}" y="${(ty - 5).toFixed(1)}" font-size="10" text-anchor="end" fill="var(--text2)">dispara a partir de acá (${debug.threshold})</text>`;
 
     const line = history.map(h => `${xFor(h.msAgo).toFixed(1)},${yFor(h.score).toFixed(1)}`).join(' ');
-    const dots = history.map(h => {
+    // ~12 evaluaciones por segundo — un círculo por cada una sería ruido;
+    // solo se marcan las que se despegan del piso.
+    const dots = history.filter(h => h.score >= this.PEAK_MIN).map(h => {
       const hit = h.score > debug.threshold;
       return `<circle cx="${xFor(h.msAgo).toFixed(1)}" cy="${yFor(h.score).toFixed(1)}" r="${hit ? 4.5 : 2.5}" fill="${hit ? 'var(--accent)' : 'var(--text2)'}" />`;
     }).join('');
