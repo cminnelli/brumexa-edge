@@ -146,7 +146,7 @@ const app = express();
 // Cada línea logueada pasa por lib/log-stream.js y se retransmite por
 // WebSocket a quien tenga /logs abierto — a ese volumen es puro ruido (y
 // trabajo de más) sin beneficio real de diagnóstico.
-const NOISY_POLL_PATHS = new Set(['/diag/mic-level', '/diag/wakeword-history', '/diag/vad-history']);
+const NOISY_POLL_PATHS = new Set(['/diag/mic-level', '/diag/wakeword-history', '/diag/vad-history', '/diag/processes', '/session/status']);
 app.use((req, _res, next) => {
   // Sin timestamp manual acá — lib/log-stream.js ya le agrega hora+ms a
   // TODO console.log centralizado (ver _patchConsole), con más precisión

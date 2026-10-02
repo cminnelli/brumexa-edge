@@ -64,6 +64,21 @@
     .log-line.origin-pi::before  { content: '🔧 PI · ';  color: var(--text2); }
     .log-line.origin-red::before { content: '☁️ RED · '; color: var(--text2); }
     .log-line.dim { opacity: .35; }
+    /* Hitos (ver EVENTS en lib/log-stream.js) — franja de color a la
+       izquierda + fondo suave, para encontrarlos de un vistazo. */
+    .log-line.ev {
+      font-weight: 600; margin: 3px 0; padding: 3px 8px;
+      border-left: 3px solid var(--ev); border-radius: 4px;
+      background: color-mix(in srgb, var(--ev) 13%, transparent);
+    }
+    .log-line.ev-voice-on     { --ev: #22c55e; }
+    .log-line.ev-voice-off    { --ev: #64748b; }
+    .log-line.ev-voice-reject { --ev: #e0a032; }
+    .log-line.ev-wake         { --ev: #a855f7; }
+    .log-line.ev-session-up   { --ev: #06b6d4; }
+    .log-line.ev-session-down { --ev: #ef4444; }
+    .log-line.ev-session-wait { --ev: #c084fc; }
+    .log-line.ev-system       { --ev: #3b82f6; }
     .logs-empty { color: var(--text2); font-size: 12px; padding: 4px 0; }
   </style>
 </head>
@@ -90,6 +105,7 @@
       <span class="logs-panel__title">Servidor (en vivo)</span>
       <input id="filter-server" class="logs-filter" type="search" placeholder="Filtrar (ej. gate, hablando, error)…" autocomplete="off" />
       <span class="logs-panel__count" id="count-server"></span>
+      <button class="btn-ghost" id="btn-events-server" title="Mostrar solo los hitos: voz, wake word, LiveKit…">★ Solo hitos</button>
       <button class="btn-ghost" id="btn-clear-server">Limpiar</button>
     </div>
     <div class="logs-body" id="body-server"></div>
@@ -111,7 +127,7 @@
 <script src="/theme.js?v=1"></script>
 <script src="/session-quick.js?v=1"></script>
 <script src="/admin-link.js?v=1"></script>
-<script src="/logs.js?v=1"></script>
+<script src="/logs.js?v=2"></script>
 
 </body>
 </html>

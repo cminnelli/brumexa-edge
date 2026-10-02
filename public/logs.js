@@ -20,6 +20,9 @@ const MAX_LINES = 500; // tope de <div> por panel — no queremos miles de nodos
 // de la terminal (pm2 logs), para que el panel del navegador y la
 // consola por SSH se vean equivalentes.
 function classify(entry) {
+  // Hitos (entry.event, ver EVENTS en lib/log-stream.js) primero — son lo
+  // que se quiere ver de un vistazo entre todo el resto.
+  if (entry.event) return `ev ev-${entry.event}`;
   if (entry.stream === 'stderr') return 'stderr';
   if (entry.origin === 'PI')  return 'origin-pi';
   if (entry.origin === 'RED') return 'origin-red';
@@ -49,6 +52,10 @@ function makePanel(prefix) {
 
   let shown = 0;
   let filterText = '';
+  let onlyEvents = false;
+  const btnEvents = document.getElementById(`btn-events-${prefix}`); // solo existe en el panel de servidor
+
+  const isVisible = (el) => (!filterText || el.dataset.text.includes(filterText)) && (!onlyEvents || el.classList.contains('ev'));
 
   function isAtBottom() {
     return body.scrollHeight - body.scrollTop - body.clientHeight < 40;
@@ -63,7 +70,7 @@ function makePanel(prefix) {
     ts.textContent = fmtTs(entry.ts);
     el.appendChild(ts);
     el.appendChild(document.createTextNode(entry.text));
-    if (filterText && !el.dataset.text.includes(filterText)) el.style.display = 'none';
+    if (!isVisible(el)) el.style.display = 'none';
 
     const wasBottom = isAtBottom();
     body.appendChild(el);
@@ -73,11 +80,20 @@ function makePanel(prefix) {
     if (wasBottom) body.scrollTop = body.scrollHeight;
   }
 
+  function refilter() {
+    for (const el of body.children) el.style.display = isVisible(el) ? '' : 'none';
+  }
+
   filter.addEventListener('input', () => {
     filterText = filter.value.trim().toLowerCase();
-    for (const el of body.children) {
-      el.style.display = (!filterText || el.dataset.text.includes(filterText)) ? '' : 'none';
-    }
+    refilter();
+  });
+
+  btnEvents?.addEventListener('click', () => {
+    onlyEvents = !onlyEvents;
+    btnEvents.classList.toggle('btn-ghost--accent', onlyEvents);
+    refilter();
+    body.scrollTop = body.scrollHeight;
   });
 
   btnClr.addEventListener('click', () => {
