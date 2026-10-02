@@ -146,7 +146,7 @@ const app = express();
 // Cada línea logueada pasa por lib/log-stream.js y se retransmite por
 // WebSocket a quien tenga /logs abierto — a ese volumen es puro ruido (y
 // trabajo de más) sin beneficio real de diagnóstico.
-const NOISY_POLL_PATHS = new Set(['/diag/mic-level', '/diag/wakeword-history']);
+const NOISY_POLL_PATHS = new Set(['/diag/mic-level', '/diag/wakeword-history', '/diag/vad-history']);
 app.use((req, _res, next) => {
   // Sin timestamp manual acá — lib/log-stream.js ya le agrega hora+ms a
   // TODO console.log centralizado (ver _patchConsole), con más precisión
@@ -894,20 +894,20 @@ app.get('/diag/processes', (_req, res) => {
   if (process.platform !== 'linux') {
     return res.json({ processes: [], error: 'Solo disponible en la Raspberry (Linux)' });
   }
-  const { execSync } = require('child_process');
-  let out;
-  try {
-    out = execSync('ps -eo pid,%cpu,%mem,etime,comm --sort=-%cpu --no-headers', { timeout: 3000, encoding: 'utf8' });
-  } catch (e) {
-    return res.status(500).json({ processes: [], error: e.message });
-  }
-  const processes = out.trim().split('\n').slice(0, 10).map(line => {
-    const m = line.trim().match(/^(\d+)\s+([\d.]+)\s+([\d.]+)\s+(\S+)\s+(.+)$/);
-    if (!m) return null;
-    const [, pid, cpu, mem, etime, comm] = m;
-    return { pid: Number(pid), cpu: Number(cpu), mem: Number(mem), etime, comm };
-  }).filter(Boolean);
-  res.json({ processes });
+  // exec (async), NO execSync — /diagnostico pide esto cada 3s, y con
+  // execSync cada `ps` congelaba el hilo principal ~60ms (LEDs, audio, todo):
+  // confirmado en producción con el monitor de [event-loop], un tildón
+  // exacto cada 3s mientras la página estaba abierta.
+  require('child_process').exec('ps -eo pid,%cpu,%mem,etime,comm --sort=-%cpu --no-headers', { timeout: 3000, encoding: 'utf8' }, (err, out) => {
+    if (err) return res.status(500).json({ processes: [], error: err.message });
+    const processes = out.trim().split('\n').slice(0, 10).map(line => {
+      const m = line.trim().match(/^(\d+)\s+([\d.]+)\s+([\d.]+)\s+(\S+)\s+(.+)$/);
+      if (!m) return null;
+      const [, pid, cpu, mem, etime, comm] = m;
+      return { pid: Number(pid), cpu: Number(cpu), mem: Number(mem), etime, comm };
+    }).filter(Boolean);
+    res.json({ processes });
+  });
 });
 
 // GET /diag/leds/live — auto-diagnóstico del "se tilda la respiración",
@@ -1071,7 +1071,9 @@ app.get('/diag/mic-level', (_req, res) => {
 // Silero (ver vad-gate.js), para calibrar umbral/cantidad de bloques con
 // datos reales (hablar + golpe en una sola prueba) en vez de a ciegas.
 app.get('/diag/vad-history', (_req, res) => {
-  res.json({ history: vadGate.getHistoryDump(), debug: vadGate.getDebugState() });
+  // onsets: cuánto tardó cada arranque de voz y cuánto de eso fue esperar a
+  // Silero (ver getOnsetDump en lib/mic-speech-gate.js).
+  res.json({ history: vadGate.getHistoryDump(), debug: vadGate.getDebugState(), onsets: micGate.getOnsetDump() });
 });
 
 // GET /diag/wakeword-history — cada evaluación del wake word de los últimos

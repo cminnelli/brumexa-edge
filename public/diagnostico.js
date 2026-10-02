@@ -452,6 +452,42 @@ const MicMeter = {
 
 };
 
+// ── Arranques de voz — cuánto tarda el LED en reaccionar, y cuánto de eso
+// es esperar a Silero (ver getOnsetDump en lib/mic-speech-gate.js). Poll
+// aparte y lento (2s): es una lista de eventos, no un gráfico en vivo.
+const VadOnsets = {
+  start() {
+    const tick = async () => {
+      if (document.hidden) return;
+      const el = document.getElementById('vad-onsets');
+      if (!el) return;
+      let data;
+      try { data = await fetch('/diag/vad-history', { cache: 'no-store' }).then(r => r.json()); } catch { return; }
+      const onsets = (data.onsets || []).slice().reverse().slice(0, 8);
+      if (!onsets.length) {
+        el.innerHTML = '<p class="field-hint" style="margin:0">Todavía no hay arranques registrados — hablá cerca del mic.</p>';
+        return;
+      }
+      const ms = v => (v === null || v === undefined ? '—' : `${v} ms`);
+      el.innerHTML = onsets.map(o => {
+        const mode = o.mode === 'vad' ? 'Vol + VAD' : 'Volumen';
+        const result = o.rejected
+          ? '<span class="pill warn">descartado por VAD</span>'
+          : `<span class="pill ok">confirmado ${ms(o.confirmedMs)}</span>`;
+        const wait = o.mode === 'vad' && !o.rejected
+          ? ` · espera VAD: destello ${ms(o.vadWaitSensingMs)}, confirmación ${ms(o.vadWaitConfirmMs)}`
+          : '';
+        return `<div style="font-size:13px; padding:3px 0">
+          ${result}
+          <span style="color:var(--muted); font-size:12px">hace ${Math.round(o.msAgo / 1000)}s · ${mode} · destello ${ms(o.sensingMs)}${wait}</span>
+        </div>`;
+      }).join('');
+    };
+    tick();
+    setInterval(tick, 2000);
+  },
+};
+
 // ── Modo de detección de voz (volumen / volumen+VAD) — ver
 // lib/mic-speech-gate.js. POST al mismo /setup/config que ya usa
 // Configuración, para que quede persistido en .env (sobrevive reiniclos),
@@ -1680,6 +1716,7 @@ const GuidedDiag = {
 
   MicMeter.start();
   WakewordDiag.start();
+  VadOnsets.start();
   LedsDiag.check();
   LedsLab.init();
   SensitivityControls.init();
