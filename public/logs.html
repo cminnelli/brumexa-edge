@@ -132,6 +132,78 @@
       box-shadow: 0 4px 14px rgba(0,0,0,.25);
     }
     .logs-jump[hidden] { display: none; }
+
+    /* Margen abajo: la última línea queda a una altura cómoda de lectura,
+       no pegada al borde inferior. */
+    .logs-body { padding-bottom: 28vh; }
+
+    /* ─── Tarjeta "Ahora" ─────────────────────────────────────────────── */
+    .now {
+      --now: #64748b;
+      display: flex; align-items: center; gap: 14px;
+      margin: 10px 12px 2px; padding: 12px 16px; border-radius: 12px;
+      background: color-mix(in srgb, var(--now) 12%, var(--surface));
+      border: 1px solid color-mix(in srgb, var(--now) 35%, transparent);
+      transition: background .3s, border-color .3s;
+    }
+    .now[data-state="listening"]  { --now: #64748b; }
+    .now[data-state="user"]       { --now: #22c55e; }
+    .now[data-state="connecting"] { --now: #a855f7; }
+    .now[data-state="connected"]  { --now: #06b6d4; }
+    .now[data-state="agent"]      { --now: #14b8a6; }
+    .now[data-state="error"]      { --now: #ef4444; }
+    .now__icon {
+      position: relative; width: 44px; height: 44px; flex-shrink: 0; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; font-size: 22px;
+      background: color-mix(in srgb, var(--now) 22%, transparent);
+    }
+    /* Anillo que late — más rápido cuando alguien habla */
+    .now__icon::after {
+      content: ''; position: absolute; inset: -4px; border-radius: 50%;
+      border: 2px solid var(--now); opacity: 0; animation: now-ring 2.4s ease-out infinite;
+    }
+    .now[data-state="user"] .now__icon::after,
+    .now[data-state="agent"] .now__icon::after { animation-duration: 1s; }
+    .now[data-state="connecting"] .now__icon::after { animation-duration: 1.4s; }
+    @keyframes now-ring { 0% { transform: scale(.85); opacity: .7; } 100% { transform: scale(1.35); opacity: 0; } }
+    /* Ecualizador — reemplaza al emoji mientras alguien habla */
+    .now__eq { display: none; gap: 3px; align-items: flex-end; height: 20px; }
+    .now__eq i { width: 4px; border-radius: 2px; background: var(--now); animation: now-eq .9s ease-in-out infinite; }
+    .now__eq i:nth-child(2) { animation-delay: -.3s; }
+    .now__eq i:nth-child(3) { animation-delay: -.6s; }
+    .now__eq i:nth-child(4) { animation-delay: -.15s; }
+    @keyframes now-eq { 0%,100% { height: 5px; } 50% { height: 20px; } }
+    .now[data-state="user"] .now__emoji, .now[data-state="agent"] .now__emoji { display: none; }
+    .now[data-state="user"] .now__eq,    .now[data-state="agent"] .now__eq    { display: flex; }
+    .now__text { flex: 1; min-width: 0; }
+    .now__title { font-weight: 800; font-size: 16px; color: var(--now); font-family: var(--font-display); }
+    .now__sub { font-size: 12.5px; color: var(--text2); }
+    .now__since { font-size: 12px; color: var(--text2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+    /* ─── Vista Simple como línea de tiempo ("Guitar Hero") ───────────── */
+    .logs-body.timeline { position: relative; padding-left: 34px; font-family: var(--font-sans); font-size: 13px; }
+    /* Riel vertical */
+    .logs-body.timeline::before {
+      content: ''; position: absolute; left: 21px; top: 0; bottom: 0; width: 2px;
+      background: linear-gradient(to bottom, transparent, var(--border2) 15%, var(--border2));
+    }
+    .timeline .log-line { position: relative; animation: tl-in .45s cubic-bezier(.2,.8,.2,1); }
+    /* Punto sobre el riel, del color del evento */
+    .timeline .log-line::after {
+      content: ''; position: absolute; left: -18px; top: 50%; width: 10px; height: 10px; margin-top: -5px;
+      border-radius: 50%; background: var(--ev, var(--text2)); box-shadow: 0 0 0 3px var(--bg);
+    }
+    .timeline .log-line.lvl-warn { --ev: var(--warn); }
+    .timeline .log-line.stderr   { --ev: var(--danger); }
+    .timeline .log-line.latest::after { width: 14px; height: 14px; margin-top: -7px; left: -20px; box-shadow: 0 0 0 3px var(--bg), 0 0 12px var(--ev, var(--accent)); }
+    /* Las viejas se van apagando a medida que suben */
+    .timeline .log-line:not(:nth-last-child(-n+12)) { opacity: .7; }
+    .timeline .log-line:not(:nth-last-child(-n+25)) { opacity: .45; }
+    .timeline .log-line.latest { font-size: 14.5px; padding-top: 8px; padding-bottom: 8px; }
+    @keyframes tl-in { from { transform: translateY(18px) scale(.97); opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) {
+      .timeline .log-line, .now__icon::after, .now__eq i, .log-line.flash { animation: none; }
+    }
     /* Celular: con los dos paneles, uno arriba del otro en vez de lado a lado */
     @media (max-width: 720px) {
       .logs-wrap { flex-direction: column; }
@@ -183,6 +255,15 @@
       <span class="logs-panel__count" id="count-server"></span>
       <button class="btn-ghost" id="btn-clear-server">Limpiar</button>
     </div>
+    <!-- "Ahora" — qué está pasando en este momento, en grande (ver NowCard en logs.js) -->
+    <div class="now" id="now-server" data-state="listening">
+      <div class="now__icon"><span class="now__emoji">👂</span><span class="now__eq"><i></i><i></i><i></i><i></i></span></div>
+      <div class="now__text">
+        <div class="now__title">Escuchando</div>
+        <div class="now__sub">Decí «ei brúmexa» para hablar con el asistente</div>
+      </div>
+      <div class="now__since"></div>
+    </div>
     <div class="logs-body" id="body-server"></div>
     <button class="logs-jump" id="jump-server" type="button" hidden>↓ Ir al último</button>
   </div>
@@ -204,7 +285,7 @@
 <script src="/theme.js?v=1"></script>
 <script src="/session-quick.js?v=1"></script>
 <script src="/admin-link.js?v=1"></script>
-<script src="/logs.js?v=5"></script>
+<script src="/logs.js?v=6"></script>
 
 </body>
 </html>

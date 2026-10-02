@@ -105,6 +105,72 @@ function fmtTs(ts) {
   return `${base}.${ms}`;
 }
 
+// ─── Tarjeta "Ahora" ─────────────────────────────────────────────────────────
+// Qué está pasando EN ESTE MOMENTO, armado a partir de los mismos hitos del
+// log (entry.event). Dos capas: la "base" (en espera / conectando / en
+// conversación) y, encima, quién está hablando ahora (vos / el asistente).
+const NOW_STATES = {
+  listening:  { emoji: '👂', title: 'Escuchando',                sub: 'Decí «ei brúmexa» para hablar con el asistente' },
+  connecting: { emoji: '🔗', title: 'Conectando…',               sub: 'Llamando al asistente' },
+  connected:  { emoji: '🤖', title: 'Conversación activa',       sub: 'El asistente te está escuchando — hablale' },
+  user:       { emoji: '🗣️', title: 'Estás hablando',            sub: '' },
+  agent:      { emoji: '🔊', title: 'El asistente está hablando', sub: '' },
+  error:      { emoji: '⚠️', title: 'Hubo un problema',          sub: '' },
+};
+
+const NowCard = (() => {
+  const el = document.getElementById('now-server');
+  let base = 'listening';  // listening | connecting | connected
+  let speaker = null;      // null | 'user' | 'agent'
+  let errorText = null;    // último error, se muestra unos segundos
+  let errorUntil = 0;
+  let since = Date.now();  // desde cuándo está en el estado visible actual
+  let shown = null;
+
+  function current() {
+    if (errorText && Date.now() < errorUntil) return 'error';
+    return speaker || base;
+  }
+
+  function render() {
+    const state = current();
+    if (state !== shown) { shown = state; since = Date.now(); }
+    const s = NOW_STATES[state];
+    el.dataset.state = state;
+    el.querySelector('.now__emoji').textContent = s.emoji;
+    el.querySelector('.now__title').textContent = s.title;
+    el.querySelector('.now__sub').textContent =
+      state === 'error' ? errorText
+      : state === 'user' ? (base === 'connected' ? 'El asistente te está escuchando' : 'Sin conversación activa — solo se ve en el LED')
+      : state === 'agent' ? 'Respondiendo'
+      : s.sub;
+    const secs = Math.floor((Date.now() - since) / 1000);
+    el.querySelector('.now__since').textContent = secs < 60 ? `hace ${secs} s` : `hace ${Math.floor(secs / 60)} min`;
+  }
+
+  function feed(entry) {
+    switch (entry.event) {
+      case 'voice-on':     speaker = 'user'; break;
+      case 'voice-off':    if (speaker === 'user') speaker = null; break;
+      case 'agent-on':     speaker = 'agent'; break;
+      case 'agent-off':    if (speaker === 'agent') speaker = null; break;
+      case 'wake':
+      case 'session-wait': base = 'connecting'; break;
+      case 'session-up':   base = 'connected'; break;
+      case 'session-down': base = 'listening'; speaker = null; break;
+    }
+    if (entry.stream === 'stderr' || entry.level === 'error') {
+      errorText = stripTags(entry.text);
+      errorUntil = Date.now() + 8000;
+    }
+    render();
+  }
+
+  setInterval(render, 1000); // "hace N s" + vencimiento del error
+  render();
+  return { feed };
+})();
+
 // ─── Panel ───────────────────────────────────────────────────────────────────
 // Guarda las entradas crudas (no solo los <div>) para poder re-dibujar todo
 // al cambiar de vista Simple ↔ Técnico sin perder historia.
@@ -206,6 +272,7 @@ function makePanel(prefix, { hasDetail }) {
   }
 
   function append(entry) {
+    if (hasDetail) NowCard.feed(entry); // solo el panel Servidor tiene la tarjeta "Ahora"
     entries.push(entry);
     if (entries.length > MAX_ENTRIES) entries.shift();
     render(entry);
@@ -215,6 +282,7 @@ function makePanel(prefix, { hasDetail }) {
 
   // Re-dibuja todo desde las entradas guardadas (al cambiar Simple ↔ Técnico).
   function rerender() {
+    body.classList.toggle('timeline', isSimple());
     body.innerHTML = '';
     lastEl = latestEl = null;
     for (const e of entries) render(e);
@@ -239,6 +307,8 @@ function makePanel(prefix, { hasDetail }) {
   function setLive(isLive) {
     dot.className = 'logs-dot ' + (isLive ? 'live' : 'down');
   }
+
+  body.classList.toggle('timeline', isSimple()); // estado inicial (después lo cambia rerender())
 
   // Al volver a mostrar un panel oculto, arrancar en lo último.
   function setVisible(v) {
