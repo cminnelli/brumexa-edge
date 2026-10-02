@@ -27,14 +27,35 @@ setupLogStream();
 const EVENT_LOOP_HISTORY_SIZE = 300;
 const _eventLoopHistory = [];
 let _eventLoopLastTick = Date.now();
+// Log RESUMIDO, no uno por atraso: los atrasos chicos (30-200ms) eran ~95 de
+// cada 300 líneas del log en uso real y tapaban todo lo demás. Se juntan y
+// sale UN aviso cada EVENT_LOOP_SUMMARY_MS con cuántos hubo y el peor; uno
+// grande (> EVENT_LOOP_LOUD_MS, eso sí se nota a simple vista) sale en el
+// momento. El historial completo sigue en /diag/leds/live, sin resumir.
+const EVENT_LOOP_LOUD_MS    = 200;
+const EVENT_LOOP_SUMMARY_MS = 30000;
+let _eventLoopLagCount = 0;
+let _eventLoopLagMax   = 0;
+let _eventLoopSummaryAt = Date.now();
 setInterval(() => {
   const now   = Date.now();
   const drift = now - _eventLoopLastTick - 16;
   _eventLoopLastTick = now;
   _eventLoopHistory.push({ ts: now, drift });
   if (_eventLoopHistory.length > EVENT_LOOP_HISTORY_SIZE) _eventLoopHistory.shift();
-  if (drift > 30) {
-    console.warn(`[event-loop] ⚠ se atrasó ${drift}ms respecto de lo esperado — algo bloqueó el hilo principal un rato`);
+  if (drift > EVENT_LOOP_LOUD_MS) {
+    console.warn(`[event-loop] ⚠ la Pi se trabó ${drift}ms — algo bloqueó el hilo principal`);
+  } else if (drift > 30) {
+    _eventLoopLagCount++;
+    if (drift > _eventLoopLagMax) _eventLoopLagMax = drift;
+  }
+  if (now - _eventLoopSummaryAt >= EVENT_LOOP_SUMMARY_MS) {
+    if (_eventLoopLagCount) {
+      console.warn(`[event-loop] ⚠ ${_eventLoopLagCount} trabones chicos en los últimos ${EVENT_LOOP_SUMMARY_MS / 1000}s (el peor: ${_eventLoopLagMax}ms)`);
+    }
+    _eventLoopLagCount = 0;
+    _eventLoopLagMax   = 0;
+    _eventLoopSummaryAt = now;
   }
 }, 16);
 

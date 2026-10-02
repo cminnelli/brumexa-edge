@@ -67,19 +67,77 @@
     /* Hitos (ver EVENTS en lib/log-stream.js) — franja de color a la
        izquierda + fondo suave, para encontrarlos de un vistazo. */
     .log-line.ev {
-      font-weight: 600; margin: 3px 0; padding: 3px 8px;
-      border-left: 3px solid var(--ev); border-radius: 4px;
-      background: color-mix(in srgb, var(--ev) 13%, transparent);
+      font-weight: 700; margin: 4px 0; padding: 4px 10px;
+      border-left: 5px solid var(--ev); border-radius: 4px;
+      color: var(--ev);
+      background: color-mix(in srgb, var(--ev) 20%, transparent);
     }
+    .log-line.ev .ts { color: var(--ev); opacity: .75; }
+    /* warn en amarillo (como la terminal) y pedidos HTTP atenuados — así
+       lo que importa salta a la vista entre el ruido. */
+    .log-line.lvl-warn { color: var(--warn); }
+    .log-line.dim-req  { opacity: .45; }
     .log-line.ev-voice-on     { --ev: #22c55e; }
-    .log-line.ev-voice-off    { --ev: #64748b; }
+    .log-line.ev-voice-off    { --ev: #0ea5e9; }
     .log-line.ev-voice-reject { --ev: #e0a032; }
     .log-line.ev-wake         { --ev: #a855f7; }
     .log-line.ev-session-up   { --ev: #06b6d4; }
     .log-line.ev-session-down { --ev: #ef4444; }
     .log-line.ev-session-wait { --ev: #c084fc; }
     .log-line.ev-system       { --ev: #3b82f6; }
+    .log-line.ev-agent-on     { --ev: #14b8a6; }
+    .log-line.ev-agent-off    { --ev: #64748b; }
     .logs-empty { color: var(--text2); font-size: 12px; padding: 4px 0; }
+    /* Contador de repetidos agrupados (vista Simple) */
+    .log-line .rep {
+      display: inline-block; margin-left: 8px; padding: 0 6px; border-radius: 999px;
+      font-size: 11px; font-weight: 700; background: var(--surface2); color: var(--text2);
+    }
+
+    /* Barra de arriba: qué paneles ver + nivel de detalle */
+    .logs-toolbar {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px;
+      padding: 8px 14px; border-bottom: 1px solid var(--border); background: var(--surface);
+    }
+    .logs-toolbar__group { display: flex; align-items: center; gap: 8px; }
+    .logs-toolbar__group[hidden] { display: none; }
+    .logs-toolbar__label { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+    .seg { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--surface2); border: 1px solid var(--border); }
+    .seg button {
+      border: 0; background: transparent; color: var(--text2); cursor: pointer;
+      padding: 4px 12px; border-radius: 6px; font-size: 12.5px; font-weight: 600; font-family: inherit;
+    }
+    .seg button.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+    .logs-panel[hidden] { display: none; }
+
+    /* La última línea — siempre resaltada (borde de acento + flecha) y con
+       un destello al llegar, para que se vea de un vistazo qué acaba de pasar. */
+    .log-line.latest {
+      outline: 2px solid var(--accent); outline-offset: -1px; border-radius: 4px;
+      box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 25%, transparent);
+    }
+    .log-line.latest:not(.ev) { padding: 3px 8px; margin: 3px 0; background: color-mix(in srgb, var(--accent) 8%, transparent); }
+    .log-line.latest .ts::before { content: '▶ '; color: var(--accent); }
+    .log-line.flash { animation: log-flash .9s ease-out; }
+    @keyframes log-flash {
+      from { background-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+    }
+
+    /* "↓ Ir al último" — solo aparece si subiste a leer algo viejo */
+    .logs-panel { position: relative; }
+    .logs-jump {
+      position: absolute; right: 18px; bottom: 16px; z-index: 5;
+      padding: 7px 14px; border-radius: 999px; border: 0; cursor: pointer;
+      background: var(--accent); color: #fff; font-weight: 700; font-size: 12.5px; font-family: inherit;
+      box-shadow: 0 4px 14px rgba(0,0,0,.25);
+    }
+    .logs-jump[hidden] { display: none; }
+    /* Celular: con los dos paneles, uno arriba del otro en vez de lado a lado */
+    @media (max-width: 720px) {
+      .logs-wrap { flex-direction: column; }
+      .logs-panel + .logs-panel { border-left: 0; border-top: 1px solid var(--border); }
+      .logs-panel__header { flex-wrap: wrap; }
+    }
   </style>
 </head>
 <body>
@@ -97,21 +155,39 @@
   </div>
 </header>
 
+<div class="logs-toolbar">
+  <div class="logs-toolbar__group">
+    <span class="logs-toolbar__label">Ver</span>
+    <div class="seg" id="seg-panels">
+      <button type="button" data-value="server">Servidor</button>
+      <button type="button" data-value="wifi">WiFi</button>
+      <button type="button" data-value="both">Ambos</button>
+    </div>
+  </div>
+  <div class="logs-toolbar__group" id="seg-detail-wrap">
+    <span class="logs-toolbar__label">Detalle</span>
+    <div class="seg" id="seg-detail">
+      <button type="button" data-value="simple" title="Solo lo importante, en castellano llano">Simple</button>
+      <button type="button" data-value="technical" title="Todo, tal cual lo imprime el server">Técnico</button>
+    </div>
+  </div>
+</div>
+
 <div class="logs-wrap">
 
-  <div class="logs-panel">
+  <div class="logs-panel" id="panel-server">
     <div class="logs-panel__header">
       <span class="logs-dot" id="dot-server"></span>
       <span class="logs-panel__title">Servidor (en vivo)</span>
-      <input id="filter-server" class="logs-filter" type="search" placeholder="Filtrar (ej. gate, hablando, error)…" autocomplete="off" />
+      <input id="filter-server" class="logs-filter" type="search" placeholder="Filtrar (ej. hablar, asistente, error)…" autocomplete="off" />
       <span class="logs-panel__count" id="count-server"></span>
-      <button class="btn-ghost" id="btn-events-server" title="Mostrar solo los hitos: voz, wake word, LiveKit…">★ Solo hitos</button>
       <button class="btn-ghost" id="btn-clear-server">Limpiar</button>
     </div>
     <div class="logs-body" id="body-server"></div>
+    <button class="logs-jump" id="jump-server" type="button" hidden>↓ Ir al último</button>
   </div>
 
-  <div class="logs-panel">
+  <div class="logs-panel" id="panel-wifi">
     <div class="logs-panel__header">
       <span class="logs-dot" id="dot-wifi"></span>
       <span class="logs-panel__title">WiFi (persistente)</span>
@@ -120,6 +196,7 @@
       <button class="btn-ghost" id="btn-clear-wifi">Limpiar</button>
     </div>
     <div class="logs-body" id="body-wifi"></div>
+    <button class="logs-jump" id="jump-wifi" type="button" hidden>↓ Ir al último</button>
   </div>
 
 </div>
@@ -127,7 +204,7 @@
 <script src="/theme.js?v=1"></script>
 <script src="/session-quick.js?v=1"></script>
 <script src="/admin-link.js?v=1"></script>
-<script src="/logs.js?v=2"></script>
+<script src="/logs.js?v=5"></script>
 
 </body>
 </html>
