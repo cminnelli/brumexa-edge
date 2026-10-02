@@ -51,47 +51,69 @@ function technicalClass(entry) {
 // Una función por hito (event de lib/log-stream.js): recibe el texto técnico
 // y devuelve la frase para humanos. Si un hito nuevo no está acá, se muestra
 // su texto técnico tal cual (nunca se pierde).
+// Íconos de línea (trazos estilo Lucide, mismo lenguaje que el navbar) —
+// reemplazan a los emojis: más sobrios y del color de cada evento.
+const ICONS = {
+  mic:     '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/>',
+  micOff:  '<path d="m2 2 20 20"/><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><path d="M12 19v3"/>',
+  ban:     '<circle cx="12" cy="12" r="9"/><path d="m5.7 5.7 12.6 12.6"/>',
+  wake:    '<path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/>',
+  loader:  '<path d="M21 12a9 9 0 1 1-6.22-8.56"/>',
+  link:    '<path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><path d="M8 12h8"/>',
+  bot:     '<path d="M12 8V4H8"/><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>',
+  end:     '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+  unplug:  '<path d="m19 5 3-3"/><path d="m2 22 3-3"/><path d="M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z"/><path d="M7.5 13.5 10 11"/><path d="M10.5 16.5 13 14"/><path d="m12 6 6 6 2.3-2.3a2.4 2.4 0 0 0 0-3.4l-2.6-2.6a2.4 2.4 0 0 0-3.4 0Z"/>',
+  speaker: '<path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/>',
+  speakerOff: '<path d="M11 5 6 9H2v6h4l5 4V5Z"/>',
+  refresh: '<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/>',
+  sliders: '<path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M2 14h4"/><path d="M10 8h4"/><path d="M18 16h4"/>',
+  alert:   '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  error:   '<circle cx="12" cy="12" r="9"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>',
+  ear:     '<path d="M6 8.5a6.5 6.5 0 1 1 13 0c0 6-6 6-6 10a3.5 3.5 0 1 1-7 0"/><path d="M15 8.5a2.5 2.5 0 0 0-5 0v1a2 2 0 1 1 0 4"/>',
+};
+const icon = (name) => `<span class="ico"><svg viewBox="0 0 24 24">${ICONS[name] || ''}</svg></span>`;
+
+// Cada hito → [ícono, texto]. Texto sin emojis (el ícono ya cumple ese rol).
 const num = (text, re) => { const m = text.match(re); return m ? m[1] : null; };
 const FRIENDLY = {
   'voice-on': (t) => {
     const ms = num(t, /confirmado en (\d+)ms/);
-    return `🗣️ Empezaste a hablar${ms ? ` (lo detectó en ${ms} ms)` : ''}${/sobre ruido de fondo/.test(t) ? ' — encima del ruido de fondo' : ''}`;
+    return ['mic', `Empezaste a hablar${ms ? ` · detectado en ${ms} ms` : ''}${/sobre ruido de fondo/.test(t) ? ' · sobre ruido de fondo' : ''}`];
   },
-  'voice-off':    (t) => { const s = num(t, /\(([\d.]+)s\)/); return `🤫 Dejaste de hablar${s ? ` (hablaste ${s} s)` : ''}`; },
-  'voice-reject': ()  => '🚫 Se escuchó un ruido, pero no era voz — ignorado',
+  'voice-off':    (t) => { const s = num(t, /\(([\d.]+)s\)/); return ['micOff', `Dejaste de hablar${s ? ` · ${s} s` : ''}`]; },
+  'voice-reject': ()  => ['ban', 'Ruido descartado — no era voz'],
   'wake': (t) => {
     const score = num(t, /score=([\d.]+)/);
-    return `👋 Te escuché decir «ei brúmexa»${score ? ` (${Math.round(parseFloat(score) * 100)}% seguro)` : ''} — conectando…`;
+    return ['wake', `Te escuché decir «ei brúmexa»${score ? ` · ${Math.round(parseFloat(score) * 100)}% seguro` : ''}`];
   },
-  'session-wait': ()  => '🔗 Conectando con el asistente…',
-  'session-up':   (t) => (/Agente/.test(t) ? '🤖 El asistente está listo — podés hablarle' : '✅ Conectado a la sala'),
-  'session-down': (t) => (/Sesión cerrada/.test(t) ? '👋 Conversación terminada' : '🔌 Se cortó la conexión con el asistente'),
-  'agent-on':     ()  => '🔊 El asistente está hablando',
-  'agent-off':    ()  => '🔈 El asistente terminó de hablar',
+  'session-wait': ()  => ['loader', 'Conectando con el asistente…'],
+  'session-up':   (t) => (/Agente/.test(t) ? ['bot', 'El asistente está listo — podés hablarle'] : ['link', 'Conectado a la sala']),
+  'session-down': (t) => (/Sesión cerrada/.test(t) ? ['end', 'Conversación terminada'] : ['unplug', 'Se cortó la conexión con el asistente']),
+  'agent-on':     ()  => ['speaker', 'El asistente está hablando'],
+  'agent-off':    ()  => ['speakerOff', 'El asistente terminó de hablar'],
   'system': (t) => {
     const hash = num(t, /update: listo \((\w+)\)/);
-    if (hash) return `⬆️ Brumexa se actualizó (versión ${hash}) — reiniciando`;
-    if (/wakeword-gate\] toggle/.test(t)) return `⚙️ «Ei brúmexa» ${/ACTIVADO/.test(t) ? 'activado' : 'desactivado'}`;
+    if (hash) return ['refresh', `Brumexa se actualizó · versión ${hash} · reiniciando`];
+    if (/wakeword-gate\] toggle/.test(t)) return ['sliders', `«Ei brúmexa» ${/ACTIVADO/.test(t) ? 'activado' : 'desactivado'}`];
     const mode = num(t, /modo de detección → (\w+)/);
-    if (mode) return `⚙️ Detección de voz: ${mode === 'vad' ? 'Volumen + VAD' : 'solo Volumen'}`;
+    if (mode) return ['sliders', `Detección de voz: ${mode === 'vad' ? 'Volumen + VAD' : 'solo Volumen'}`];
     return null;
   },
 };
 
-// Saca prefijos técnicos tipo "[event-loop] " / "[rag-auth] " de un aviso.
-const stripTags = (t) => t.replace(/^(\[[^\]]+\]\s*)+/, '');
+// Saca prefijos técnicos ("[event-loop] ") y emojis/símbolos del principio
+// de un aviso — en vista Simple el ícono ya indica que es aviso/error.
+const stripTags = (t) => t.replace(/^(\[[^\]]+\]\s*)+/, '').replace(/^[^\p{L}\p{N}«(]+/u, '');
 
-// Qué mostrar en vista simple — { text, cls } o null (no se muestra).
+// Qué mostrar en vista simple — { icon, text, cls } o null (no se muestra).
 function simpleView(entry) {
   if (entry.event) {
     const f = FRIENDLY[entry.event];
-    return { text: (f && f(entry.text)) || entry.text, cls: `ev ev-${entry.event}` };
+    const [ico, text] = (f && f(entry.text)) || ['refresh', entry.text];
+    return { icon: ico, text, cls: `ev-${entry.event}` };
   }
-  if (entry.stream === 'stderr' || entry.level === 'error') {
-    const t = stripTags(entry.text);
-    return { text: /^[✘✗❌]/.test(t) ? t : '❌ ' + t, cls: 'stderr' }; // sin doble cruz si el mensaje ya trae la suya
-  }
-  if (entry.level === 'warn') return { text: stripTags(entry.text), cls: 'lvl-warn' };
+  if (entry.stream === 'stderr' || entry.level === 'error') return { icon: 'error', text: stripTags(entry.text), cls: 'stderr' };
+  if (entry.level === 'warn') return { icon: 'alert', text: stripTags(entry.text), cls: 'lvl-warn' };
   return null;
 }
 
@@ -110,12 +132,12 @@ function fmtTs(ts) {
 // log (entry.event). Dos capas: la "base" (en espera / conectando / en
 // conversación) y, encima, quién está hablando ahora (vos / el asistente).
 const NOW_STATES = {
-  listening:  { emoji: '👂', title: 'Escuchando',                sub: 'Decí «ei brúmexa» para hablar con el asistente' },
-  connecting: { emoji: '🔗', title: 'Conectando…',               sub: 'Llamando al asistente' },
-  connected:  { emoji: '🤖', title: 'Conversación activa',       sub: 'El asistente te está escuchando — hablale' },
-  user:       { emoji: '🗣️', title: 'Estás hablando',            sub: '' },
-  agent:      { emoji: '🔊', title: 'El asistente está hablando', sub: '' },
-  error:      { emoji: '⚠️', title: 'Hubo un problema',          sub: '' },
+  listening:  { icon: 'ear',    title: 'Escuchando',                 sub: 'Decí «ei brúmexa» para hablar con el asistente' },
+  connecting: { icon: 'loader', title: 'Conectando…',                sub: 'Llamando al asistente' },
+  connected:  { icon: 'bot',    title: 'Conversación activa',        sub: 'El asistente te está escuchando' },
+  user:       { icon: 'mic',    title: 'Estás hablando',             sub: '' },
+  agent:      { icon: 'speaker', title: 'El asistente está hablando', sub: '' },
+  error:      { icon: 'alert',  title: 'Hubo un problema',           sub: '' },
 };
 
 const NowCard = (() => {
@@ -137,7 +159,10 @@ const NowCard = (() => {
     if (state !== shown) { shown = state; since = Date.now(); }
     const s = NOW_STATES[state];
     el.dataset.state = state;
-    el.querySelector('.now__emoji').textContent = s.emoji;
+    if (el.dataset.icon !== s.icon) { // re-dibujar el SVG solo si cambió
+      el.dataset.icon = s.icon;
+      el.querySelector('.now__icon .ico').outerHTML = icon(s.icon);
+    }
     el.querySelector('.now__title').textContent = s.title;
     el.querySelector('.now__sub').textContent =
       state === 'error' ? errorText
@@ -189,30 +214,38 @@ function makePanel(prefix, { hasDetail }) {
   let lastEl = null;   // último <div> dibujado — para agrupar repetidos en vista simple
   let latestEl = null; // la línea marcada como "la última" (resaltada)
 
-  // Seguir al último: por default SIEMPRE baja a la línea nueva. Solo deja
-  // de seguir si subís a propósito para leer algo (si no, te arrastraría
-  // para abajo mientras leés) — ahí aparece "↓ Ir al último" para volver.
+  // Seguir al último: por default SIEMPRE se queda en la línea nueva. Solo
+  // deja de seguir si te movés a propósito a leer algo (si no, te
+  // arrastraría mientras leés) — ahí aparece "Ir a lo último" para volver.
   let follow = true;
 
   const isSimple = () => hasDetail && prefs.detail === 'simple';
   const matches  = (el) => !filterText || el.dataset.text.includes(filterText);
 
-  function isAtBottom() {
-    return body.scrollHeight - body.scrollTop - body.clientHeight < 40;
+  // Vista Simple = feed, lo más nuevo ARRIBA. Vista Técnico (y WiFi) =
+  // terminal, lo más nuevo ABAJO — así se lee de corrido para depurar.
+  const newestTop = () => isSimple();
+
+  function isAtLatest() {
+    return newestTop()
+      ? body.scrollTop < 40
+      : body.scrollHeight - body.scrollTop - body.clientHeight < 40;
   }
 
   function scrollToLatest() {
-    body.scrollTop = body.scrollHeight;
+    body.scrollTop = newestTop() ? 0 : body.scrollHeight;
   }
 
   function setFollow(v) {
     follow = v;
     btnJump.hidden = v;
+    btnJump.textContent = newestTop() ? '↑ Ir a lo último' : '↓ Ir a lo último';
   }
 
   // Scroll del usuario (rueda, arrastre) — los scrolls que hace el propio
-  // código terminan siempre abajo de todo, así que no apagan el seguimiento.
-  body.addEventListener('scroll', () => setFollow(isAtBottom()));
+  // código terminan siempre en el extremo de lo último, así que no apagan
+  // el seguimiento.
+  body.addEventListener('scroll', () => setFollow(isAtLatest()));
   btnJump.addEventListener('click', () => { setFollow(true); scrollToLatest(); });
 
   // Resalta `el` como la última línea (y le saca la marca a la anterior).
@@ -226,11 +259,12 @@ function makePanel(prefix, { hasDetail }) {
   }
 
   function render(entry) {
-    let text = entry.text, cls = technicalClass(entry);
+    let text = entry.text, cls = technicalClass(entry), ico = null;
     if (isSimple()) {
       const v = simpleView(entry);
       if (!v) return;
-      ({ text, cls } = v);
+      ({ text, cls, icon: ico } = v);
+      cls = 'tl ' + cls;
 
       // Repetido del anterior (ignorando números) → se suma al contador
       // del que ya está en pantalla en vez de agregar otra línea.
@@ -259,12 +293,23 @@ function makePanel(prefix, { hasDetail }) {
     const msg = document.createElement('span');
     msg.className = 'msg';
     msg.textContent = text;
+    if (ico) {
+      const badge = document.createElement('span');
+      badge.className = 'tl-ico';
+      badge.innerHTML = icon(ico); // SVG fijo de ICONS, nunca texto del log
+      el.append(badge);
+    }
     el.append(ts, msg);
     if (!matches(el)) el.style.display = 'none';
-    body.appendChild(el);
+    if (newestTop()) {
+      body.prepend(el);
+      while (body.children.length > MAX_ENTRIES) body.removeChild(body.lastChild);
+    } else {
+      body.appendChild(el);
+      while (body.children.length > MAX_ENTRIES) body.removeChild(body.firstChild);
+    }
     lastEl = el;
     markLatest(el);
-    while (body.children.length > MAX_ENTRIES) body.removeChild(body.firstChild);
   }
 
   function updateCount() {
@@ -281,8 +326,14 @@ function makePanel(prefix, { hasDetail }) {
   }
 
   // Re-dibuja todo desde las entradas guardadas (al cambiar Simple ↔ Técnico).
-  function rerender() {
+  // Clases de layout según la vista: feed (Simple) o terminal (Técnico).
+  function syncLayout() {
     body.classList.toggle('timeline', isSimple());
+    root.classList.toggle('newest-top', newestTop());
+  }
+
+  function rerender() {
+    syncLayout();
     body.innerHTML = '';
     lastEl = latestEl = null;
     for (const e of entries) render(e);
@@ -308,7 +359,7 @@ function makePanel(prefix, { hasDetail }) {
     dot.className = 'logs-dot ' + (isLive ? 'live' : 'down');
   }
 
-  body.classList.toggle('timeline', isSimple()); // estado inicial (después lo cambia rerender())
+  syncLayout(); // estado inicial (después lo cambia rerender())
 
   // Al volver a mostrar un panel oculto, arrancar en lo último.
   function setVisible(v) {

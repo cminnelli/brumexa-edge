@@ -64,34 +64,40 @@
     .log-line.origin-pi::before  { content: '🔧 PI · ';  color: var(--text2); }
     .log-line.origin-red::before { content: '☁️ RED · '; color: var(--text2); }
     .log-line.dim { opacity: .35; }
-    /* Hitos (ver EVENTS en lib/log-stream.js) — franja de color a la
-       izquierda + fondo suave, para encontrarlos de un vistazo. */
+    /* ─── Paleta de hitos ─────────────────────────────────────────────────
+       Acotada y alrededor del violeta de la marca: violeta = todo lo del
+       asistente (wake word, conexión, asistente hablando); verde sobrio =
+       vos hablando; gris = lo neutro; ámbar/rojo SOLO para avisos/errores. */
+    .log-line { --ev: var(--text2); }
+    .log-line.ev-voice-on     { --ev: #10b981; }
+    .log-line.ev-voice-off    { --ev: #94a3b8; }
+    .log-line.ev-voice-reject { --ev: #d97706; }
+    .log-line.ev-wake         { --ev: var(--accent); }
+    .log-line.ev-session-wait { --ev: #a78bfa; }
+    .log-line.ev-session-up   { --ev: var(--accent); }
+    .log-line.ev-agent-on     { --ev: #8b5cf6; }
+    .log-line.ev-agent-off    { --ev: #94a3b8; }
+    .log-line.ev-session-down { --ev: #e11d48; }
+    .log-line.ev-system       { --ev: #64748b; }
+    .log-line.lvl-warn        { --ev: var(--warn); }
+    .log-line.stderr          { --ev: var(--danger); }
+
+    /* Vista Técnico: hitos con una franja fina y fondo apenas teñido. */
     .log-line.ev {
-      font-weight: 700; margin: 4px 0; padding: 4px 10px;
-      border-left: 5px solid var(--ev); border-radius: 4px;
-      color: var(--ev);
-      background: color-mix(in srgb, var(--ev) 20%, transparent);
+      font-weight: 600; margin: 2px 0; padding: 2px 8px;
+      border-left: 3px solid var(--ev); border-radius: 3px;
+      background: color-mix(in srgb, var(--ev) 9%, transparent);
     }
-    .log-line.ev .ts { color: var(--ev); opacity: .75; }
-    /* warn en amarillo (como la terminal) y pedidos HTTP atenuados — así
-       lo que importa salta a la vista entre el ruido. */
+    .log-line.ev .msg { color: color-mix(in srgb, var(--ev) 70%, var(--text)); }
+    /* warn en ámbar (como la terminal) y pedidos HTTP atenuados. */
     .log-line.lvl-warn { color: var(--warn); }
     .log-line.dim-req  { opacity: .45; }
-    .log-line.ev-voice-on     { --ev: #22c55e; }
-    .log-line.ev-voice-off    { --ev: #0ea5e9; }
-    .log-line.ev-voice-reject { --ev: #e0a032; }
-    .log-line.ev-wake         { --ev: #a855f7; }
-    .log-line.ev-session-up   { --ev: #06b6d4; }
-    .log-line.ev-session-down { --ev: #ef4444; }
-    .log-line.ev-session-wait { --ev: #c084fc; }
-    .log-line.ev-system       { --ev: #3b82f6; }
-    .log-line.ev-agent-on     { --ev: #14b8a6; }
-    .log-line.ev-agent-off    { --ev: #64748b; }
     .logs-empty { color: var(--text2); font-size: 12px; padding: 4px 0; }
     /* Contador de repetidos agrupados (vista Simple) */
     .log-line .rep {
-      display: inline-block; margin-left: 8px; padding: 0 6px; border-radius: 999px;
-      font-size: 11px; font-weight: 700; background: var(--surface2); color: var(--text2);
+      display: inline-block; margin-left: 8px; padding: 0 7px; border-radius: 999px;
+      font-size: 11px; font-weight: 600; background: var(--surface2); color: var(--text2);
+      font-variant-numeric: tabular-nums;
     }
 
     /* Barra de arriba: qué paneles ver + nivel de detalle */
@@ -110,99 +116,119 @@
     .seg button.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
     .logs-panel[hidden] { display: none; }
 
-    /* La última línea — siempre resaltada (borde de acento + flecha) y con
-       un destello al llegar, para que se vea de un vistazo qué acaba de pasar. */
-    .log-line.latest {
-      outline: 2px solid var(--accent); outline-offset: -1px; border-radius: 4px;
-      box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 25%, transparent);
+    /* Última línea (vista Técnico) — borde de acento + destello al llegar. */
+    .log-line.latest:not(.tl) {
+      outline: 1.5px solid var(--accent); outline-offset: -1px; border-radius: 4px;
+      background: color-mix(in srgb, var(--accent) 7%, transparent);
     }
-    .log-line.latest:not(.ev) { padding: 3px 8px; margin: 3px 0; background: color-mix(in srgb, var(--accent) 8%, transparent); }
-    .log-line.latest .ts::before { content: '▶ '; color: var(--accent); }
+    .log-line.latest:not(.tl):not(.ev) { padding: 3px 8px; margin: 3px 0; }
     .log-line.flash { animation: log-flash .9s ease-out; }
-    @keyframes log-flash {
-      from { background-color: color-mix(in srgb, var(--accent) 35%, transparent); }
-    }
+    @keyframes log-flash { from { background-color: color-mix(in srgb, var(--accent) 22%, transparent); } }
 
-    /* "↓ Ir al último" — solo aparece si subiste a leer algo viejo */
+    /* "Ir al último" — solo aparece si te moviste a leer algo viejo */
     .logs-panel { position: relative; }
     .logs-jump {
       position: absolute; right: 18px; bottom: 16px; z-index: 5;
       padding: 7px 14px; border-radius: 999px; border: 0; cursor: pointer;
-      background: var(--accent); color: #fff; font-weight: 700; font-size: 12.5px; font-family: inherit;
+      background: var(--accent); color: #fff; font-weight: 600; font-size: 12.5px; font-family: inherit;
       box-shadow: 0 4px 14px rgba(0,0,0,.25);
     }
     .logs-jump[hidden] { display: none; }
+    /* Vista Simple: lo nuevo está ARRIBA, así que el botón va arriba */
+    .logs-panel.newest-top .logs-jump { top: 170px; bottom: auto; }
 
-    /* Margen abajo: la última línea queda a una altura cómoda de lectura,
-       no pegada al borde inferior. */
-    .logs-body { padding-bottom: 28vh; }
+    /* Vista Técnico (terminal, lo nuevo abajo): margen para que la última
+       línea quede a altura de lectura, no pegada al borde inferior. */
+    .logs-body:not(.timeline) { padding-bottom: 28vh; }
+
+    /* Íconos de línea (mismo estilo que el navbar) */
+    .ico { display: inline-flex; }
+    .ico svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
     /* ─── Tarjeta "Ahora" ─────────────────────────────────────────────── */
     .now {
-      --now: #64748b;
+      --now: #94a3b8;
       display: flex; align-items: center; gap: 14px;
-      margin: 10px 12px 2px; padding: 12px 16px; border-radius: 12px;
-      background: color-mix(in srgb, var(--now) 12%, var(--surface));
-      border: 1px solid color-mix(in srgb, var(--now) 35%, transparent);
-      transition: background .3s, border-color .3s;
+      margin: 12px 14px 4px; padding: 14px 18px; border-radius: 14px;
+      background: var(--surface); border: 1px solid var(--border);
+      box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 6px 20px -12px color-mix(in srgb, var(--now) 60%, transparent);
+      transition: box-shadow .4s;
     }
-    .now[data-state="listening"]  { --now: #64748b; }
-    .now[data-state="user"]       { --now: #22c55e; }
-    .now[data-state="connecting"] { --now: #a855f7; }
-    .now[data-state="connected"]  { --now: #06b6d4; }
-    .now[data-state="agent"]      { --now: #14b8a6; }
-    .now[data-state="error"]      { --now: #ef4444; }
+    .now[data-state="listening"]  { --now: #94a3b8; }
+    .now[data-state="user"]       { --now: #10b981; }
+    .now[data-state="connecting"] { --now: #a78bfa; }
+    .now[data-state="connected"]  { --now: var(--accent); }
+    .now[data-state="agent"]      { --now: #8b5cf6; }
+    .now[data-state="error"]      { --now: var(--danger); }
     .now__icon {
-      position: relative; width: 44px; height: 44px; flex-shrink: 0; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center; font-size: 22px;
-      background: color-mix(in srgb, var(--now) 22%, transparent);
+      position: relative; width: 42px; height: 42px; flex-shrink: 0; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center; color: var(--now);
+      background: color-mix(in srgb, var(--now) 13%, transparent);
+      transition: color .3s, background .3s;
     }
-    /* Anillo que late — más rápido cuando alguien habla */
+    .now__icon .ico { width: 20px; height: 20px; }
+    /* Halo que late, discreto — más rápido cuando alguien habla */
     .now__icon::after {
-      content: ''; position: absolute; inset: -4px; border-radius: 50%;
-      border: 2px solid var(--now); opacity: 0; animation: now-ring 2.4s ease-out infinite;
+      content: ''; position: absolute; inset: -3px; border-radius: 14px;
+      border: 1.5px solid var(--now); opacity: 0; animation: now-ring 2.8s ease-out infinite;
     }
     .now[data-state="user"] .now__icon::after,
-    .now[data-state="agent"] .now__icon::after { animation-duration: 1s; }
-    .now[data-state="connecting"] .now__icon::after { animation-duration: 1.4s; }
-    @keyframes now-ring { 0% { transform: scale(.85); opacity: .7; } 100% { transform: scale(1.35); opacity: 0; } }
-    /* Ecualizador — reemplaza al emoji mientras alguien habla */
-    .now__eq { display: none; gap: 3px; align-items: flex-end; height: 20px; }
-    .now__eq i { width: 4px; border-radius: 2px; background: var(--now); animation: now-eq .9s ease-in-out infinite; }
+    .now[data-state="agent"] .now__icon::after { animation-duration: 1.2s; }
+    .now[data-state="connecting"] .now__icon::after { animation-duration: 1.6s; }
+    @keyframes now-ring { 0% { transform: scale(.9); opacity: .55; } 100% { transform: scale(1.25); opacity: 0; } }
+    /* Ecualizador — reemplaza al ícono mientras alguien habla */
+    .now__eq { display: none; gap: 3px; align-items: flex-end; height: 18px; }
+    .now__eq i { width: 3px; border-radius: 2px; background: var(--now); animation: now-eq .9s ease-in-out infinite; }
     .now__eq i:nth-child(2) { animation-delay: -.3s; }
     .now__eq i:nth-child(3) { animation-delay: -.6s; }
     .now__eq i:nth-child(4) { animation-delay: -.15s; }
-    @keyframes now-eq { 0%,100% { height: 5px; } 50% { height: 20px; } }
-    .now[data-state="user"] .now__emoji, .now[data-state="agent"] .now__emoji { display: none; }
-    .now[data-state="user"] .now__eq,    .now[data-state="agent"] .now__eq    { display: flex; }
+    @keyframes now-eq { 0%,100% { height: 4px; } 50% { height: 18px; } }
+    .now[data-state="user"] .now__icon .ico, .now[data-state="agent"] .now__icon .ico { display: none; }
+    .now[data-state="user"] .now__eq,        .now[data-state="agent"] .now__eq        { display: flex; }
     .now__text { flex: 1; min-width: 0; }
-    .now__title { font-weight: 800; font-size: 16px; color: var(--now); font-family: var(--font-display); }
-    .now__sub { font-size: 12.5px; color: var(--text2); }
-    .now__since { font-size: 12px; color: var(--text2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .now__title { font-weight: 700; font-size: 15.5px; color: var(--text); font-family: var(--font-display); letter-spacing: -.01em; }
+    .now__sub { font-size: 12.5px; color: var(--text2); margin-top: 1px; }
+    .now__since {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 11.5px; color: var(--text2); font-variant-numeric: tabular-nums; white-space: nowrap;
+    }
+    .now__since::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--now); }
 
-    /* ─── Vista Simple como línea de tiempo ("Guitar Hero") ───────────── */
-    .logs-body.timeline { position: relative; padding-left: 34px; font-family: var(--font-sans); font-size: 13px; }
-    /* Riel vertical */
+    /* ─── Vista Simple: feed, lo más nuevo arriba ─────────────────────── */
+    .logs-body.timeline { position: relative; padding: 6px 14px 20px 14px; font-family: var(--font-sans); font-size: 13px; }
+    /* Riel vertical que une los íconos */
     .logs-body.timeline::before {
-      content: ''; position: absolute; left: 21px; top: 0; bottom: 0; width: 2px;
-      background: linear-gradient(to bottom, transparent, var(--border2) 15%, var(--border2));
+      content: ''; position: absolute; left: 31px; top: 14px; bottom: 0; width: 1px;
+      background: linear-gradient(to bottom, var(--border2), var(--border2) 70%, transparent);
     }
-    .timeline .log-line { position: relative; animation: tl-in .45s cubic-bezier(.2,.8,.2,1); }
-    /* Punto sobre el riel, del color del evento */
-    .timeline .log-line::after {
-      content: ''; position: absolute; left: -18px; top: 50%; width: 10px; height: 10px; margin-top: -5px;
-      border-radius: 50%; background: var(--ev, var(--text2)); box-shadow: 0 0 0 3px var(--bg);
+    .log-line.tl {
+      position: relative; display: flex; align-items: center; gap: 12px;
+      padding: 7px 10px 7px 4px; border-radius: 10px; white-space: normal;
+      animation: tl-in .4s cubic-bezier(.2,.8,.2,1);
     }
-    .timeline .log-line.lvl-warn { --ev: var(--warn); }
-    .timeline .log-line.stderr   { --ev: var(--danger); }
-    .timeline .log-line.latest::after { width: 14px; height: 14px; margin-top: -7px; left: -20px; box-shadow: 0 0 0 3px var(--bg), 0 0 12px var(--ev, var(--accent)); }
-    /* Las viejas se van apagando a medida que suben */
-    .timeline .log-line:not(:nth-last-child(-n+12)) { opacity: .7; }
-    .timeline .log-line:not(:nth-last-child(-n+25)) { opacity: .45; }
-    .timeline .log-line.latest { font-size: 14.5px; padding-top: 8px; padding-bottom: 8px; }
-    @keyframes tl-in { from { transform: translateY(18px) scale(.97); opacity: 0; } }
+    .log-line.tl .tl-ico {
+      position: relative; z-index: 1; flex-shrink: 0; width: 28px; height: 28px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center; color: var(--ev);
+      background: color-mix(in srgb, var(--ev) 14%, var(--bg)); box-shadow: 0 0 0 3px var(--bg);
+    }
+    .log-line.tl .tl-ico .ico { width: 15px; height: 15px; }
+    .log-line.tl .msg { flex: 1; min-width: 0; color: var(--text); font-weight: 500; }
+    .log-line.tl .ts { order: 3; margin: 0; font-size: 11.5px; color: var(--muted); }
+    .log-line.tl .rep { order: 2; }
+    /* La última (arriba de todo): tarjeta sutil con el color del evento */
+    .log-line.tl.latest {
+      background: var(--surface); border: 1px solid var(--border);
+      box-shadow: 0 6px 18px -10px color-mix(in srgb, var(--ev) 70%, transparent);
+      padding-top: 10px; padding-bottom: 10px; margin-bottom: 4px;
+    }
+    .log-line.tl.latest .msg { font-weight: 650; font-size: 14px; }
+    .log-line.tl.latest .tl-ico { width: 32px; height: 32px; box-shadow: 0 0 0 3px var(--surface); }
+    /* Las viejas se van apagando a medida que bajan */
+    .timeline .log-line:nth-child(n+10) { opacity: .7; }
+    .timeline .log-line:nth-child(n+25) { opacity: .45; }
+    @keyframes tl-in { from { transform: translateY(-10px); opacity: 0; } }
     @media (prefers-reduced-motion: reduce) {
-      .timeline .log-line, .now__icon::after, .now__eq i, .log-line.flash { animation: none; }
+      .log-line.tl, .now__icon::after, .now__eq i, .log-line.flash { animation: none; }
     }
     /* Celular: con los dos paneles, uno arriba del otro en vez de lado a lado */
     @media (max-width: 720px) {
@@ -257,7 +283,7 @@
     </div>
     <!-- "Ahora" — qué está pasando en este momento, en grande (ver NowCard en logs.js) -->
     <div class="now" id="now-server" data-state="listening">
-      <div class="now__icon"><span class="now__emoji">👂</span><span class="now__eq"><i></i><i></i><i></i><i></i></span></div>
+      <div class="now__icon"><span class="ico"></span><span class="now__eq"><i></i><i></i><i></i><i></i></span></div>
       <div class="now__text">
         <div class="now__title">Escuchando</div>
         <div class="now__sub">Decí «ei brúmexa» para hablar con el asistente</div>
@@ -285,7 +311,7 @@
 <script src="/theme.js?v=1"></script>
 <script src="/session-quick.js?v=1"></script>
 <script src="/admin-link.js?v=1"></script>
-<script src="/logs.js?v=6"></script>
+<script src="/logs.js?v=7"></script>
 
 </body>
 </html>
