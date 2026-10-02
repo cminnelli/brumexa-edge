@@ -117,7 +117,6 @@ const leds                                             = require('./lib/leds');
 const soundEffects                                     = require('./lib/sound-effects');
 const ragAuth                                          = require('./lib/rag-auth');
 const { requestRoomToken, setCredentials: setTokenCredentials } = require('./lib/rag-token');
-const clapConnect                                      = require('./lib/clap-connect'); // CLAP-CONNECT — pedido puntual para un evento, ver lib/clap-connect.js para sacarlo
 const { POP_SETTLE_MS: MIC_MONITOR_WARMUP_MS }         = require('./lib/mic-calibration');
 const wakewordGate                                     = require('./lib/wakeword-gate'); // WAKEWORD — detecta "ei brúmexa", ver lib/wakeword-gate.js
 const vadGate                                           = require('./lib/vad-gate'); // VAD — "¿esto es voz humana?", ver lib/vad-gate.js y lib/mic-speech-gate.js
@@ -377,7 +376,6 @@ app.get('/setup/config', (_req, res) => {
     // Chimes de conexión (WiFi/LiveKit) — ver lib/sound-effects.js.
     notificationSoundsEnabled: getVal('NOTIFICATION_SOUNDS_ENABLED') || 'true',
     notificationVolume:        getVal('NOTIFICATION_VOLUME')         || '1.0',
-    clapConnectEnabled: getVal('CLAP_CONNECT_ENABLED') || 'true', // CLAP-CONNECT
     wakewordEnabled: getVal('WAKEWORD_ENABLED') || 'false', // WAKEWORD — apagado por default, ver lib/wakeword-gate.js
     brumexaColor: getVal('BRUMEXA_COLOR') || 'negro',
     // Ritmo de los LEDS — ver lib/leds.js (setBreathePeriodMs, setHangoverMs,
@@ -549,7 +547,6 @@ app.post('/setup/config', express.json(), async (req, res) => {
     alsaMicDevice, alsaSpeakerDevice,
     micGateEnabled, micGateAttenuationDb, micPrerollMs, micDetectionMode, vadThreshold,
     notificationSoundsEnabled, notificationVolume,
-    clapConnectEnabled, // CLAP-CONNECT
     wakewordEnabled, // WAKEWORD
     apSsid, apPass,
   } = req.body || {};
@@ -604,7 +601,6 @@ app.post('/setup/config', express.json(), async (req, res) => {
     if (vadThreshold         !== undefined) content = setEnvLine(content, 'VAD_SPEECH_THRESHOLD',     vadThreshold);
     if (notificationSoundsEnabled !== undefined) content = setEnvLine(content, 'NOTIFICATION_SOUNDS_ENABLED', notificationSoundsEnabled);
     if (notificationVolume        !== undefined) content = setEnvLine(content, 'NOTIFICATION_VOLUME',         notificationVolume);
-    if (clapConnectEnabled        !== undefined) content = setEnvLine(content, 'CLAP_CONNECT_ENABLED',        clapConnectEnabled); // CLAP-CONNECT
     if (wakewordEnabled           !== undefined) content = setEnvLine(content, 'WAKEWORD_ENABLED',             wakewordEnabled); // WAKEWORD
     if (micPrerollMs         !== undefined) content = setEnvLine(content, 'MIC_PREROLL_MS',           micPrerollMs);
     // Vacío es un valor válido acá (= "volver a usar el hostname") — se guarda
@@ -650,7 +646,6 @@ app.post('/setup/config', express.json(), async (req, res) => {
     if (vadThreshold         !== undefined) { const v = parseFloat(vadThreshold); if (!isNaN(v)) micGate.setVadThreshold(v); }
     if (notificationSoundsEnabled !== undefined) soundEffects.setSoundsEnabled(notificationSoundsEnabled !== 'false' && notificationSoundsEnabled !== false);
     if (notificationVolume        !== undefined) { const v = parseFloat(notificationVolume); if (!isNaN(v)) soundEffects.setNotificationGain(v); }
-    if (clapConnectEnabled        !== undefined) clapConnect.setEnabled(clapConnectEnabled !== 'false' && clapConnectEnabled !== false); // CLAP-CONNECT
     if (wakewordEnabled           !== undefined) { // WAKEWORD
       const on = wakewordEnabled === 'true' || wakewordEnabled === true;
       wakewordGate.setEnabled(on);
@@ -1163,7 +1158,6 @@ function startMicMonitor() {
       // desactualizado hasta que _publishMic lo alcance a corregir solo.
       micGate.feed(level);
       leds.speaking(level);
-      clapConnect.feed(level); // CLAP-CONNECT
       _micLevel = { level, peak, updatedAt: Date.now(), source: 'idle-monitor' };
       peak = 0;
       last = Date.now();
@@ -1318,17 +1312,9 @@ async function startSession({ micDevice, speakerDevice }) {
   throw lastError;
 }
 
-// CLAP-CONNECT — dispara el mismo startSession() que usa el botón "Conectar",
-// con los mismos dispositivos configurados en /configuracion (mismo criterio
-// que resuelve POST /session/start más abajo).
-clapConnect.onDoubleClap(() => {
-  const micDevice     = getEnvVal('MIC_ALSA_DEVICE')     || 'plughw:0,0';
-  const speakerDevice = getEnvVal('SPEAKER_ALSA_DEVICE') || 'brumexa_speaker';
-  startSession({ micDevice, speakerDevice }).catch(e => console.warn('[clap-connect] startSession:', e.message));
-});
-
-// WAKEWORD — mismo criterio que CLAP-CONNECT: dispara el mismo startSession()
-// que usa el botón "Conectar", al detectar "ei brúmexa".
+// WAKEWORD — dispara el mismo startSession() que usa el botón "Conectar", al
+// detectar "ei brúmexa", con los mismos dispositivos configurados en
+// /configuracion (mismo criterio que resuelve POST /session/start más abajo).
 wakewordGate.onWake(() => {
   const micDevice     = getEnvVal('MIC_ALSA_DEVICE')     || 'plughw:0,0';
   const speakerDevice = getEnvVal('SPEAKER_ALSA_DEVICE') || 'brumexa_speaker';
