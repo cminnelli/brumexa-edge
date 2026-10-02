@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brumexa — Endpoints</title>
+  <!-- Red de seguridad contra íconos SVG "gigantes" antes de que cargue
+       style.css — ver el mismo comentario en public/index.html. -->
+  <style>svg { width: 1em; height: 1em; }</style>
+  <script>
+    (function () {
+      var t = localStorage.getItem('brumexa-theme');
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- No-bloqueante (media=print + onload) — ver public/local.html. -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+  <link rel="stylesheet" href="/style.css?v=24" />
+  <style>
+    .ep-filter {
+      width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--bg); color: var(--text);
+      font-size: 13px; font-family: 'Consolas', 'Fira Code', monospace; margin: 10px 0 4px;
+    }
+    .ep-filter:focus { outline: none; border-color: var(--accent); }
+    .ep-group { margin-top: 18px; }
+    .ep-group__title { font-weight: 700; font-size: 13px; color: var(--text2); margin-bottom: 6px; }
+    .ep-row {
+      display: flex; gap: 10px; align-items: center; padding: 5px 0;
+      border-bottom: 1px solid var(--border); font-family: 'Consolas', 'Fira Code', monospace; font-size: 13px;
+    }
+    .ep-method { min-width: 52px; font-size: 11px; font-weight: 700; text-align: center; padding: 2px 0; border-radius: 4px; }
+    .ep-method.get  { background: rgba(61,186,118,.14); color: var(--success); }
+    .ep-method.post { background: rgba(224,160,50,.14); color: var(--warn); }
+    .ep-method.other { background: var(--surface2); color: var(--text2); }
+    .ep-path { word-break: break-all; color: var(--text); }
+    a.ep-path { color: var(--accent); text-decoration: none; }
+    a.ep-path:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="site-header__inner">
+    <div class="site-header__brand">
+      <span class="brand-name">Brumexa</span>
+    </div>
+    <nav class="tab-nav">
+      <a class="tab-btn" href="/" title="Panel"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg><span class="tab-btn__label">Panel</span></a>
+      <a class="tab-btn" href="/configuracion" title="Configuración"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="tab-btn__label">Configuración</span></a>
+      <a class="tab-btn" href="/diagnostico" title="Diagnóstico"><svg viewBox="0 0 24 24"><path d="M3 12h4l2-7 4 14 2-7h6"/></svg><span class="tab-btn__label">Diagnóstico</span></a>
+      <a class="tab-btn" href="/logs" title="Logs"><svg viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h10"/></svg><span class="tab-btn__label">Logs</span></a>
+      <a class="tab-btn" href="/terminal" title="Terminal Pi"><svg viewBox="0 0 24 24"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg><span class="tab-btn__label">Terminal Pi</span></a>
+      <a class="tab-btn" href="/local" title="Local"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8"/><path d="M12 16v4"/></svg><span class="tab-btn__label">Local</span></a>
+      <a class="tab-btn" href="/instalacion" title="Instalación"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"/></svg><span class="tab-btn__label">Instalación</span></a>
+      <a class="tab-btn" href="#" id="nav-admin" title="Admin"><svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5l-8-3Z"/></svg><span class="tab-btn__label">Admin</span></a>
+    </nav>
+    <div class="site-header__actions">
+      <button id="nav-session-btn" class="btn-ghost" type="button" title="Conectar/desconectar la sesión de voz">▶ Conectar</button>
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambiar tema" title="Cambiar tema"></button>
+    </div>
+  </div>
+</header>
+
+<main class="page-wrap" style="max-width:760px">
+  <div class="card">
+    <div class="card-section-title">Endpoints</div>
+    <p class="field-hint" style="margin:6px 0 0">
+      Todas las rutas del server, leídas en vivo del código. Las <b>GET</b> sin parámetros se pueden abrir
+      (las páginas se ven como página, los <code>/diag/…</code> devuelven el JSON crudo). Las <b>POST</b> cambian
+      cosas (config, reinicios, grabaciones), así que acá solo se listan, no se ejecutan.
+    </p>
+    <input id="ep-filter" class="ep-filter" type="search" placeholder="Filtrar (ej. diag, wakeword, setup)…" autocomplete="off" />
+    <div id="ep-count" class="field-hint"></div>
+    <div id="ep-list"><p class="field-hint">Cargando…</p></div>
+  </div>
+</main>
+
+<script>
+'use strict';
+(function () {
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  }
+
+  let routes = [];
+
+  function render() {
+    const q = document.getElementById('ep-filter').value.trim().toLowerCase();
+    const shown = routes.filter(r => !q || r.path.toLowerCase().includes(q) || r.method.toLowerCase() === q);
+    document.getElementById('ep-count').textContent = `${shown.length} de ${routes.length} rutas`;
+
+    // Agrupadas por el primer tramo del path (/diag, /setup, /configuracion…)
+    const groups = new Map();
+    for (const r of shown) {
+      const key = '/' + (r.path.split('/')[1] || '');
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(r);
+    }
+
+    document.getElementById('ep-list').innerHTML = [...groups].map(([key, items]) => `
+      <div class="ep-group">
+        <div class="ep-group__title">${esc(key)}</div>
+        ${items.map(r => {
+          const cls = r.method === 'GET' ? 'get' : r.method === 'POST' ? 'post' : 'other';
+          const openable = r.method === 'GET' && !/[:*(]/.test(r.path);
+          const path = openable
+            ? `<a class="ep-path" href="${esc(r.path)}" target="_blank" rel="noopener">${esc(r.path)}</a>`
+            : `<span class="ep-path">${esc(r.path)}</span>`;
+          return `<div class="ep-row"><span class="ep-method ${cls}">${esc(r.method)}</span>${path}</div>`;
+        }).join('')}
+      </div>
+    `).join('');
+  }
+
+  document.getElementById('ep-filter').addEventListener('input', render);
+
+  fetch('/diag/endpoints', { cache: 'no-store' })
+    .then(r => r.json())
+    .then(data => { routes = data.routes; render(); })
+    .catch(e => { document.getElementById('ep-list').innerHTML = `<p class="field-hint">No se pudo cargar: ${esc(e.message)}</p>`; });
+})();
+</script>
+<script src="/theme.js?v=1"></script>
+<script src="/session-quick.js?v=1"></script>
+<script src="/admin-link.js?v=1"></script>
+
+</body>
+</html>

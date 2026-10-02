@@ -146,7 +146,7 @@ const app = express();
 // Cada línea logueada pasa por lib/log-stream.js y se retransmite por
 // WebSocket a quien tenga /logs abierto — a ese volumen es puro ruido (y
 // trabajo de más) sin beneficio real de diagnóstico.
-const NOISY_POLL_PATHS = new Set(['/diag/mic-level']);
+const NOISY_POLL_PATHS = new Set(['/diag/mic-level', '/diag/wakeword-history']);
 app.use((req, _res, next) => {
   // Sin timestamp manual acá — lib/log-stream.js ya le agrega hora+ms a
   // TODO console.log centralizado (ver _patchConsole), con más precisión
@@ -189,6 +189,18 @@ app.get('/logs', (_req, res) => {
 // ese archivo para el porqué.
 app.get('/diagnostico', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'diagnostico.html'));
+});
+
+// ─── GET /endpoints — todas las rutas HTTP del server, leídas en vivo del
+// router de Express (ver lib/route-list.js). Las páginas (/diagnostico,
+// /configuracion…) piden datos a rutas como /diag/mic-level — esta página
+// las muestra todas en un lugar, con link directo a las GET para ver el
+// JSON crudo. /diag/endpoints es el mismo listado en JSON.
+app.get('/endpoints', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'endpoints.html'));
+});
+app.get('/diag/endpoints', (_req, res) => {
+  res.json({ routes: require('./lib/route-list').listRoutes(app) });
 });
 
 // Lee una clave KEY=valor de .env en el momento (sin caché — si alguien la
@@ -1060,6 +1072,13 @@ app.get('/diag/mic-level', (_req, res) => {
 // datos reales (hablar + golpe en una sola prueba) en vez de a ciegas.
 app.get('/diag/vad-history', (_req, res) => {
   res.json({ history: vadGate.getHistoryDump(), debug: vadGate.getDebugState() });
+});
+
+// GET /diag/wakeword-history — cada evaluación del wake word de los últimos
+// 60s (score, cuánto tardó el modelo, cada cuánto evalúa de verdad) + las
+// últimas detecciones, para la card de /diagnostico. Solo lee memoria.
+app.get('/diag/wakeword-history', (_req, res) => {
+  res.json({ history: wakewordGate.getHistoryDump(), debug: wakewordGate.getDebugState() });
 });
 
 // GET /diag/calibration-history — todas las corridas guardadas (boot +

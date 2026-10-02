@@ -222,6 +222,7 @@
         <span class="dbg-dot idle" id="sum-leds-dot"></span>
       </div>
     </div>
+    <p class="field-hint" style="margin:10px 0 0">Los datos crudos que usa esta página (y todas las demás rutas del server) están en <a href="/endpoints" style="color:var(--accent)">Endpoints</a>.</p>
   </div>
 
   <!-- § Diagnóstico de conexión — RAG API + token de LiveKit -->
@@ -392,6 +393,47 @@
     </div>
   </div>
 
+  <!-- § Wake word "ei brúmexa" — cada evaluación del modelo, no solo las
+       que pasan el umbral (ver /diag/wakeword-history y lib/wakeword-gate.js).
+       Para separar "el modelo dio bajo" de "la Pi no llegó a evaluar ese
+       tramo de audio". -->
+  <div class="card">
+    <div class="card-section-hdr">
+      <span class="card-section-icon"><svg viewBox="0 0 24 24"><path d="M12 3v3"/><path d="M5.6 5.6l2.1 2.1"/><path d="M18.4 5.6l-2.1 2.1"/><circle cx="12" cy="14" r="6"/><path d="M12 11v3l2 2"/></svg></span>
+      <div>
+        <div class="card-section-title">Wake word — "ei brúmexa"</div>
+        <div class="card-section-desc">Score del modelo en cada evaluación, aunque no llegue a disparar</div>
+      </div>
+    </div>
+
+    <div id="ww-alert" class="sound-alert muted">Consultando…</div>
+    <button class="btn-ghost" id="btn-ww-enable" type="button" style="display:none; margin-top:8px">Activar wake word</button>
+    <div id="ww-enable-result" style="margin-top:8px"></div>
+
+    <div class="sound-kpis">
+      <div class="stat-tile">
+        <div class="stat-tile__label">Máximo últimos 5s</div>
+        <div class="stat-tile__value"><span id="stat-ww-max">—</span></div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-tile__label">Tarda el modelo</div>
+        <div class="stat-tile__value"><span id="stat-ww-infer">—</span></div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-tile__label">Evalúa cada</div>
+        <div class="stat-tile__value"><span id="stat-ww-period">—</span></div>
+      </div>
+    </div>
+    <p class="field-hint" id="ww-coverage" style="margin:6px 0 10px"></p>
+
+    <div id="ww-chart-wrap" style="overflow-x:auto"></div>
+    <p class="field-hint" style="margin:6px 0 0">Cada punto = una evaluación (mira los últimos 2s de audio). Franja ámbar = estabas hablando. Si dijiste la frase y no hay puntos en esa franja, la Pi no la evaluó; si hay puntos pero bajos, el modelo no la reconoció.</p>
+
+    <div class="divider" style="margin:14px 0"></div>
+    <div class="field-group-label" style="margin-top:0">Picos recientes (último minuto)</div>
+    <div id="ww-peaks"></div>
+  </div>
+
   <!-- § Parlante -->
   <div class="card">
     <div class="card-section-hdr">
@@ -476,7 +518,7 @@
 
 </main>
 
-<script src="/diagnostico.js?v=7"></script>
+<script src="/diagnostico.js?v=8"></script>
 <script src="/theme.js?v=1"></script>
 <script src="/session-quick.js?v=1"></script>
 <script src="/admin-link.js?v=1"></script>

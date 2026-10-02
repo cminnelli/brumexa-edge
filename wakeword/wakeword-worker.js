@@ -13,7 +13,7 @@
  * Protocolo simple por mensajes:
  *   afuera -> adentro: { type: 'predict', buffer: ArrayBuffer }
  *   adentro -> afuera: { type: 'ready' }
- *                       { type: 'score', score: number }
+ *                       { type: 'score', score: number, inferMs: number }
  *                       { type: 'error', error: string }
  */
 
@@ -28,8 +28,12 @@ async function main() {
   parentPort.on('message', async (msg) => {
     if (msg.type !== 'predict') return;
     try {
+      // inferMs = solo lo que tarda el modelo, medido acá adentro — para
+      // /diag/wakeword-history (ver lib/wakeword-gate.js).
+      const startedAt = performance.now();
       const score = await model.predict(new Int16Array(msg.buffer));
-      parentPort.postMessage({ type: 'score', score });
+      const inferMs = performance.now() - startedAt;
+      parentPort.postMessage({ type: 'score', score, inferMs });
     } catch (e) {
       parentPort.postMessage({ type: 'error', error: e.message });
     }

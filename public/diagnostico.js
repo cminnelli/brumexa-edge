@@ -104,6 +104,7 @@ const MicMeter = {
     // historial rolling y redibujar el gráfico — un solo request por tick.
     const dbfs = mic.peak > 0 ? 20 * Math.log10(mic.peak / 32767) : -90;
     this._history.push({
+      t: Date.now(), // para cruzarlo con el gráfico del wake word (WakewordDiag), que va por tiempo real
       dbfs,
       ambientFloorDbfs:       mic.ambientFloorDbfs,
       effectiveThresholdDbfs: mic.effectiveThresholdDbfs,
@@ -472,6 +473,206 @@ async function setDetectionMode(mode) {
     if (result) result.innerHTML = `<div class="pill bad">⚠ ${esc(e.message)}</div>`;
   }
 }
+
+// ============================================================
+// WAKE WORD — "ei brúmexa". Poll de /diag/wakeword-history (cada evaluación
+// del último minuto, no solo las que disparan). Responde dos preguntas
+// distintas que antes no se podían separar: ¿el modelo reconoció la frase
+// (score alto/bajo)? y ¿la Pi llegó a evaluar ese tramo de audio (hay
+// puntos donde hablaste, y cada cuánto)?
+// ============================================================
+const WakewordDiag = {
+  _timer: null,
+  SPAN_MS: 60000,      // mismo HISTORY_MS que lib/wakeword-gate.js
+  PEAK_MIN: 0.05,      // por debajo de esto es "nada", no cuenta como pico
+  PEAK_GAP_MS: 3000,   // evaluaciones más separadas que esto = picos distintos
+  PHRASE_MS: 1000,     // lo que tarda en decirse "ei brúmexa", aprox
+  CHART_H: 130,
+
+  start() {
+    if (this._timer) return;
+    this._tick();
+    this._timer = setInterval(() => { if (!document.hidden) this._tick(); }, 1000);
+  },
+
+  async _tick() {
+    let data;
+    try {
+      data = await fetch('/diag/wakeword-history', { cache: 'no-store' }).then(r => r.json());
+    } catch (e) {
+      this._setAlert('warn', `Error consultando: ${e.message}`);
+      return;
+    }
+    const { history, debug } = data;
+    this._renderStatus(debug, history);
+    this._renderKpis(debug, history);
+    this._renderChart(debug, history);
+    this._renderPeaks(debug, history);
+  },
+
+  _setAlert(cls, text) {
+    const el = document.getElementById('ww-alert');
+    if (!el) return;
+    el.className = `sound-alert ${cls}`;
+    el.textContent = text;
+  },
+
+  _renderStatus(debug, history) {
+    const btn = document.getElementById('btn-ww-enable');
+    if (btn) btn.style.display = debug.armed ? 'none' : '';
+
+    const last = debug.detections[debug.detections.length - 1];
+    if (!debug.armed) {
+      this._setAlert('muted', 'Wake word apagado — no se está evaluando nada');
+    } else if (debug.cooldownRemainingMs > 0) {
+      this._setAlert('warn', `⚠ El worker crasheó varias veces — pausado ${Math.ceil(debug.cooldownRemainingMs / 1000)}s más`);
+    } else if (!debug.workerReady) {
+      this._setAlert('warn', '⏳ Cargando el modelo…');
+    } else if (!history.length || history[history.length - 1].msAgo > 5000) {
+      this._setAlert('warn', '⚠ Activo, pero no llega audio para evaluar (¿mic desactivado o sesión en curso?)');
+    } else if (last && last.msAgo < 5000) {
+      this._setAlert('live', `✅ ¡Detectado! (score ${last.score.toFixed(3)})`);
+    } else {
+      this._setAlert('muted', `Escuchando — decí "ei brúmexa" (dispara a partir de ${debug.threshold})`);
+    }
+  },
+
+  // Período REAL entre evaluaciones (no el EVAL_INTERVAL_MS configurado):
+  // si el modelo tarda más que eso, el worker está ocupado y se saltean.
+  _avgPeriodMs(history) {
+    const recent = history.slice(-11);
+    if (recent.length < 2) return null;
+    let sum = 0;
+    for (let i = 1; i < recent.length; i++) sum += recent[i - 1].msAgo - recent[i].msAgo;
+    return sum / (recent.length - 1);
+  },
+
+  _renderKpis(debug, history) {
+    const maxEl = document.getElementById('stat-ww-max');
+    const infEl = document.getElementById('stat-ww-infer');
+    const perEl = document.getElementById('stat-ww-period');
+    const covEl = document.getElementById('ww-coverage');
+
+    const last5 = history.filter(h => h.msAgo <= 5000);
+    const max = last5.length ? Math.max(...last5.map(h => h.score)) : null;
+    if (maxEl) {
+      maxEl.textContent = max === null ? '—' : max.toFixed(3);
+      maxEl.style.color = max !== null && max > debug.threshold ? 'var(--accent)' : '';
+    }
+
+    const recent = history.slice(-10);
+    const avgInfer = recent.length ? recent.reduce((s, h) => s + (h.inferMs || 0), 0) / recent.length : null;
+    if (infEl) infEl.textContent = avgInfer === null ? '—' : `${Math.round(avgInfer)} ms`;
+
+    const period = this._avgPeriodMs(history);
+    if (perEl) perEl.textContent = period === null ? '—' : `${(period / 1000).toFixed(2)} s`;
+
+    // Cada evaluación mira los últimos windowMs. Para que una frase de
+    // ~PHRASE_MS caiga ENTERA en al menos una ventana, dos ventanas
+    // seguidas tienen que solaparse por lo menos eso.
+    if (covEl) {
+      if (period === null) covEl.textContent = '';
+      else if (period <= debug.windowMs - this.PHRASE_MS) covEl.textContent = `✅ Ventanas de ${debug.windowMs / 1000}s bien solapadas — la frase siempre cae entera en alguna.`;
+      else if (period < debug.windowMs) covEl.textContent = `⚠ Las ventanas se solapan poco — según en qué momento la digas, la frase puede quedar cortada entre dos evaluaciones.`;
+      else covEl.textContent = `✘ Evalúa más lento que el largo de la ventana (${debug.windowMs / 1000}s) — hay tramos de audio que el modelo nunca mira.`;
+    }
+  },
+
+  _renderChart(debug, history) {
+    const wrap = document.getElementById('ww-chart-wrap');
+    if (!wrap) return;
+    const W = MicMeter.CHART_W, H = this.CHART_H;
+    const PL = MicMeter.PAD_L, PR = MicMeter.PAD_R, PT = MicMeter.PAD_T, PB = MicMeter.PAD_B;
+    const xFor = (msAgo) => PL + (1 - msAgo / this.SPAN_MS) * (W - PL - PR);
+    const yFor = (s) => PT + (1 - Math.max(0, Math.min(1, s))) * (H - PT - PB);
+
+    // Franjas de "estabas hablando" — del historial de MicMeter (mismo
+    // voiceActive que el gráfico de Panorama), una muestra cada ~200ms.
+    const now = Date.now();
+    const bandW = (200 / this.SPAN_MS) * (W - PL - PR);
+    let bands = '';
+    for (const s of MicMeter._history) {
+      const msAgo = now - s.t;
+      if (!s.voiceActive || msAgo > this.SPAN_MS) continue;
+      bands += `<rect x="${(xFor(msAgo) - bandW).toFixed(1)}" y="${PT}" width="${(bandW + 0.6).toFixed(1)}" height="${H - PT - PB}" fill="rgba(224,160,50,0.22)" />`;
+    }
+
+    let grid = '';
+    for (let v = 0; v <= 1; v += 0.5) {
+      const y = yFor(v);
+      grid += `<line x1="${PL}" y1="${y.toFixed(1)}" x2="${W - PR}" y2="${y.toFixed(1)}" stroke="var(--border)" stroke-width="1" />`;
+      grid += `<text x="2" y="${(y + 3).toFixed(1)}" font-size="9" fill="var(--text2)">${v}</text>`;
+    }
+    const ty = yFor(debug.threshold);
+    const thresh = `<line x1="${PL}" y1="${ty.toFixed(1)}" x2="${W - PR}" y2="${ty.toFixed(1)}" stroke="var(--text2)" stroke-width="1.3" stroke-dasharray="4,3" opacity="0.85" />`
+      + `<text x="${W - PR - 3}" y="${(ty - 5).toFixed(1)}" font-size="10" text-anchor="end" fill="var(--text2)">dispara a partir de acá (${debug.threshold})</text>`;
+
+    const line = history.map(h => `${xFor(h.msAgo).toFixed(1)},${yFor(h.score).toFixed(1)}`).join(' ');
+    const dots = history.map(h => {
+      const hit = h.score > debug.threshold;
+      return `<circle cx="${xFor(h.msAgo).toFixed(1)}" cy="${yFor(h.score).toFixed(1)}" r="${hit ? 4.5 : 2.5}" fill="${hit ? 'var(--accent)' : 'var(--text2)'}" />`;
+    }).join('');
+
+    wrap.innerHTML = `
+      <svg viewBox="0 0 ${W} ${H}" style="display:block; width:100%; height:${H}px; min-width:420px; background:var(--bg); border-radius:8px">
+        ${bands}
+        ${grid}
+        ${thresh}
+        ${line ? `<polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="1.5" opacity="0.6" />` : ''}
+        ${dots}
+      </svg>
+    `;
+  },
+
+  // Agrupa evaluaciones seguidas con score >= PEAK_MIN en un solo "pico"
+  // (una misma frase suele dar 2-3 evaluaciones altas seguidas).
+  _renderPeaks(debug, history) {
+    const el = document.getElementById('ww-peaks');
+    if (!el) return;
+    const peaks = [];
+    let cur = null;
+    for (const h of history) {
+      if (h.score < this.PEAK_MIN) continue;
+      if (cur && cur.lastMsAgo - h.msAgo <= this.PEAK_GAP_MS) {
+        if (h.score > cur.score) { cur.score = h.score; cur.msAgo = h.msAgo; }
+        cur.lastMsAgo = h.msAgo;
+        cur.count++;
+      } else {
+        cur = { score: h.score, msAgo: h.msAgo, lastMsAgo: h.msAgo, count: 1 };
+        peaks.push(cur);
+      }
+    }
+    if (!peaks.length) {
+      el.innerHTML = `<p class="field-hint" style="margin:0">Ningún score por encima de ${this.PEAK_MIN} en el último minuto.</p>`;
+      return;
+    }
+    el.innerHTML = peaks.reverse().slice(0, 8).map(p => {
+      const verdict = p.score > debug.threshold ? '<span class="pill ok">disparó</span>'
+        : p.score >= debug.threshold / 2 ? '<span class="pill warn">casi</span>'
+        : '<span class="pill">bajo</span>';
+      return `<div style="display:flex; gap:10px; align-items:center; font-size:13px; padding:3px 0">
+        <span style="font-variant-numeric:tabular-nums; min-width:52px">${p.score.toFixed(3)}</span>
+        ${verdict}
+        <span style="color:var(--muted); font-size:12px">hace ${Math.round(p.msAgo / 1000)}s · ${p.count} eval.</span>
+      </div>`;
+    }).join('');
+  },
+
+  async enable() {
+    const result = document.getElementById('ww-enable-result');
+    try {
+      const res = await fetch('/setup/config', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wakewordEnabled: 'true' }),
+      }).then(r => r.json());
+      if (!res.ok) throw new Error(res.error || 'error desconocido');
+      if (result) { result.innerHTML = '<div class="pill ok">✔ Wake word activado</div>'; setTimeout(() => { result.innerHTML = ''; }, 3000); }
+      this._tick();
+    } catch (e) {
+      if (result) result.innerHTML = `<div class="pill bad">⚠ ${esc(e.message)}</div>`;
+    }
+  },
+};
 
 // ============================================================
 // PARLANTE — mismo endpoint que ya usaba Configuración. Toggle: si ya
@@ -1414,6 +1615,7 @@ const GuidedDiag = {
   document.getElementById('btn-rec-stop')?.addEventListener('click', () => Recorder.stop());
   document.getElementById('btn-mode-volume')?.addEventListener('click', () => setDetectionMode('volume'));
   document.getElementById('btn-mode-vad')?.addEventListener('click', () => setDetectionMode('vad'));
+  document.getElementById('btn-ww-enable')?.addEventListener('click', () => WakewordDiag.enable());
 
   // Umbral de Silero — mismo patrón que el slider de volumen (SensitivityControls
   // más abajo): aplica en vivo con debounce, persiste en .env (vía /setup/config,
@@ -1477,6 +1679,7 @@ const GuidedDiag = {
   } catch {}
 
   MicMeter.start();
+  WakewordDiag.start();
   LedsDiag.check();
   LedsLab.init();
   SensitivityControls.init();
