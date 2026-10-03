@@ -23,6 +23,10 @@ echo "║     Brumexa-Edge — Instalación       ║"
 echo "╚══════════════════════════════════════╝"
 echo ""
 
+echo -e "${YELLOW}⚠ IMPORTANTE: el upgrade de paquetes (apt upgrade) está APAGADO por default.${NC}"
+echo -e "${YELLOW}  Para prenderlo, correr: BRUMEXA_UPGRADE=1 bash install.sh${NC}"
+echo ""
+
 # ─── 1. Verificar arquitectura ───────────────────────────────────────────────
 info "Verificando arquitectura..."
 ARCH=$(uname -m)
