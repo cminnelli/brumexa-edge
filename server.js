@@ -132,6 +132,7 @@ try {
 
 const { session: lkSession }                           = require('./lib/livekit-session');
 const micGate                                          = require('./lib/mic-speech-gate');
+const latencyMarks                                     = require('./lib/latency-marks');
 const calibrationHistory                               = require('./lib/calibration-history');
 const { createCalibrationRunner }                      = require('./lib/calibration');
 const leds                                             = require('./lib/leds');
@@ -1259,6 +1260,7 @@ async function _connectOnce({ micDevice, speakerDevice }) {
     requestRoomToken(), CONNECT_TIMEOUT_MS, 'Timeout pidiendo token (30s)'
   );
   lastKnownLivekitUrl = url;
+  latencyMarks.mark('startup.tokenOk');
 
   await _withTimeout(
     lkSession.start({ token, url, roomName, micDevice, speakerDevice }),
@@ -1293,6 +1295,7 @@ async function startSession({ micDevice, speakerDevice }) {
   }
 
   const step = _stepTimer('inicio');
+  latencyMarks.mark('startup.sessionStart');
 
   // Frenar el monitor de mic ambiente ANTES de mostrar el cometa: si sigue
   // vivo durante el pedido de token (red, puede tardar), cualquier ruido
@@ -1337,6 +1340,7 @@ async function startSession({ micDevice, speakerDevice }) {
 // detectar "ei brúmexa", con los mismos dispositivos configurados en
 // /configuracion (mismo criterio que resuelve POST /session/start más abajo).
 wakewordGate.onWake(() => {
+  latencyMarks.mark('startup.wake');
   const micDevice     = getEnvVal('MIC_ALSA_DEVICE')     || 'plughw:0,0';
   const speakerDevice = getEnvVal('SPEAKER_ALSA_DEVICE') || 'brumexa_speaker';
   startSession({ micDevice, speakerDevice }).catch(e => console.warn('[wakeword-gate] startSession:', e.message));
