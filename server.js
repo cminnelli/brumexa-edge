@@ -387,6 +387,7 @@ app.get('/setup/config', (_req, res) => {
     speakerGain:  getVal('SPEAKER_GAIN')  || '3.0',
     talkThreshold: getVal('MIC_TALK_THRESHOLD_DBFS') || '-25',
     silenceTimeoutMs: getVal('SILENCE_DISCONNECT_MS') || '20000',
+    heartbeatIntervalMs: getVal('DEVICE_HEARTBEAT_MS') || '30000',
     // Gate de ruido sobre el audio publicado a LiveKit — ver
     // lib/livekit-session.js (_publishMic) y lib/mic-speech-gate.js.
     micGateEnabled:       getVal('MIC_GATE_ENABLED')       || 'true',
@@ -565,7 +566,7 @@ async function autoDetectAlsaDevices() {
 app.post('/setup/config', express.json(), async (req, res) => {
   const envFile = path.join(__dirname, '.env');
   const {
-    ragApiUrl, deviceId, apiKey, micGain, speakerGain, talkThreshold, silenceTimeoutMs, brumexaColor,
+    ragApiUrl, deviceId, apiKey, micGain, speakerGain, talkThreshold, silenceTimeoutMs, heartbeatIntervalMs, brumexaColor,
     ledBreathePeriodMs, ledHangoverMs, ledOnsetMs, ledOffsetMs,
     alsaMicDevice, alsaSpeakerDevice,
     micGateEnabled, micGateAttenuationDb, micPrerollMs, micDetectionMode, vadThreshold,
@@ -611,6 +612,7 @@ app.post('/setup/config', express.json(), async (req, res) => {
     if (speakerGain !== undefined) content = setEnvLine(content, 'SPEAKER_GAIN',  speakerGain);
     if (talkThreshold !== undefined) content = setEnvLine(content, 'MIC_TALK_THRESHOLD_DBFS', talkThreshold);
     if (silenceTimeoutMs !== undefined) content = setEnvLine(content, 'SILENCE_DISCONNECT_MS', silenceTimeoutMs);
+    if (heartbeatIntervalMs !== undefined) content = setEnvLine(content, 'DEVICE_HEARTBEAT_MS', heartbeatIntervalMs);
     if (brumexaColor  !== undefined) content = setEnvLine(content, 'BRUMEXA_COLOR', brumexaColor);
     if (ledBreathePeriodMs !== undefined) content = setEnvLine(content, 'LED_BREATHE_PERIOD_MS', ledBreathePeriodMs);
     if (ledHangoverMs      !== undefined) content = setEnvLine(content, 'LED_HANGOVER_MS',       ledHangoverMs);
@@ -657,6 +659,10 @@ app.post('/setup/config', express.json(), async (req, res) => {
     if (silenceTimeoutMs !== undefined) {
       const s = parseInt(silenceTimeoutMs, 10);
       if (!isNaN(s)) lkSession.setSilenceTimeout(s);
+    }
+    if (heartbeatIntervalMs !== undefined) {
+      const h = parseInt(heartbeatIntervalMs, 10);
+      if (!isNaN(h)) deviceHeartbeat.setIntervalMs(h);
     }
     if (brumexaColor !== undefined) leds.setDeviceColor(brumexaColor);
     if (ledBreathePeriodMs !== undefined) { const v = parseFloat(ledBreathePeriodMs); if (!isNaN(v)) leds.setBreathePeriodMs(v); }

@@ -431,6 +431,17 @@
         <p class="field-hint">Se desconecta sola si nadie habla. Arrastrá del todo a la izquierda para desactivarlo.</p>
       </div>
 
+      <div class="field">
+        <label class="field-label" for="inp-heartbeat">Aviso de "estoy online" al admin</label>
+        <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
+          <div class="gain-row" style="grid-template-columns:1fr 55px">
+            <input type="range" id="inp-heartbeat" class="gain-slider" min="10" max="300" step="10" value="30" />
+            <span class="gain-val" id="val-heartbeat">30 s</span>
+          </div>
+        </div>
+        <p class="field-hint">Cada cuánto la Pi le avisa al admin que está conectada. Más corto = el admin se entera antes si se desconecta; el costo es mínimo igual.</p>
+      </div>
+
       <div class="field-group-label">Micrófono</div>
       <div class="field" style="margin-bottom:0.5rem">
         <div class="mic-switch-row">
@@ -871,6 +882,7 @@
         setLiveSliderField('inp-speaker-gain', 'val-speaker-gain', cfg.speakerGain, 3,     v => `${parseFloat(v).toFixed(1)}x`);
         setLiveSliderField('inp-notification-volume', 'val-notification-volume', cfg.notificationVolume, 1, v => `${parseFloat(v).toFixed(1)}x`);
         setLiveSliderField('inp-silence-timeout', 'val-silence-timeout', (parseInt(cfg.silenceTimeoutMs, 10) || 20000) / 1000, 20, v => `${v} s`);
+        setLiveSliderField('inp-heartbeat', 'val-heartbeat', (parseInt(cfg.heartbeatIntervalMs, 10) || 30000) / 1000, 30, v => `${v} s`);
         setLiveSliderField('inp-led-breathe',  'val-led-breathe',  cfg.ledBreathePeriodMs, 1900, v => `${v} ms`);
         setLiveSliderField('inp-led-hangover', 'val-led-hangover', cfg.ledHangoverMs,      1100, v => `${v} ms`);
         setLiveSliderField('inp-mic-preroll',          'val-mic-preroll',          cfg.micPrerollMs,         500, v => `${v} ms`);
@@ -1872,6 +1884,7 @@
   wireLiveSlider('inp-speaker-gain',  'val-speaker-gain',  v => `${parseFloat(v).toFixed(1)}x`, v => ({ speakerGain: v }));
   wireLiveSlider('inp-notification-volume', 'val-notification-volume', v => `${parseFloat(v).toFixed(1)}x`, v => ({ notificationVolume: v }));
   wireLiveSlider('inp-silence-timeout', 'val-silence-timeout', v => `${v} s`, v => ({ silenceTimeoutMs: Math.round(parseFloat(v) * 1000) }));
+  wireLiveSlider('inp-heartbeat', 'val-heartbeat', v => `${v} s`, v => ({ heartbeatIntervalMs: Math.round(parseFloat(v) * 1000) }));
   wireLiveSlider('inp-led-breathe',   'val-led-breathe',   v => `${v} ms`, v => ({ ledBreathePeriodMs: v }));
   wireLiveSlider('inp-led-hangover',  'val-led-hangover',  v => `${v} ms`, v => ({ ledHangoverMs: v }));
   wireLiveSlider('inp-mic-preroll',   'val-mic-preroll',   v => `${v} ms`, v => ({ micPrerollMs: v }));
