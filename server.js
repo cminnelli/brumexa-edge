@@ -45,6 +45,8 @@ setInterval(() => {
   if (_eventLoopHistory.length > EVENT_LOOP_HISTORY_SIZE) _eventLoopHistory.shift();
   if (drift > EVENT_LOOP_LOUD_MS) {
     console.warn(`[event-loop] ⚠ la Pi se trabó ${drift}ms — algo bloqueó el hilo principal`);
+    // La página Latencia del admin la muestra en el turno donde pasó.
+    latencyMarks.mark('piStall', now - drift, { ms: drift });
   } else if (drift > 30) {
     _eventLoopLagCount++;
     if (drift > _eventLoopLagMax) _eventLoopLagMax = drift;
