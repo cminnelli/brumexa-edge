@@ -133,6 +133,7 @@ try {
 const { session: lkSession }                           = require('./lib/livekit-session');
 const micGate                                          = require('./lib/mic-speech-gate');
 const latencyMarks                                     = require('./lib/latency-marks');
+const deviceHeartbeat                                  = require('./lib/device-heartbeat');
 const calibrationHistory                               = require('./lib/calibration-history');
 const { createCalibrationRunner }                      = require('./lib/calibration');
 const leds                                             = require('./lib/leds');
@@ -1654,7 +1655,10 @@ httpServer.listen(PORT, async () => {
   console.log(`  Device                  → ${DEVICE_CONFIGURED ? `✔ ${process.env.BRUMEXA_DEVICE_ID}` : '(no configurado)'}`);
   console.log(`  Setup WiFi              → http://localhost:${PORT}/setup\n`);
 
-  if (DEVICE_CONFIGURED) ragAuth.initAuth();
+  if (DEVICE_CONFIGURED) {
+    ragAuth.initAuth();
+    deviceHeartbeat.start(); // "estoy online" para el admin, cada 30 s
+  }
 
   // Arranca ya mismo, no solo si hay sesión — así /local muestra latencia al
   // servidor LiveKit aunque nadie haya apretado "Conectar" todavía (una vez
