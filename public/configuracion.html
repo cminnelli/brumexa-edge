@@ -102,6 +102,19 @@
       border-radius: 50%; animation: wifi-spin .7s linear infinite; flex-shrink: 0;
     }
     @keyframes wifi-spin { to { transform: rotate(360deg); } }
+
+    /* ── ⓘ: botón chico al lado del título que abre/cierra una explicación ── */
+    .info-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 16px; height: 16px; margin-left: 6px; padding: 0; vertical-align: middle;
+      border: 1.5px solid var(--muted); border-radius: 50%; background: none;
+      color: var(--text2); font: 700 10px/1 var(--font-sans); font-style: italic; cursor: pointer;
+    }
+    .info-btn:hover, .info-btn[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+    .info-box {
+      margin-top: 6px; padding: 10px 12px; border-radius: var(--r-sm);
+      background: var(--surface2); color: var(--text2); font-size: 12.5px; line-height: 1.5;
+    }
   </style>
 </head>
 <body>
@@ -364,7 +377,8 @@
             <span class="gain-val" id="val-led-breathe">1900 ms</span>
           </div>
         </div>
-        <p class="field-hint">Cuánto dura un ciclo completo de inhalar+exhalar. Menos ms = respiración más rápida.</p>
+        <p class="field-hint">Cuánto dura una respiración de la luz. Más bajo = más rápida.</p>
+        <p class="field-hint">Cuándo se apaga la luz al terminar de hablar se ajusta en Conversación → "Pausa para darte por terminado" (también decide qué audio se manda).</p>
       </div>
     </div>
 
@@ -436,18 +450,10 @@
         <div style="display:flex; flex-direction:column; gap:1rem; margin-top:0.75rem">
           <div class="field">
             <label class="field-label" style="display:flex; align-items:center; gap:8px; cursor:pointer">
-              <input type="checkbox" id="inp-mic-gate-enabled" checked style="width:auto" />
-              Silenciar el ruido de fondo
-            </label>
-            <p class="field-hint">Solo manda audio al agente cuando confirma que estás hablando.</p>
-          </div>
-
-          <div class="field">
-            <label class="field-label" style="display:flex; align-items:center; gap:8px; cursor:pointer">
               <input type="checkbox" id="inp-notification-sounds-enabled" checked style="width:auto" />
               Sonidos de notificación
             </label>
-            <p class="field-hint">Los 4 chimes de conexión/desconexión (WiFi y LiveKit) — apagalos del todo acá, o solo bajales el volumen arriba en "Volumen de notificaciones".</p>
+            <p class="field-hint">Los sonidos de conectar y desconectar. Para bajarlos sin apagarlos, usá "Volumen de notificaciones".</p>
           </div>
 
           <div>
@@ -477,35 +483,57 @@
         </div>
       </div>
 
+      <!-- Detección de tu voz: cómo decide la Pi qué audio manda al servidor.
+           Los ⓘ abren una explicación (ver .info-btn / .info-box). -->
+      <div class="field-group-label">Detección de tu voz</div>
+
+      <div class="field">
+        <label class="field-label" style="display:flex; align-items:center; gap:8px; cursor:pointer">
+          <input type="checkbox" id="inp-mic-gate-enabled" checked style="width:auto" />
+          Filtrar ruido de fondo
+          <button type="button" class="info-btn" aria-label="Cómo funciona">i</button>
+        </label>
+        <p class="field-hint">Recomendado: prendido.</p>
+        <div class="info-box" hidden>Solo manda tu audio al servidor cuando confirma que es voz; el resto lo manda en silencio. <b>Apagado:</b> manda todo, sin espera (responde un poco antes), pero un ruido fuerte puede hacer que Brumexa conteste sola.</div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="inp-mic-preroll">Margen para no perder el comienzo
+          <button type="button" class="info-btn" aria-label="Cómo funciona">i</button>
+        </label>
+        <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
+          <div class="gain-row" style="grid-template-columns:1fr 65px">
+            <input type="range" id="inp-mic-preroll" class="gain-slider" min="100" max="500" step="50" value="300" />
+            <span class="gain-val" id="val-mic-preroll">300 ms</span>
+          </div>
+        </div>
+        <p class="field-hint">Recomendado: 300 ms. Más bajo responde antes, pero puede perder la primera sílaba.</p>
+        <div class="info-box" hidden>La Pi tarda ~300 ms en confirmar que lo que escucha es voz y no ruido. Mientras tanto guarda el audio, así no se pierde el comienzo. Ejemplo: decís "Hola, ¿cuánto sale?"; con poco margen llega "…la, ¿cuánto sale?". <b>Este tiempo se suma a cada respuesta.</b></div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="inp-led-hangover">Pausa para darte por terminado
+          <button type="button" class="info-btn" aria-label="Cómo funciona">i</button>
+        </label>
+        <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
+          <div class="gain-row" style="grid-template-columns:1fr 70px">
+            <input type="range" id="inp-led-hangover" class="gain-slider" min="400" max="1500" step="50" value="600" />
+            <span class="gain-val" id="val-led-hangover">600 ms</span>
+          </div>
+        </div>
+        <p class="field-hint">Recomendado: 600 ms. Maneja la luz y cuándo deja de mandar tu audio.</p>
+        <div class="info-box" hidden>Cuando dejás de hablar, la Pi espera este tiempo antes de apagar la luz y dejar de mandar tu audio. Si retomás antes, sigue siendo la misma frase. Cuándo responder lo decide el servidor (~0,35 s de silencio), así que en general no suma demora; <b>con ruido de fondo, un valor alto sí puede atrasar la respuesta.</b></div>
+      </div>
+
+      <div class="field-group-label">Charla</div>
+
       <!-- WAKEWORD — apagado por default, ver lib/wakeword-gate.js -->
       <div class="field">
         <label class="field-label" style="display:flex; align-items:center; gap:8px; cursor:pointer">
           <input type="checkbox" id="inp-wakeword-enabled" style="width:auto" />
           Conectar diciendo "ei brúmexa" (experimental)
         </label>
-        <p class="field-hint">Detector de wake word en prueba — puede consumir bastante procesador en la Pi. Dejalo apagado salvo que estés probándolo activamente.</p>
-      </div>
-
-      <div class="field">
-        <label class="field-label" for="inp-mic-preroll">Margen antes de confirmar tu voz</label>
-        <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
-          <div class="gain-row" style="grid-template-columns:1fr 65px">
-            <input type="range" id="inp-mic-preroll" class="gain-slider" min="300" max="2000" step="50" value="500" />
-            <span class="gain-val" id="val-mic-preroll">500 ms</span>
-          </div>
-        </div>
-        <p class="field-hint">El sistema tarda ~300ms en confirmar que estás hablando de verdad (así un ruido corto no dispara nada) — este es el audio "de respaldo" que guarda mientras tanto, para que no se pierda el arranque de tu primera palabra. 500ms ya cubre esos 300ms con margen de sobra.</p>
-      </div>
-
-      <div class="field">
-        <label class="field-label" for="inp-led-hangover">Margen antes de darte por terminado</label>
-        <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
-          <div class="gain-row" style="grid-template-columns:1fr 70px">
-            <input type="range" id="inp-led-hangover" class="gain-slider" min="300" max="6000" step="100" value="1100" />
-            <span class="gain-val" id="val-led-hangover">1100 ms</span>
-          </div>
-        </div>
-        <p class="field-hint">Cuánto silencio tolera antes de asumir que terminaste (por ejemplo, si te quedás pensando qué decir a mitad de una frase) — retomar antes de que se cumpla este tiempo sigue contando como "seguís hablando", sin cortes. Más alto = tolera pausas más largas.</p>
+        <p class="field-hint">Usa bastante procesador. Dejalo apagado salvo para probar.</p>
       </div>
 
       <div class="field">
@@ -516,7 +544,7 @@
             <span class="gain-val" id="val-silence-timeout">20 s</span>
           </div>
         </div>
-        <p class="field-hint">Se desconecta sola si nadie habla. Arrastrá del todo a la izquierda para desactivarlo.</p>
+        <p class="field-hint">Si nadie habla este tiempo, corta la charla. Todo a la izquierda = nunca.</p>
       </div>
 
     </div>
@@ -907,8 +935,8 @@
         setLiveSliderField('inp-silence-timeout', 'val-silence-timeout', (parseInt(cfg.silenceTimeoutMs, 10) || 20000) / 1000, 20, v => `${v} s`);
         setLiveSliderField('inp-heartbeat', 'val-heartbeat', (parseInt(cfg.heartbeatIntervalMs, 10) || 30000) / 1000, 30, v => `${v} s`);
         setLiveSliderField('inp-led-breathe',  'val-led-breathe',  cfg.ledBreathePeriodMs, 1900, v => `${v} ms`);
-        setLiveSliderField('inp-led-hangover', 'val-led-hangover', cfg.ledHangoverMs,      1100, v => `${v} ms`);
-        setLiveSliderField('inp-mic-preroll',          'val-mic-preroll',          cfg.micPrerollMs,         500, v => `${v} ms`);
+        setLiveSliderField('inp-led-hangover', 'val-led-hangover', cfg.ledHangoverMs,      600, v => `${v} ms`);
+        setLiveSliderField('inp-mic-preroll',          'val-mic-preroll',          cfg.micPrerollMs,         300, v => `${v} ms`);
         document.getElementById('inp-mic-gate-enabled').checked = cfg.micGateEnabled !== 'false';
         document.getElementById('inp-notification-sounds-enabled').checked = cfg.notificationSoundsEnabled !== 'false';
         document.getElementById('inp-wakeword-enabled').checked = cfg.wakewordEnabled === 'true'; // WAKEWORD
@@ -1996,6 +2024,18 @@
     updateMicButton();
     btn.disabled = false;
   }
+
+  // ⓘ: abre/cierra la explicación de su campo. preventDefault: el botón está
+  // dentro de un <label> y sin esto también prendería/apagaría el checkbox.
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.info-btn');
+    if (!btn) return;
+    e.preventDefault();
+    const box = btn.closest('.field')?.querySelector('.info-box');
+    if (!box) return;
+    box.hidden = !box.hidden;
+    btn.setAttribute('aria-expanded', String(!box.hidden));
+  });
 
   loadAll();
 </script>

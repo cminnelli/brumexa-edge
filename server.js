@@ -394,7 +394,7 @@ app.get('/setup/config', (_req, res) => {
     // lib/livekit-session.js (_publishMic) y lib/mic-speech-gate.js.
     micGateEnabled:       getVal('MIC_GATE_ENABLED')       || 'true',
     micGateAttenuationDb: getVal('MIC_GATE_ATTENUATION_DB') || '-90',
-    micPrerollMs:         getVal('MIC_PREROLL_MS')          || '500',
+    micPrerollMs:         getVal('MIC_PREROLL_MS')          || '300',
     // Modo de detección de voz — 'volume' (siempre, probado) o 'vad'
     // (volumen + Silero VAD) — ver lib/mic-speech-gate.js.
     micDetectionMode: getVal('MIC_DETECTION_MODE') || 'volume',
@@ -407,7 +407,7 @@ app.get('/setup/config', (_req, res) => {
     // Ritmo de los LEDS — ver lib/leds.js (setBreathePeriodMs, setHangoverMs,
     // setOnsetDurationMs, setOffsetDurationMs) para el porqué de cada uno.
     ledBreathePeriodMs: getVal('LED_BREATHE_PERIOD_MS') || '1900',
-    ledHangoverMs:      getVal('LED_HANGOVER_MS')       || '1100',
+    ledHangoverMs:      getVal('LED_HANGOVER_MS')       || '600',
     ledOnsetMs:         getVal('LED_ONSET_MS')          || '536',
     ledOffsetMs:        getVal('LED_OFFSET_MS')         || '965',
     alsaMicDevice:      getVal('MIC_ALSA_DEVICE')     || 'default',
