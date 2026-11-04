@@ -103,18 +103,63 @@
     }
     @keyframes wifi-spin { to { transform: rotate(360deg); } }
 
-    /* ── ⓘ: botón chico al lado del título que abre/cierra una explicación ── */
+    /* ── Sliders de esta página: pista más gruesa, thumb blanco con anillo de
+         acento y el valor en una pastilla (el relleno sigue siendo --pct). ── */
+    .page-wrap .gain-slider { height: 8px; border-radius: 999px; }
+    .page-wrap .gain-slider::-webkit-slider-thumb {
+      box-sizing: border-box; width: 20px; height: 20px; margin-top: -6px;
+      background: #fff; border: 2px solid var(--accent);
+      box-shadow: 0 1px 4px rgba(0,0,0,.25);
+    }
+    .page-wrap .gain-slider:hover::-webkit-slider-thumb { background: #fff; }
+    .page-wrap .gain-slider::-moz-range-track    { height: 8px; border-radius: 999px; }
+    .page-wrap .gain-slider::-moz-range-progress { height: 8px; border-radius: 999px; }
+    .page-wrap .gain-slider::-moz-range-thumb {
+      box-sizing: border-box; width: 20px; height: 20px;
+      background: #fff; border: 2px solid var(--accent);
+    }
+    .page-wrap .gain-val {
+      justify-self: end; padding: 3px 9px; border-radius: 999px;
+      background: var(--surface2); font-size: 11.5px; text-align: center;
+      font-variant-numeric: tabular-nums; white-space: nowrap;
+    }
+
+    /* ── Checkboxes como switch, con el texto a la izquierda y el switch a la derecha ── */
+    .field-label input[type="checkbox"] {
+      -webkit-appearance: none; appearance: none; order: 2; margin: 0 0 0 auto;
+      position: relative; flex-shrink: 0; width: 40px !important; height: 22px;
+      border-radius: 999px; background: var(--border2); cursor: pointer; transition: background var(--tr);
+    }
+    .field-label input[type="checkbox"]::before {
+      content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px;
+      border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform var(--tr);
+    }
+    .field-label input[type="checkbox"]:checked { background: var(--accent); }
+    .field-label input[type="checkbox"]:checked::before { transform: translateX(18px); }
+
+    /* ── ⓘ: abre un pop-up con la explicación (texto en .info-box, oculto) ── */
     .info-btn {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 16px; height: 16px; margin-left: 6px; padding: 0; vertical-align: middle;
+      display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+      width: 17px; height: 17px; margin-left: 6px; padding: 0; vertical-align: middle;
       border: 1.5px solid var(--muted); border-radius: 50%; background: none;
-      color: var(--text2); font: 700 10px/1 var(--font-sans); font-style: italic; cursor: pointer;
+      color: var(--text2); font: italic 700 10px/1 Georgia, serif; cursor: pointer;
+      transition: border-color var(--tr), color var(--tr);
     }
     .info-btn:hover, .info-btn[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
-    .info-box {
-      margin-top: 6px; padding: 10px 12px; border-radius: var(--r-sm);
-      background: var(--surface2); color: var(--text2); font-size: 12.5px; line-height: 1.5;
+    .info-box { display: none; }
+    .info-pop {
+      position: fixed; z-index: 1000; padding: 14px 16px;
+      background: var(--surface); border: 1px solid var(--border2); border-radius: 0.75rem;
+      box-shadow: 0 12px 32px rgba(0,0,0,.18); color: var(--text2); font-size: 13px; line-height: 1.55;
+      animation: info-pop-in .14s ease-out;
     }
+    .info-pop__title { font-weight: 600; color: var(--text); margin-bottom: 6px; padding-right: 20px; }
+    .info-pop__close {
+      position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; padding: 0;
+      border: none; border-radius: 50%; background: none; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer;
+    }
+    .info-pop__close:hover { background: var(--surface2); color: var(--text); }
+    @keyframes info-pop-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
   </style>
 </head>
 <body>
@@ -2025,17 +2070,57 @@
     btn.disabled = false;
   }
 
-  // ⓘ: abre/cierra la explicación de su campo. preventDefault: el botón está
-  // dentro de un <label> y sin esto también prendería/apagaría el checkbox.
+  // ⓘ: pop-up flotante con la explicación del campo (sale del .info-box
+  // oculto). Se cierra tocando afuera, con la ✕ o con Esc. preventDefault: el
+  // botón está dentro de un <label> y sin esto también cambiaría el switch.
+  const infoPop = document.createElement('div');
+  infoPop.className = 'info-pop';
+  infoPop.setAttribute('role', 'dialog');
+  infoPop.hidden = true;
+  document.body.appendChild(infoPop);
+  let infoBtn = null;
+
+  function closeInfo() {
+    infoPop.hidden = true;
+    infoBtn?.setAttribute('aria-expanded', 'false');
+    infoBtn = null;
+  }
+  function placeInfo() {
+    const r = infoBtn.getBoundingClientRect();
+    const w = Math.min(320, window.innerWidth - 32);
+    infoPop.style.width = `${w}px`;
+    const left = Math.max(16, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - 16 - w));
+    const h = infoPop.offsetHeight;
+    const below = r.bottom + 8;
+    infoPop.style.left = `${left}px`;
+    infoPop.style.top = `${below + h > window.innerHeight - 8 ? Math.max(8, r.top - 8 - h) : below}px`;
+  }
+  function openInfo(btn) {
+    const src = btn.closest('.field')?.querySelector('.info-box');
+    if (!src) return;
+    const label = btn.closest('label').cloneNode(true);
+    label.querySelectorAll('button, input').forEach((n) => n.remove());
+    infoPop.innerHTML = `<button type="button" class="info-pop__close" aria-label="Cerrar">✕</button>`
+      + `<div class="info-pop__title">${esc(label.textContent.trim())}</div>${src.innerHTML}`;
+    infoPop.hidden = false;
+    infoBtn = btn;
+    btn.setAttribute('aria-expanded', 'true');
+    placeInfo();
+  }
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('.info-btn');
-    if (!btn) return;
-    e.preventDefault();
-    const box = btn.closest('.field')?.querySelector('.info-box');
-    if (!box) return;
-    box.hidden = !box.hidden;
-    btn.setAttribute('aria-expanded', String(!box.hidden));
+    if (btn) {
+      e.preventDefault();
+      const same = btn === infoBtn;
+      closeInfo();
+      if (!same) openInfo(btn);
+      return;
+    }
+    if (!infoPop.hidden && (e.target.closest('.info-pop__close') || !infoPop.contains(e.target))) closeInfo();
   });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeInfo(); });
+  window.addEventListener('resize', () => { if (infoBtn) placeInfo(); });
+  window.addEventListener('scroll', () => { if (infoBtn) placeInfo(); }, { passive: true });
 
   loadAll();
 </script>
