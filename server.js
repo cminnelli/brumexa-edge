@@ -1268,9 +1268,10 @@ function _withTimeout(promise, ms, message) {
 function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 async function _connectOnce({ micDevice, speakerDevice, greetedLocally }) {
-  const { token, roomName, serverUrl: url } = await _withTimeout(
+  const { token, roomName, serverUrl: url, greetingEtag } = await _withTimeout(
     requestRoomToken({ greetedLocally }), CONNECT_TIMEOUT_MS, 'Timeout pidiendo token (30s)'
   );
+  if (greetingEtag !== undefined) localGreeting.noteEtag(greetingEtag);
   lastKnownLivekitUrl = url;
   latencyMarks.mark('startup.tokenOk');
 
@@ -1380,12 +1381,12 @@ function _scalePcm(pcm, gain) {
   return out;
 }
 
-// Traer el saludo al arrancar, después de cada conversación (por si cambió
-// el saludo o la voz en el admin) y cada 15 min. Con ETag: casi siempre es un 304.
+// Saludo: se trae al arrancar y al cambiar negocio/dispositivo. Si se edita
+// en el admin, el token de la próxima charla avisa (greetingEtag) y se baja
+// al terminarla — no hay consultas periódicas.
 localGreeting.load();
 setTimeout(() => localGreeting.refresh(), 5000);
-setInterval(() => { if (!lkSession.isActive()) localGreeting.refresh(); }, 15 * 60 * 1000);
-lkSession.on('disconnected', () => setTimeout(() => localGreeting.refresh(), 3000));
+lkSession.on('disconnected', () => setTimeout(() => localGreeting.refreshIfStale(), 3000));
 
 let _sessionConnectedAt = 0;
 
