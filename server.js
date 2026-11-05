@@ -1276,7 +1276,7 @@ async function _connectOnce({ micDevice, speakerDevice, greetedLocally }) {
   latencyMarks.mark('startup.tokenOk');
 
   await _withTimeout(
-    lkSession.start({ token, url, roomName, micDevice, speakerDevice }),
+    lkSession.start({ token, url, roomName, micDevice, speakerDevice, greetedLocally: !!greetedLocally }),
     CONNECT_TIMEOUT_MS, 'Timeout conectando a LiveKit (30s)'
   );
 
