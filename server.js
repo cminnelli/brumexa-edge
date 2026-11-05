@@ -1360,12 +1360,15 @@ wakewordGate.onWake(() => {
   // Con LOCAL_GREETING=false vuelve al saludo del agente al conectar.
   const greeting = !lkSession.isActive() && getEnvVal('LOCAL_GREETING') !== 'false' ? localGreeting.get() : null;
   if (greeting) {
-    // Una pausa natural antes de contestar (LOCAL_GREETING_DELAY_MS, default 1 s).
-    const delay = parseInt(getEnvVal('LOCAL_GREETING_DELAY_MS') || '1000', 10) || 0;
-    setTimeout(() => {
+    // Sin pausa por defecto (LOCAL_GREETING_DELAY_MS=0): suena en este mismo
+    // instante, antes de que startSession() arranque (un timer acá se
+    // atrasaba ~0,6 s porque el arranque de la sesión ocupa el event loop).
+    const delay = parseInt(getEnvVal('LOCAL_GREETING_DELAY_MS') || '0', 10) || 0;
+    const play = () => {
       lkSession.playChime(_scalePcm(greeting.pcm, lkSession.getSpeakerGain()), speakerDevice);
       latencyMarks.mark('startup.localGreeting');
-    }, delay);
+    };
+    if (delay > 0) setTimeout(play, delay); else play();
   }
   // Se manda el TEXTO que sonó: el agente lo toma como dicho por él.
   startSession({ micDevice, speakerDevice, greetedLocally: greeting ? greeting.text || true : false }).catch(e => console.warn('[wakeword-gate] startSession:', e.message));
