@@ -1375,17 +1375,18 @@ wakewordGate.onWake(() => {
   // Con LOCAL_GREETING=false vuelve al saludo del agente al conectar.
   const greeting = !lkSession.isActive() && getEnvVal('LOCAL_GREETING') !== 'false' ? localGreeting.get() : null;
   if (greeting) {
-    // Sin pausa por defecto (LOCAL_GREETING_DELAY_MS=0): suena en este mismo
-    // instante, antes de que startSession() arranque (un timer acá se
-    // atrasaba ~0,6 s porque el arranque de la sesión ocupa el event loop).
-    const delay = parseInt(getEnvVal('LOCAL_GREETING_DELAY_MS') || '0', 10) || 0;
-    const play = () => {
-      const pcm = _scalePcm(greeting.pcm, lkSession.getSpeakerGain());
-      lkSession.playChime(pcm, speakerDevice);
-      _ledsFollowSpeech(pcm);
-      latencyMarks.mark('startup.localGreeting');
-    };
-    if (delay > 0) setTimeout(play, delay); else play();
+    // Pausa natural antes de contestar (LOCAL_GREETING_DELAY_MS, default 1 s),
+    // para que no se sienta tan distinto de las respuestas normales. Va como
+    // SILENCIO delante del audio, que se manda a sonar YA: un timer acá se
+    // atrasaba ~0,6 s porque el arranque de la sesión ocupa el event loop.
+    // La conexión arranca igual en este mismo instante (startSession abajo).
+    const delayMs = Math.max(0, parseInt(getEnvVal('LOCAL_GREETING_DELAY_MS') || '1000', 10) || 0);
+    const voice = _scalePcm(greeting.pcm, lkSession.getSpeakerGain());
+    const lead = Buffer.alloc(Math.round(delayMs * 48) * 2); // 48 muestras por ms, 16 bits
+    lkSession.playChime(Buffer.concat([lead, voice]), speakerDevice);
+    leds.connecting();                   // durante la pausa: "conectando"
+    _ledsFollowSpeech(voice, delayMs);   // y con la voz, "agente hablando"
+    latencyMarks.mark('startup.localGreeting');
   }
   // Se manda el TEXTO que sonó: el agente lo toma como dicho por él.
   startSession({ micDevice, speakerDevice, greetedLocally: greeting ? greeting.text || true : false }).catch(e => console.warn('[wakeword-gate] startSession:', e.message));
@@ -1396,7 +1397,7 @@ wakewordGate.onWake(() => {
 // ritmo que 'speaker-stats'). Mientras dura, nadie pisa las luces con
 // "conectando"/"listo"; al terminar quedan en el estado que corresponda.
 let _speechLedUntil = 0;
-function _ledsFollowSpeech(pcm) {
+function _ledsFollowSpeech(pcm, leadMs = 0) {
   const WIN = 9600; // 100 ms a 48 kHz mono 16 bits
   const levels = [];
   for (let off = 0; off < pcm.length; off += WIN) {
@@ -1405,10 +1406,15 @@ function _ledsFollowSpeech(pcm) {
     for (let i = off; i < end; i += 2) { const a = Math.abs(pcm.readInt16LE(i)); if (a > peak) peak = a; }
     levels.push(peak / 32767);
   }
-  _speechLedUntil = Date.now() + levels.length * 100 + 1500;
-  let i = 0;
+  const startAt = Date.now() + leadMs;   // cuándo empieza a sonar la voz
+  _speechLedUntil = startAt + levels.length * 100 + 1500;
+  // Por reloj, no por cantidad de ticks: si el event loop se atrasa
+  // (arranque de la sesión), las luces se ponen al día con el audio.
+  let last = -1;
   const tick = setInterval(() => {
-    if (i < levels.length) { leds.agentSpeaking(levels[i++]); return; }
+    const i = Math.floor((Date.now() - startAt) / 100);
+    if (i < 0) return;                   // todavía en la pausa: "conectando"
+    if (i < levels.length) { if (i !== last) { last = i; leds.agentSpeaking(levels[i]); } return; }
     clearInterval(tick);
     leds.agentSpeaking(0);
     // Después de la ola de "terminó de hablar": conectando o lista.
@@ -1417,7 +1423,7 @@ function _ledsFollowSpeech(pcm) {
       if (!lkSession.isActive()) return;
       if (_agentConfirmed) leds.idle(); else leds.connecting();
     }, 1500);
-  }, 100);
+  }, 50);
 }
 const _speechLedsBusy = () => Date.now() < _speechLedUntil;
 
