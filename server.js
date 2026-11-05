@@ -1268,10 +1268,13 @@ function _withTimeout(promise, ms, message) {
 function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 async function _connectOnce({ micDevice, speakerDevice, greetedLocally }) {
-  const { token, roomName, serverUrl: url, greetingEtag } = await _withTimeout(
+  const { token, roomName, serverUrl: url, greetingEtag, errorEtag } = await _withTimeout(
     requestRoomToken({ greetedLocally }), CONNECT_TIMEOUT_MS, 'Timeout pidiendo token (30s)'
   );
-  if (greetingEtag !== undefined) localGreeting.noteEtag(greetingEtag);
+  localGreeting.noteEtags({
+    ...(greetingEtag !== undefined ? { greeting: greetingEtag } : {}),
+    ...(errorEtag !== undefined ? { error: errorEtag } : {}),
+  });
   lastKnownLivekitUrl = url;
   latencyMarks.mark('startup.tokenOk');
 
@@ -1318,7 +1321,7 @@ async function startSession({ micDevice, speakerDevice, greetedLocally = false }
   await stopMicMonitor();
   step('stopMicMonitor');
   _agentConfirmed = false;
-  leds.connecting();  // cometa cian mientras se pide token y conecta a LiveKit — se mantiene durante los reintentos, sin cortes visuales
+  if (!_speechLedsBusy()) leds.connecting();  // cometa cian mientras se pide token y conecta a LiveKit — se mantiene durante los reintentos, sin cortes visuales (no si suena el saludo grabado)
   step('leds.connecting');
 
   let lastError;
@@ -1345,8 +1348,20 @@ async function startSession({ micDevice, speakerDevice, greetedLocally = false }
   // verdad, no es hipotético. brumexaError() ya hace la vuelta suave sola
   // (pulso rojo, después funde a la respiración normal).
   leds.brumexaError(4000);
+  _sayConnectionError();
   startMicMonitor();
   throw lastError;
+}
+
+// "Uy, no me pude conectar…" con la voz del agente (frase grabada, se edita
+// en el admin). Va por el mismo pipe que el saludo: si el saludo todavía
+// suena, la frase sale después, no encima.
+function _sayConnectionError() {
+  const phrase = getEnvVal('LOCAL_GREETING') !== 'false' ? localGreeting.get('error') : null;
+  if (!phrase) return;
+  const speakerDevice = getEnvVal('SPEAKER_ALSA_DEVICE') || 'brumexa_speaker';
+  console.log(`[greeting] no se pudo conectar → "${phrase.text}"`);
+  lkSession.playChime(_scalePcm(phrase.pcm, lkSession.getSpeakerGain()), speakerDevice);
 }
 
 // WAKEWORD — dispara el mismo startSession() que usa el botón "Conectar", al
@@ -1365,7 +1380,9 @@ wakewordGate.onWake(() => {
     // atrasaba ~0,6 s porque el arranque de la sesión ocupa el event loop).
     const delay = parseInt(getEnvVal('LOCAL_GREETING_DELAY_MS') || '0', 10) || 0;
     const play = () => {
-      lkSession.playChime(_scalePcm(greeting.pcm, lkSession.getSpeakerGain()), speakerDevice);
+      const pcm = _scalePcm(greeting.pcm, lkSession.getSpeakerGain());
+      lkSession.playChime(pcm, speakerDevice);
+      _ledsFollowSpeech(pcm);
       latencyMarks.mark('startup.localGreeting');
     };
     if (delay > 0) setTimeout(play, delay); else play();
@@ -1373,6 +1390,36 @@ wakewordGate.onWake(() => {
   // Se manda el TEXTO que sonó: el agente lo toma como dicho por él.
   startSession({ micDevice, speakerDevice, greetedLocally: greeting ? greeting.text || true : false }).catch(e => console.warn('[wakeword-gate] startSession:', e.message));
 });
+
+// Luces del saludo grabado: la misma animación de "agente hablando" que con
+// la voz real, alimentada con el volumen del audio cada 100 ms (el mismo
+// ritmo que 'speaker-stats'). Mientras dura, nadie pisa las luces con
+// "conectando"/"listo"; al terminar quedan en el estado que corresponda.
+let _speechLedUntil = 0;
+function _ledsFollowSpeech(pcm) {
+  const WIN = 9600; // 100 ms a 48 kHz mono 16 bits
+  const levels = [];
+  for (let off = 0; off < pcm.length; off += WIN) {
+    let peak = 0;
+    const end = Math.min(off + WIN, pcm.length - 1);
+    for (let i = off; i < end; i += 2) { const a = Math.abs(pcm.readInt16LE(i)); if (a > peak) peak = a; }
+    levels.push(peak / 32767);
+  }
+  _speechLedUntil = Date.now() + levels.length * 100 + 1500;
+  let i = 0;
+  const tick = setInterval(() => {
+    if (i < levels.length) { leds.agentSpeaking(levels[i++]); return; }
+    clearInterval(tick);
+    leds.agentSpeaking(0);
+    // Después de la ola de "terminó de hablar": conectando o lista.
+    setTimeout(() => {
+      _speechLedUntil = 0;
+      if (!lkSession.isActive()) return;
+      if (_agentConfirmed) leds.idle(); else leds.connecting();
+    }, 1500);
+  }, 100);
+}
+const _speechLedsBusy = () => Date.now() < _speechLedUntil;
 
 // Mismo volumen que la voz del agente (speakerGain), con clipping.
 function _scalePcm(pcm, gain) {
@@ -1411,6 +1458,9 @@ lkSession.on('mic-stats',     ({ peak, dbfs }) => {
 lkSession.on('speaker-stats', ({ peak }) => {
   // El log ya lo hace lib/livekit-session.js — acá solo sincronizamos el LED
   // (verde) con el volumen real de la voz del agente, mismo patrón que 'mic-stats'.
+  // Mientras suena el saludo grabado, sus luces las maneja _ledsFollowSpeech
+  // (el agente ya conectado manda silencio y lo pisaría con 0).
+  if (_speechLedsBusy()) return;
   leds.agentSpeaking(peak / 32767);
 });
 // 'connected' es solo la SALA (room.connect() resuelto) — el agente puede
@@ -1430,7 +1480,7 @@ lkSession.on('connected',     () => { stopMicMonitor(); _sessionConnectedAt = Da
 lkSession.on('agent-audio',   () => {
   const yaEstabaConfirmado = _agentConfirmed;
   _agentConfirmed = true;
-  leds.idle();
+  if (!_speechLedsBusy()) leds.idle();   // si suena el saludo grabado, sus luces terminan y quedan en idle solas
   // Ya no suena el chime de "conectado" (2026-11-05): con el saludo grabado
   // la Pi ya contesta al toque y el chime sonaba encima/después del saludo.
   // Si se quiere volver: soundEffects.buildLivekitChimePcm() + lkSession.playChime().
@@ -1467,7 +1517,17 @@ lkSession.on('disconnected',  d => {
 });
 // Se agotaron los reintentos (agente inalcanzable) — señal clara de error
 // en vez de caer en idle como si todo estuviera bien.
-lkSession.on('agent-dead',    () => { leds.brumexaError(4000); startMicMonitor(); });
+lkSession.on('agent-dead',    () => {
+  leds.brumexaError(4000);
+  startMicMonitor();
+  // agent-dead llega ANTES de que lkSession se cierre (y el cierre mata el
+  // aplay): la frase espera a que termine de cerrarse, hasta 5 s.
+  const t0 = Date.now();
+  const tick = setInterval(() => {
+    // Status pasa a idle antes de matar aplay: esperar las dos cosas.
+    if ((!lkSession.isActive() && !lkSession.aplayProc) || Date.now() - t0 > 5000) { clearInterval(tick); _sayConnectionError(); }
+  }, 200);
+});
 
 app.post('/session/start', express.json(), async (req, res) => {
   const reqId = Math.random().toString(36).slice(2, 7);
