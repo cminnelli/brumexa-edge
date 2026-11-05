@@ -142,6 +142,7 @@ const leds                                             = require('./lib/leds');
 const soundEffects                                     = require('./lib/sound-effects');
 const ragAuth                                          = require('./lib/rag-auth');
 const { requestRoomToken, setCredentials: setTokenCredentials } = require('./lib/rag-token');
+const localGreeting                                      = require('./lib/local-greeting');
 const { POP_SETTLE_MS: MIC_MONITOR_WARMUP_MS }         = require('./lib/mic-calibration');
 const wakewordGate                                     = require('./lib/wakeword-gate'); // WAKEWORD — detecta "ei brúmexa", ver lib/wakeword-gate.js
 const vadGate                                           = require('./lib/vad-gate'); // VAD — "¿esto es voz humana?", ver lib/vad-gate.js y lib/mic-speech-gate.js
@@ -1264,9 +1265,9 @@ function _withTimeout(promise, ms, message) {
 
 function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-async function _connectOnce({ micDevice, speakerDevice }) {
+async function _connectOnce({ micDevice, speakerDevice, greetedLocally }) {
   const { token, roomName, serverUrl: url } = await _withTimeout(
-    requestRoomToken(), CONNECT_TIMEOUT_MS, 'Timeout pidiendo token (30s)'
+    requestRoomToken({ greetedLocally }), CONNECT_TIMEOUT_MS, 'Timeout pidiendo token (30s)'
   );
   lastKnownLivekitUrl = url;
   latencyMarks.mark('startup.tokenOk');
@@ -1296,7 +1297,7 @@ function _stepTimer(label) {
 
 // ─── startSession(): la misma lógica que corría inline en POST /session/start,
 // separada para más claridad — hoy la usa solo esa ruta HTTP ────────────────
-async function startSession({ micDevice, speakerDevice }) {
+async function startSession({ micDevice, speakerDevice, greetedLocally = false }) {
   if (lkSession.isActive()) {
     const err = new Error('Sesión ya activa');
     err.sessionActive = true;
@@ -1323,7 +1324,7 @@ async function startSession({ micDevice, speakerDevice }) {
       // OJO: _connectOnce espera de red (fetch a RAG API + LiveKit) — un
       // tiempo largo acá es esperar, no bloquear. Por eso no se lo mide con
       // step() como a lo de arriba (daría falsos positivos todo el tiempo).
-      return await _connectOnce({ micDevice, speakerDevice });
+      return await _connectOnce({ micDevice, speakerDevice, greetedLocally });
     } catch (e) {
       lastError = e;
       console.warn(`[session/start] intento ${attempt}/${MAX_CONNECT_ATTEMPTS} falló:`, e.message);
@@ -1352,8 +1353,32 @@ wakewordGate.onWake(() => {
   latencyMarks.mark('startup.wake');
   const micDevice     = getEnvVal('MIC_ALSA_DEVICE')     || 'plughw:0,0';
   const speakerDevice = getEnvVal('SPEAKER_ALSA_DEVICE') || 'brumexa_speaker';
-  startSession({ micDevice, speakerDevice }).catch(e => console.warn('[wakeword-gate] startSession:', e.message));
+  // Saludo grabado: suena YA, mientras se conecta de fondo (ver lib/local-greeting.js).
+  // Con LOCAL_GREETING=false vuelve al saludo del agente al conectar.
+  const greeting = !lkSession.isActive() && getEnvVal('LOCAL_GREETING') !== 'false' ? localGreeting.get() : null;
+  if (greeting) {
+    lkSession.playChime(_scalePcm(greeting.pcm, lkSession.getSpeakerGain()), speakerDevice);
+    latencyMarks.mark('startup.localGreeting');
+  }
+  startSession({ micDevice, speakerDevice, greetedLocally: !!greeting }).catch(e => console.warn('[wakeword-gate] startSession:', e.message));
 });
+
+// Mismo volumen que la voz del agente (speakerGain), con clipping.
+function _scalePcm(pcm, gain) {
+  if (gain === 1) return pcm;
+  const out = Buffer.alloc(pcm.length);
+  for (let i = 0; i + 1 < pcm.length; i += 2) {
+    out.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(pcm.readInt16LE(i) * gain))), i);
+  }
+  return out;
+}
+
+// Traer el saludo al arrancar, después de cada conversación (por si cambió
+// el saludo o la voz en el admin) y cada 15 min. Con ETag: casi siempre es un 304.
+localGreeting.load();
+setTimeout(() => localGreeting.refresh(), 5000);
+setInterval(() => { if (!lkSession.isActive()) localGreeting.refresh(); }, 15 * 60 * 1000);
+lkSession.on('disconnected', () => setTimeout(() => localGreeting.refresh(), 3000));
 
 let _sessionConnectedAt = 0;
 
