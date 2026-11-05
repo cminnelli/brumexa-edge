@@ -1385,7 +1385,11 @@ wakewordGate.onWake(() => {
     const lead = Buffer.alloc(Math.round(delayMs * 48) * 2); // 48 muestras por ms, 16 bits
     lkSession.playChime(Buffer.concat([lead, voice]), speakerDevice);
     leds.connecting();                   // durante la pausa: "conectando"
-    _ledsFollowSpeech(voice, delayMs);   // y con la voz, "agente hablando"
+    // Y con la voz, "agente hablando". Entre que el audio se manda y que SUENA
+    // pasa un rato (abrir aplay + su buffer; medido con el mic: ~0,3–0,4 s,
+    // más al abrir aplay de cero): las luces se atrasan eso para ir con la voz.
+    const ledOffsetMs = Math.max(0, parseInt(getEnvVal('LOCAL_GREETING_LED_OFFSET_MS') || '450', 10) || 0);
+    _ledsFollowSpeech(voice, delayMs + ledOffsetMs);
     latencyMarks.mark('startup.localGreeting');
   }
   // Se manda el TEXTO que sonó: el agente lo toma como dicho por él.
