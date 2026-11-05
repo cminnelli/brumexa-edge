@@ -646,6 +646,8 @@ app.post('/setup/config', express.json(), async (req, res) => {
     if (ragApiUrl !== undefined || deviceId !== undefined || apiKey !== undefined) {
       ragAuth.setCredentials({ ragApiUrl, deviceId, apiKey });
       setTokenCredentials({ ragApiUrl, deviceId });
+      // Otro negocio/dispositivo → otro agente y otro saludo: bajarlo ya.
+      setTimeout(() => localGreeting.refresh(), 2000);
     }
     if (micGain !== undefined) {
       const g = parseFloat(micGain);
@@ -1357,10 +1359,15 @@ wakewordGate.onWake(() => {
   // Con LOCAL_GREETING=false vuelve al saludo del agente al conectar.
   const greeting = !lkSession.isActive() && getEnvVal('LOCAL_GREETING') !== 'false' ? localGreeting.get() : null;
   if (greeting) {
-    lkSession.playChime(_scalePcm(greeting.pcm, lkSession.getSpeakerGain()), speakerDevice);
-    latencyMarks.mark('startup.localGreeting');
+    // Una pausa natural antes de contestar (LOCAL_GREETING_DELAY_MS, default 1 s).
+    const delay = parseInt(getEnvVal('LOCAL_GREETING_DELAY_MS') || '1000', 10) || 0;
+    setTimeout(() => {
+      lkSession.playChime(_scalePcm(greeting.pcm, lkSession.getSpeakerGain()), speakerDevice);
+      latencyMarks.mark('startup.localGreeting');
+    }, delay);
   }
-  startSession({ micDevice, speakerDevice, greetedLocally: !!greeting }).catch(e => console.warn('[wakeword-gate] startSession:', e.message));
+  // Se manda el TEXTO que sonó: el agente lo toma como dicho por él.
+  startSession({ micDevice, speakerDevice, greetedLocally: greeting ? greeting.text || true : false }).catch(e => console.warn('[wakeword-gate] startSession:', e.message));
 });
 
 // Mismo volumen que la voz del agente (speakerGain), con clipping.
@@ -1420,20 +1427,10 @@ lkSession.on('agent-audio',   () => {
   const yaEstabaConfirmado = _agentConfirmed;
   _agentConfirmed = true;
   leds.idle();
-  if (!yaEstabaConfirmado) {
-    // El chime usa su propio volumen (soundEffects._notificationGain, el
-    // slider de Configuración → Sonido) — antes seguía el gain de la VOZ
-    // del agente para no sonar desproporcionado, pero con un control propio
-    // ya no hace falta esa aproximación.
-    //
-    // Se escribe DIRECTO en el mismo pipe de aplay que ya usa la voz del
-    // agente (lkSession.playChime), en vez de abrir un aplay propio — dos
-    // aplay separados compitiendo por el mismo device ALSA (plughw:0,0) es
-    // justo por qué a veces no se escuchaba: el que perdía la carrera por
-    // el device fallaba en silencio con "Device or resource busy".
-    const chime = soundEffects.buildLivekitChimePcm(undefined, lkSession.getSpeakerFormat());
-    if (chime) lkSession.playChime(chime);
-  }
+  // Ya no suena el chime de "conectado" (2026-11-05): con el saludo grabado
+  // la Pi ya contesta al toque y el chime sonaba encima/después del saludo.
+  // Si se quiere volver: soundEffects.buildLivekitChimePcm() + lkSession.playChime().
+  void yaEstabaConfirmado;
 });
 lkSession.on('error',         e => { console.error('[lk-session-evt] error:', e.message); leds.brumexaError(4000); startMicMonitor(); });
 // _isReconnecting en lkSession vuelve a false apenas la SALA reconecta
