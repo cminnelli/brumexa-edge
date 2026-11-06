@@ -143,6 +143,7 @@ const soundEffects                                     = require('./lib/sound-ef
 const ragAuth                                          = require('./lib/rag-auth');
 const { requestRoomToken, setCredentials: setTokenCredentials } = require('./lib/rag-token');
 const localGreeting                                      = require('./lib/local-greeting');
+const agentLevel                                         = require('./lib/agent-level');
 const { POP_SETTLE_MS: MIC_MONITOR_WARMUP_MS }         = require('./lib/mic-calibration');
 const wakewordGate                                     = require('./lib/wakeword-gate'); // WAKEWORD — detecta "ei brúmexa", ver lib/wakeword-gate.js
 const vadGate                                           = require('./lib/vad-gate'); // VAD — "¿esto es voz humana?", ver lib/vad-gate.js y lib/mic-speech-gate.js
@@ -1361,7 +1362,7 @@ function _sayConnectionError() {
   if (!phrase) return;
   const speakerDevice = getEnvVal('SPEAKER_ALSA_DEVICE') || 'brumexa_speaker';
   console.log(`[greeting] no se pudo conectar → "${phrase.text}"`);
-  lkSession.playChime(_scalePcm(phrase.pcm, lkSession.getSpeakerGain()), speakerDevice);
+  lkSession.playChime(_scalePcm(phrase.pcm, lkSession.getSpeakerGain() * agentLevel.matchGain(phrase.pcm)), speakerDevice);
 }
 
 // WAKEWORD — dispara el mismo startSession() que usa el botón "Conectar", al
@@ -1381,7 +1382,8 @@ wakewordGate.onWake(() => {
     // atrasaba ~0,6 s porque el arranque de la sesión ocupa el event loop.
     // La conexión arranca igual en este mismo instante (startSession abajo).
     const delayMs = Math.max(0, parseInt(getEnvVal('LOCAL_GREETING_DELAY_MS') || '1000', 10) || 0);
-    const voice = _scalePcm(greeting.pcm, lkSession.getSpeakerGain());
+    // Al mismo nivel que la voz del agente en las charlas (lib/agent-level.js), y con su volumen.
+    const voice = _scalePcm(greeting.pcm, lkSession.getSpeakerGain() * agentLevel.matchGain(greeting.pcm));
     const lead = Buffer.alloc(Math.round(delayMs * 48) * 2); // 48 muestras por ms, 16 bits
     lkSession.playChime(Buffer.concat([lead, voice]), speakerDevice);
     leds.connecting();                   // durante la pausa: "conectando"
