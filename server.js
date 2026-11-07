@@ -1391,12 +1391,18 @@ function _listenReset() {
 // La pregunta ya está grabada y el agente ya está: se manda.
 function _sendQuestionWhenReady() {
   if (!_listen.question || !_agentConfirmed || !lkSession.isActive()) return;
-  const pcm = _listen.question;
+  // El monitor graba el audio crudo: se le aplica la misma ganancia del mic
+  // que usa la sesión (_publishMic). Sin esto la pregunta llegaba ~12 dB más
+  // baja (micGain 4) y OpenAI la transcribía vacía.
+  const raw = _listen.question;
   _listen.question = null;
+  const pcm = _scalePcm(raw, lkSession.getMicGain());
+  let peak = 0;
+  for (let i = 0; i + 1 < pcm.length; i += 2) { const a = Math.abs(pcm.readInt16LE(i)); if (a > peak) peak = a; }
   lkSession.sendQuestion(pcm, questionCapture.RATE)
     .then(() => {
       latencyMarks.mark('startup.questionSent');
-      console.log(`[wake] pregunta mandada al agente (${(pcm.length / 32000).toFixed(1)} s)`);
+      console.log(`[wake] pregunta mandada al agente (${(pcm.length / 32000).toFixed(1)} s, ganancia ×${lkSession.getMicGain()}, pico ${(20 * Math.log10(Math.max(peak, 1) / 32767)).toFixed(1)} dBFS)`);
     })
     .catch(e => {
       console.warn('[wake] no se pudo mandar la pregunta:', e.message);
