@@ -1425,7 +1425,7 @@ wakewordGate.onWake(() => {
   leds.listening();
   questionCapture.start({
     waitMs:       parseInt(getEnvVal('QUESTION_WAIT_MS') || '6000', 10) || 6000,
-    endSilenceMs: parseInt(getEnvVal('QUESTION_END_SILENCE_MS') || '500', 10) || 500,
+    endSilenceMs: parseInt(getEnvVal('QUESTION_END_SILENCE_MS') || '800', 10) || 800,
     onSpeech: () => latencyMarks.mark('startup.questionStart'),
     onDone: (pcm) => {
       latencyMarks.mark('startup.questionEnd');
