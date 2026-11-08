@@ -1538,10 +1538,13 @@ lkSession.on('disconnected',  d => {
   const silent = _listen.silentEnd;
   _listen.silentEnd = false;
   _listenReset();
-  // Fin de la charla: Brumexa exhala y se duerme (luces), sin sonido de
-  // "desconectado". Si se quiere volver: soundEffects.playSound('livekit_desconectado.wav').
+  // Fin de la charla: Brumexa exhala y se duerme (luces) + sonido de
+  // "desconectado". Para cuando llega este evento, stop() ya cerró el aplay
+  // del agente, así que playSound() (su propio aplay) es seguro.
   if (!silent) leds.sleep();
   startMicMonitor();
+  if (silent) return;
+  try { soundEffects.playSound('livekit_desconectado.wav'); } catch (e) { console.warn('[lk-session-evt] playSound desconectado:', e.message); }
 });
 // Se agotaron los reintentos (agente inalcanzable) — señal clara de error
 // en vez de caer en idle como si todo estuviera bien.
