@@ -1439,7 +1439,7 @@ wakewordGate.onWake(() => {
       console.log('[wake] no preguntaste nada: vuelvo a dormir');
       _listen.cancelled = true;
       _listen.phase = null;
-      leds.idle();
+      leds.sleep();
       // Si ya conectó, cortar sin ruido; si todavía conecta, corta startSession al terminar.
       if (lkSession.isActive()) { _listen.silentEnd = true; lkSession.stop('no-question').catch(() => {}); }
     },
@@ -1485,7 +1485,7 @@ lkSession.on('speaker-stats', ({ peak }) => {
   // El log ya lo hace lib/livekit-session.js — acá solo sincronizamos el LED
   // (verde) con el volumen real de la voz del agente, mismo patrón que 'mic-stats'.
   // "hey brumexa": la respuesta empezó a sonar → se termina el "pensando".
-  if (_listen.phase === 'thinking' && peak / 32767 > 0.03) { _listen.phase = null; leds.idle(); }
+  if (_listen.phase === 'thinking' && peak / 32767 > 0.03) { _listen.phase = null; leds.waiting(lkSession.getSilenceTimeout()); }
   leds.agentSpeaking(peak / 32767);
 });
 // 'connected' es solo la SALA (room.connect() resuelto) — el agente puede
@@ -1507,7 +1507,7 @@ lkSession.on('agent-audio',   () => {
   const yaEstabaConfirmado = _agentConfirmed;
   _agentConfirmed = true;
   // Escuchando / pensando ("hey brumexa"): las luces siguen en ese estado.
-  if (!_listen.phase) leds.idle();
+  if (!_listen.phase) leds.waiting(lkSession.getSilenceTimeout());
   // Sin chime de "conectado": con "hey brumexa" se conecta en silencio.
   // Si se quiere volver: soundEffects.buildLivekitChimePcm() + lkSession.playChime().
   void yaEstabaConfirmado;
@@ -1538,15 +1538,10 @@ lkSession.on('disconnected',  d => {
   const silent = _listen.silentEnd;
   _listen.silentEnd = false;
   _listenReset();
-  leds.idle();
+  // Fin de la charla: Brumexa exhala y se duerme (luces), sin sonido de
+  // "desconectado". Si se quiere volver: soundEffects.playSound('livekit_desconectado.wav').
+  if (!silent) leds.sleep();
   startMicMonitor();
-  if (silent) return;
-  // El chime de conectado se mete en el pipe compartido de aplay (ver
-  // buildLivekitChimePcm) porque ese pipe está OCUPADO en ese momento — acá
-  // no hace falta ese rodeo: para cuando llega este evento, stop() ya cerró
-  // el aplay del agente (ver el orden en lkSession.stop()), así que el
-  // device está libre y playSound() (su propio aplay) es seguro.
-  try { soundEffects.playSound('livekit_desconectado.wav'); } catch (e) { console.warn('[lk-session-evt] playSound desconectado:', e.message); }
 });
 // Se agotaron los reintentos (agente inalcanzable) — señal clara de error
 // en vez de caer en idle como si todo estuviera bien.
