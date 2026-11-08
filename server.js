@@ -145,6 +145,7 @@ const { requestRoomToken, setCredentials: setTokenCredentials } = require('./lib
 const localGreeting                                      = require('./lib/local-greeting');
 const agentLevel                                         = require('./lib/agent-level');
 const questionCapture                                    = require('./lib/question-capture');
+const serverHealth                                       = require('./lib/server-health');
 const { POP_SETTLE_MS: MIC_MONITOR_WARMUP_MS }         = require('./lib/mic-calibration');
 const wakewordGate                                     = require('./lib/wakeword-gate'); // WAKEWORD — detecta "ei brúmexa", ver lib/wakeword-gate.js
 const vadGate                                           = require('./lib/vad-gate'); // VAD — "¿esto es voz humana?", ver lib/vad-gate.js y lib/mic-speech-gate.js
@@ -1785,6 +1786,18 @@ httpServer.listen(PORT, async () => {
   if (DEVICE_CONFIGURED) {
     ragAuth.initAuth();
     deviceHeartbeat.start(); // "estoy online" para el admin, cada 30 s
+    // Servidor caído al arrancar o después: luces de "sin servidor" y, cuando
+    // vuelve, se re-autentica y baja la frase de error sola (ver lib/server-health.js).
+    serverHealth.start({
+      getUrl: () => ragAuth.getStatus().ragApiUrl || process.env.RAG_API_URL || 'http://localhost:4000',
+      onChange: (up) => {
+        leds.setServerHealth(up);
+        if (up) {
+          ragAuth.ensureAuth().catch(e => console.warn('[server] login al volver:', e.message));
+          setTimeout(() => localGreeting.refresh(), 1000);
+        }
+      },
+    });
   }
 
   // Arranca ya mismo, no solo si hay sesión — así /local muestra latencia al
