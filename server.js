@@ -107,7 +107,7 @@ const { startRecording, stopRecording, getStatus,
         listRecordings, RECORDINGS_DIR,
         reserveBrowserFilename, saveBrowserRecording,
         deleteRecording, boostCaptureGain } = require('./lib/recorder');
-const { setupWifi, autoStartAP, startHealthMonitor, getStatus: getWifiStatus, getStatusAsync: getWifiStatusAsync, setApSsid, setApPass, DEFAULT_AP_PASS } = require('./lib/wifi');
+const { setupWifi, autoStartAP, startHealthMonitor, getStatus: getWifiStatus, getStatusAsync: getWifiStatusAsync, setApSsid, setApPass, DEFAULT_AP_PASS, reconnectNow: reconnectWifiNow, getNetworkHealth: getWifiNetworkHealth } = require('./lib/wifi');
 const { setupLocalDebug, getSystemInfo }                = require('./lib/local-debug');
 const { setupSystemFixes }                              = require('./lib/system-fixes');
 
@@ -1357,8 +1357,7 @@ async function startSession({ micDevice, speakerDevice, listenFirst = false }) {
   // verdad, no es hipotético. brumexaError() ya hace la vuelta suave sola
   // (pulso rojo, después funde a la respiración normal).
   startMicMonitor();
-  // Si ya te habías dormido (no preguntaste nada), el error no se anuncia.
-  if (listenFirst && _listen.cancelled) throw lastError;
+  // Se avisa siempre, aunque todavía no hayas preguntado nada.
   _listenReset();
   leds.brumexaError(4000);
   _sayConnectionError();
@@ -1415,8 +1414,30 @@ function _sendQuestionWhenReady() {
     .catch(e => console.warn('[wake] publishMic:', e.message));
 }
 
-wakewordGate.onWake(() => {
+// "hey brumexa" sin Wi-Fi o con el servidor caído (ya lo sabemos por los
+// chequeos de fondo): avisar al toque con la frase de error, una vez por
+// wake, sin escuchar ni intentar conectar. Sin Wi-Fi, además reintenta la red
+// ya (si vuelve, suena el aviso de Wi-Fi conectado y podés volver a llamarla).
+let _offlineWakeUntil = 0;
+function _offlineReason() {
+  const net = getWifiNetworkHealth();
+  if (net === 'disconnected' || net === 'connecting' || net === 'ap') return 'wifi';
+  if (DEVICE_CONFIGURED && !serverHealth.isUp()) return 'server';
+  return null;
+}
+function _wakeOffline(reason) {
+  if (Date.now() < _offlineWakeUntil) return;   // ya está avisando / reintentando
+  _offlineWakeUntil = Date.now() + 5000;
+  console.log(`[wake] sin ${reason === 'wifi' ? 'Wi-Fi' : 'servidor'} → aviso de error`);
+  leds.brumexaError(4000);
+  _sayConnectionError();
+  if (reason === 'wifi') reconnectWifiNow().catch(e => console.warn('[wake] reintento Wi-Fi:', e.message));
+}
+
+function _onWake({ forceOffline } = {}) {
   if (lkSession.isActive() || questionCapture.isActive()) return;
+  const offline = forceOffline || _offlineReason();
+  if (offline) return _wakeOffline(offline);
   latencyMarks.mark('startup.wake');
   const micDevice     = getEnvVal('MIC_ALSA_DEVICE')     || 'plughw:0,0';
   const speakerDevice = getEnvVal('SPEAKER_ALSA_DEVICE') || 'brumexa_speaker';
@@ -1445,6 +1466,15 @@ wakewordGate.onWake(() => {
     },
   });
   startSession({ micDevice, speakerDevice, listenFirst: true }).catch(e => console.warn('[wakeword-gate] startSession:', e.message));
+}
+wakewordGate.onWake(() => _onWake());
+
+// Para probar el "hey brumexa" sin hablar: POST /diag/wake (?offline=wifi|server
+// simula estar sin red / sin servidor).
+app.post('/diag/wake', (req, res) => {
+  const off = req.query.offline;
+  _onWake({ forceOffline: off === 'wifi' || off === 'server' ? off : null });
+  res.json({ ok: true, offline: off || null });
 });
 
 // Mismo volumen que la voz del agente (speakerGain), con clipping.
@@ -1534,6 +1564,24 @@ lkSession.on('disconnected',  d => {
     leds.connecting();
     return;
   }
+  // La sala avisa con un número (DisconnectReason de LiveKit); stop() avisa
+  // después con su propio motivo (texto). 1 = lo cerramos nosotros: el aviso
+  // que cuenta es el de stop(), no hacer nada dos veces.
+  if (typeof d.reason === 'number') {
+    if (d.reason === 1) return;
+    // Se cayó la sala en medio de la charla (red, servidor): limpiar y avisar.
+    console.warn(`[lk-session-evt] la charla se cortó sola (motivo ${d.reason}) → aviso de error`);
+    lkSession.stop('dropped').catch(() => {});
+    return;
+  }
+  if (d.reason === 'retry') return;   // intento fallido de startSession: avisa startSession al final
+  if (d.reason === 'dropped') {
+    _listenReset();
+    leds.brumexaError(4000);
+    startMicMonitor();
+    _sayConnectionError();
+    return;
+  }
   // "hey brumexa" sin pregunta: se vuelve a dormir sin ningún sonido.
   const silent = _listen.silentEnd;
   _listen.silentEnd = false;
@@ -1550,6 +1598,7 @@ lkSession.on('disconnected',  d => {
 // en vez de caer en idle como si todo estuviera bien.
 lkSession.on('agent-dead',    () => {
   _listenReset();
+  _listen.silentEnd = true;   // el stop() que sigue no suena "desconectado": acá va la frase de error
   leds.brumexaError(4000);
   startMicMonitor();
   // agent-dead llega ANTES de que lkSession se cierre (y el cierre mata el
