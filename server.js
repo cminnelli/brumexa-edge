@@ -1382,10 +1382,55 @@ function _sayConnectionError() {
 // abre el mic de la sesión para las repreguntas. Si no decís nada en
 // QUESTION_WAIT_MS, se vuelve a dormir en silencio.
 //   _listen.phase: 'listening' (grabando) | 'thinking' (esperando la respuesta) | null
-const _listen = { phase: null, question: null, cancelled: false, silentEnd: false };
+//   _listen.streamP: la pregunta va en vivo (promesa del stream abierto, o null si falló)
+const _listen = { phase: null, question: null, cancelled: false, silentEnd: false, streamP: null };
 function _listenReset() {
   questionCapture.cancel();
-  _listen.phase = null; _listen.question = null; _listen.cancelled = false;
+  _listen.phase = null; _listen.question = null; _listen.cancelled = false; _listen.streamP = null;
+}
+
+// Pregunta en vivo (2026-11-09): apenas el agente está, se le manda lo
+// grabado hasta ahora y, de ahí en más, cada pedazo del mic a medida que
+// hablás. Al terminar solo falta cerrar el stream: el agente ya tiene casi
+// todo y pide la respuesta enseguida (antes se mandaba todo junto al final:
+// 0,4–1,6 s más por la red de la Pi). Si todavía conecta, se graba como siempre.
+function _startQuestionStream() {
+  if (_listen.phase !== 'listening' || _listen.streamP || !questionCapture.isActive() || !_agentConfirmed || !lkSession.isActive()) return;
+  const gain = lkSession.getMicGain();
+  _listen.streamP = lkSession.openQuestionStream(questionCapture.RATE).then(st => {
+    // Sincrónico a propósito: tap() y el primer write en el mismo tick, así
+    // ningún chunk nuevo se adelanta a lo ya grabado.
+    const sofar = questionCapture.tap(chunk => { st.write(_scalePcm(chunk, gain)).catch(() => {}); });
+    if (sofar) { st.write(_scalePcm(sofar, gain)).catch(() => {}); st.tapped = true; console.log(`[wake] pregunta en vivo: ${(sofar.length / 32000).toFixed(1)} s grabados de golpe, el resto mientras hablás`); }
+    return st;
+  }).catch(e => { console.warn('[wake] no se pudo abrir la pregunta en vivo (va completa al final):', e.message); return null; });
+}
+
+// Terminaste de preguntar y la pregunta iba en vivo: cerrar el stream.
+async function _finishQuestionStream(raw) {
+  const st = await _listen.streamP;
+  if (!st) { _listen.question = raw; return _sendQuestionWhenReady(); }
+  try {
+    if (!st.tapped) await st.write(_scalePcm(raw, lkSession.getMicGain()));   // se abrió justo cuando terminabas
+    await st.close();
+    _questionDelivered(raw);
+  } catch (e) {
+    console.warn('[wake] no se pudo cerrar la pregunta en vivo:', e.message);
+    if (_listen.phase === 'thinking') { _listen.phase = null; leds.idle(); }
+  }
+}
+
+// La pregunta llegó al agente: se mide y el mic pasa a la sesión (repreguntas).
+function _questionDelivered(raw) {
+  latencyMarks.mark('startup.questionSent');
+  let peak = 0;
+  for (let i = 0; i + 1 < raw.length; i += 2) { const a = Math.abs(raw.readInt16LE(i)); if (a > peak) peak = a; }
+  peak = Math.min(32767, peak * lkSession.getMicGain());
+  console.log(`[wake] pregunta mandada al agente (${(raw.length / 32000).toFixed(1)} s, ganancia ×${lkSession.getMicGain()}, pico ${(20 * Math.log10(Math.max(peak, 1) / 32767)).toFixed(1)} dBFS)`);
+  // Mientras habla el agente, el mic se mutea solo.
+  stopMicMonitor()
+    .then(() => lkSession.publishMic())
+    .catch(e => console.warn('[wake] publishMic:', e.message));
 }
 
 // La pregunta ya está grabada y el agente ya está: se manda.
@@ -1396,22 +1441,12 @@ function _sendQuestionWhenReady() {
   // baja (micGain 4) y OpenAI la transcribía vacía.
   const raw = _listen.question;
   _listen.question = null;
-  const pcm = _scalePcm(raw, lkSession.getMicGain());
-  let peak = 0;
-  for (let i = 0; i + 1 < pcm.length; i += 2) { const a = Math.abs(pcm.readInt16LE(i)); if (a > peak) peak = a; }
-  lkSession.sendQuestion(pcm, questionCapture.RATE)
-    .then(() => {
-      latencyMarks.mark('startup.questionSent');
-      console.log(`[wake] pregunta mandada al agente (${(pcm.length / 32000).toFixed(1)} s, ganancia ×${lkSession.getMicGain()}, pico ${(20 * Math.log10(Math.max(peak, 1) / 32767)).toFixed(1)} dBFS)`);
-    })
+  lkSession.sendQuestion(_scalePcm(raw, lkSession.getMicGain()), questionCapture.RATE)
+    .then(() => _questionDelivered(raw))
     .catch(e => {
       console.warn('[wake] no se pudo mandar la pregunta:', e.message);
       if (_listen.phase === 'thinking') { _listen.phase = null; leds.idle(); }
-    })
-    // El mic pasa del monitor a la sesión (repreguntas). Mientras habla el agente, se mutea solo.
-    .then(() => stopMicMonitor())
-    .then(() => lkSession.publishMic())
-    .catch(e => console.warn('[wake] publishMic:', e.message));
+    });
 }
 
 // "hey brumexa" sin Wi-Fi o con el servidor caído (ya lo sabemos por los
@@ -1452,9 +1487,9 @@ function _onWake({ forceOffline } = {}) {
     onDone: (pcm) => {
       latencyMarks.mark('startup.questionEnd');
       _listen.phase = 'thinking';
-      _listen.question = pcm;
       leds.thinking();
-      _sendQuestionWhenReady();
+      if (_listen.streamP) _finishQuestionStream(pcm);
+      else { _listen.question = pcm; _sendQuestionWhenReady(); }
     },
     onNoSpeech: () => {
       console.log('[wake] no preguntaste nada: vuelvo a dormir');
@@ -1541,8 +1576,9 @@ lkSession.on('agent-audio',   () => {
   // Sin chime de "conectado": con "hey brumexa" se conecta en silencio.
   // Si se quiere volver: soundEffects.buildLivekitChimePcm() + lkSession.playChime().
   void yaEstabaConfirmado;
-  // Si la pregunta ya estaba grabada, sale ahora.
+  // Si la pregunta ya estaba grabada, sale ahora; si todavía hablás, va en vivo.
   _sendQuestionWhenReady();
+  _startQuestionStream();
 });
 lkSession.on('error',         e => { console.error('[lk-session-evt] error:', e.message); leds.brumexaError(4000); startMicMonitor(); });
 // _isReconnecting en lkSession vuelve a false apenas la SALA reconecta
