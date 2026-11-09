@@ -1386,7 +1386,7 @@ function _sayConnectionError() {
 const _listen = { phase: null, question: null, cancelled: false, silentEnd: false, streamP: null };
 function _listenReset() {
   questionCapture.cancel();
-  _listen.phase = null; _listen.question = null; _listen.cancelled = false; _listen.streamP = null;
+  _listen.phase = null; _listen.question = null; _listen.cancelled = false; _listen.streamP = null; _listen.warm = false;
 }
 
 // Pregunta en vivo (2026-11-09): apenas el agente está, se le manda lo
@@ -1422,7 +1422,7 @@ async function _finishQuestionStream(raw) {
 
 // La pregunta llegó al agente: se mide y el mic pasa a la sesión (repreguntas).
 function _questionDelivered(raw) {
-  latencyMarks.mark('startup.questionSent');
+  latencyMarks.mark(_listen.warm ? 'piVoiceSent' : 'startup.questionSent');
   let peak = 0;
   for (let i = 0; i + 1 < raw.length; i += 2) { const a = Math.abs(raw.readInt16LE(i)); if (a > peak) peak = a; }
   peak = Math.min(32767, peak * lkSession.getMicGain());
@@ -1472,20 +1472,24 @@ function _wakeOffline(reason) {
 function _onWake({ forceOffline } = {}) {
   if (lkSession.isActive() || questionCapture.isActive()) return;
   const offline = forceOffline || _offlineReason();
-  if (offline) return _wakeOffline(offline);
-  latencyMarks.mark('startup.wake');
+  // Ventana caliente: la sala y el agente siguen de la charla anterior.
+  const warm = lkSession.isWarm() && lkSession.resume();
+  if (!warm && offline) return _wakeOffline(offline);
+  if (!warm) latencyMarks.mark('startup.wake');
   const micDevice     = getEnvVal('MIC_ALSA_DEVICE')     || 'plughw:0,0';
   const speakerDevice = getEnvVal('SPEAKER_ALSA_DEVICE') || 'brumexa_speaker';
   _listenReset();
   _listen.phase = 'listening';
   _listen.silentEnd = false;
+  _listen.warm = warm;
   leds.listening();
   questionCapture.start({
     waitMs:       parseInt(getEnvVal('QUESTION_WAIT_MS') || '6000', 10) || 6000,
     endSilenceMs: parseInt(getEnvVal('QUESTION_END_SILENCE_MS') || '800', 10) || 800,
-    onSpeech: () => latencyMarks.mark('startup.questionStart'),
+    // En caliente no hay arranque: las marcas van al turno (Latencia las muestra igual).
+    onSpeech: () => latencyMarks.mark(warm ? 'piVoiceStart' : 'startup.questionStart', warm ? (micGate.getLastOnsetStartAt() || Date.now()) : Date.now()),
     onDone: (pcm) => {
-      latencyMarks.mark('startup.questionEnd');
+      latencyMarks.mark(warm ? 'piVoiceEnd' : 'startup.questionEnd', warm ? micGate.getLastVoiceAt() : Date.now());
       _listen.phase = 'thinking';
       leds.thinking();
       if (_listen.streamP) _finishQuestionStream(pcm);
@@ -1496,13 +1500,24 @@ function _onWake({ forceOffline } = {}) {
       _listen.cancelled = true;
       _listen.phase = null;
       leds.sleep();
-      // Si ya conectó, cortar sin ruido; si todavía conecta, corta startSession al terminar.
-      if (lkSession.isActive()) { _listen.silentEnd = true; lkSession.stop('no-question').catch(() => {}); }
+      // En caliente: vuelve al reposo (la sala sigue). Si ya conectó, cortar sin
+      // ruido; si todavía conecta, corta startSession al terminar.
+      if (warm) lkSession.rest('no-question').catch(() => {});
+      else if (lkSession.isActive()) { _listen.silentEnd = true; lkSession.stop('no-question').catch(() => {}); }
     },
   });
+  // En caliente el agente ya está: la pregunta va en vivo desde ya.
+  if (warm) return _startQuestionStream();
   startSession({ micDevice, speakerDevice, listenFirst: true }).catch(e => console.warn('[wakeword-gate] startSession:', e.message));
 }
 wakewordGate.onWake(() => _onWake());
+
+// Para probar la ventana caliente sin esperar el corte por silencio.
+app.post('/diag/rest', (_req, res) => {
+  if (lkSession.getStatus().status !== 'connected') return res.json({ ok: false, status: lkSession.getStatus().status });
+  lkSession.rest('diag').catch(() => {});
+  res.json({ ok: true });
+});
 
 // Para probar el "hey brumexa" sin hablar: POST /diag/wake (?offline=wifi|server
 // simula estar sin red / sin servidor).
@@ -1594,7 +1609,23 @@ lkSession.on('reconnecting',  () => { _agentConfirmed = false; });
 // seguir (no volver a idle) y el monitor de mic idle NO debe reanudarse
 // (si lo hace, vuelve el falso "vos → hablando" por ruido ambiente que ya
 // arreglamos, pisando el cometa).
+// La charla terminó pero la sala queda caliente (ver rest() en livekit-session):
+// para vos es como antes (exhala, suena "desconectado", vuelve a escuchar
+// "hey brumexa"), solo que la próxima vez contesta sin armar sala nueva.
+let _restingRoom = false;
+// Se borra al volver a conectar (no en 'idle': la sala caída pasa por idle antes de avisar).
+lkSession.on('status', st => { if (st === 'connected' || st === 'connecting') _restingRoom = false; });
+lkSession.on('resting', ({ reason }) => {
+  _restingRoom = true;
+  _listenReset();
+  startMicMonitor();
+  if (reason === 'no-question') return;
+  leds.sleep();
+  try { soundEffects.playSound('livekit_desconectado.wav'); } catch (e) { console.warn('[lk-session-evt] playSound desconectado:', e.message); }
+});
 lkSession.on('disconnected',  d => {
+  // Fin de la ventana caliente (o sala nueva encima): ya se avisó al entrar en reposo.
+  if (d.reason === 'warm-timeout' || d.reason === 'restart') { _restingRoom = false; _listenReset(); startMicMonitor(); return; }
   console.log('[lk-session-evt] disconnected:', d.reason);
   if (lkSession.getStatus().isReconnecting) {
     leds.connecting();
@@ -1605,6 +1636,8 @@ lkSession.on('disconnected',  d => {
   // que cuenta es el de stop(), no hacer nada dos veces.
   if (typeof d.reason === 'number') {
     if (d.reason === 1) return;
+    // Se cayó estando en reposo: nadie estaba hablando, no hay nada que avisar.
+    if (_restingRoom) { lkSession.stop('warm-timeout').catch(() => {}); return; }
     // Se cayó la sala en medio de la charla (red, servidor): limpiar y avisar.
     console.warn(`[lk-session-evt] la charla se cortó sola (motivo ${d.reason}) → aviso de error`);
     lkSession.stop('dropped').catch(() => {});
