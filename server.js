@@ -1386,6 +1386,7 @@ function _sayConnectionError() {
 const _listen = { phase: null, question: null, cancelled: false, silentEnd: false, streamP: null };
 function _listenReset() {
   questionCapture.cancel();
+  lkSession.setCapturing(false);
   _listen.phase = null; _listen.question = null; _listen.cancelled = false; _listen.streamP = null; _listen.warm = false;
 }
 
@@ -1489,6 +1490,7 @@ function _onWake({ forceOffline } = {}) {
     // En caliente no hay arranque: las marcas van al turno (Latencia las muestra igual).
     onSpeech: () => latencyMarks.mark(warm ? 'piVoiceStart' : 'startup.questionStart', warm ? (micGate.getLastOnsetStartAt() || Date.now()) : Date.now()),
     onDone: (pcm) => {
+      lkSession.setCapturing(false);
       latencyMarks.mark(warm ? 'piVoiceEnd' : 'startup.questionEnd', warm ? micGate.getLastVoiceAt() : Date.now());
       _listen.phase = 'thinking';
       leds.thinking();
@@ -1506,6 +1508,7 @@ function _onWake({ forceOffline } = {}) {
       else if (lkSession.isActive()) { _listen.silentEnd = true; lkSession.stop('no-question').catch(() => {}); }
     },
   });
+  lkSession.setCapturing(true);
   // En caliente el agente ya está: la pregunta va en vivo desde ya.
   if (warm) return _startQuestionStream();
   startSession({ micDevice, speakerDevice, listenFirst: true }).catch(e => console.warn('[wakeword-gate] startSession:', e.message));
