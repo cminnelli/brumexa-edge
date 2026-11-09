@@ -1396,7 +1396,7 @@ function _listenReset() {
 // todo y pide la respuesta enseguida (antes se mandaba todo junto al final:
 // 0,4–1,6 s más por la red de la Pi). Si todavía conecta, se graba como siempre.
 function _startQuestionStream() {
-  if (_listen.phase !== 'listening' || _listen.streamP || !questionCapture.isActive() || !_agentConfirmed || !lkSession.isActive()) return;
+  if (_listen.phase !== 'listening' || _listen.streamP || !questionCapture.isActive() || !(_agentConfirmed || lkSession.isAgentReady()) || !lkSession.isActive()) return;
   const gain = lkSession.getMicGain();
   _listen.streamP = lkSession.openQuestionStream(questionCapture.RATE).then(st => {
     // Sincrónico a propósito: tap() y el primer write en el mismo tick, así
@@ -1436,7 +1436,7 @@ function _questionDelivered(raw) {
 
 // La pregunta ya está grabada y el agente ya está: se manda.
 function _sendQuestionWhenReady() {
-  if (!_listen.question || !_agentConfirmed || !lkSession.isActive()) return;
+  if (!_listen.question || !(_agentConfirmed || lkSession.isAgentReady()) || !lkSession.isActive()) return;
   // El monitor graba el audio crudo: se le aplica la misma ganancia del mic
   // que usa la sesión (_publishMic). Sin esto la pregunta llegaba ~12 dB más
   // baja (micGain 4) y OpenAI la transcribía vacía.
@@ -1586,6 +1586,11 @@ lkSession.on('connected',     () => { if (!_listen.phase) stopMicMonitor(); _ses
 // de _agentConfirmed, sonaría de nuevo cada vez que este evento se repite
 // dentro de una sesión ya confirmada (ver el comentario de _agentConfirmed
 // más arriba).
+// El agente avisó que ya puede recibir la pregunta: mandarla sin esperar a oírlo.
+lkSession.on('agent-ready', () => {
+  _sendQuestionWhenReady();
+  _startQuestionStream();
+});
 lkSession.on('agent-audio',   () => {
   const yaEstabaConfirmado = _agentConfirmed;
   _agentConfirmed = true;
