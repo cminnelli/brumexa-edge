@@ -20,7 +20,7 @@
        emergencia, sin internet real, y un <link rel=stylesheet> normal a
        un dominio externo sin ruta a internet traba el render entero. -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
-  <link rel="stylesheet" href="/style.css?v=26" />
+  <link rel="stylesheet" href="/style.css?v=27" />
   <style>
     #card-update.highlight-pulse {
       animation: card-highlight-pulse 1.3s ease-out;
@@ -182,7 +182,7 @@
     .ap-icon-btn.on { color: #fff; }
     #ap-on-device:not(.on) { color: rgba(245,245,247,.35); background: transparent; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
     .ap-now { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-    .ap-now__label { font-size: 13px; font-weight: 600; letter-spacing: -.01em; }
+    .ap-now__label { font-size: 12.5px; font-weight: 600; letter-spacing: -.01em; }
     .ap-dots { display: flex; gap: 2px; }
     .ap-dot { width: 18px; height: 14px; border: 0; padding: 0; background: none; cursor: pointer; display: grid; place-items: center; }
     .ap-dot::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,.25); transition: background .2s, width .25s; }
@@ -202,7 +202,7 @@
     }
     .ap-group > .ap-item:first-child { border-top: 0; }
     .ap-item--btn { background: none; border-left: 0; border-right: 0; border-bottom: 0; cursor: pointer; color: inherit; font: inherit; text-align: left; }
-    .ap-item__label { font-size: 14px; color: var(--text); }
+    .ap-item__label { font-size: 13px; color: var(--text); }
     .ap-item__end { display: flex; align-items: center; gap: 8px; }
     .ap-chev { width: 13px; height: 13px; color: var(--muted); transition: transform .25s; }
     .ap-item--btn[aria-expanded="true"] .ap-chev { transform: rotate(90deg); }
@@ -227,7 +227,7 @@
     .ap-collapse__in { overflow: hidden; }
     .ap-roles { padding: 0 0 4px 14px; }
     .ap-role { border-top: .5px solid var(--border); }
-    .ap-role__head { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 0; border: 0; background: none; cursor: pointer; color: var(--text); font: 13.5px var(--ap-font); text-align: left; }
+    .ap-role__head { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 0; border: 0; background: none; cursor: pointer; color: var(--text); font: 12.5px var(--ap-font); text-align: left; }
     .ap-role__dot { width: 12px; height: 12px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.2), 0 0 8px var(--glow, transparent); }
     .ap-role__name { flex: 1; }
     .ap-role .ap-collapse__in { padding: 0 12px 0 22px; }
@@ -257,7 +257,7 @@
            abajo: solo hace scroll + resalta la card, ya NO dispara la
            actualización sola — eso lo decide la persona tocando el botón
            real de adentro de la card. -->
-      <button id="btn-update-header" class="btn-ghost btn-ghost--accent" type="button" style="flex-shrink:0; padding:6px 12px; font-size:12px; display:none" title="Hay una actualización disponible — ir a Mantenimiento">
+      <button id="btn-update-header" class="btn-ghost btn-ghost--accent" type="button" style="flex-shrink:0; padding:6px 12px; font-size:12px; display:none" title="Hay una actualización disponible">
         ⬇️ Actualizar
       </button>
       <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Cambiar tema" title="Cambiar tema"></button>
@@ -283,8 +283,8 @@
       <div class="card-section-hdr">
         <span class="card-section-icon"><svg viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="3.5"/><path d="M10.5 12.5 20 3"/><path d="M15 8l2.5 2.5"/><path d="M18 5l2 2"/></svg></span>
         <div>
-          <div class="card-section-title">Credenciales</div>
-          <div class="card-section-desc">A diferencia del resto de la página, esto necesita "Guardar" — para no mandar credenciales a medio escribir</div>
+          <div class="card-section-title">Cuenta</div>
+          <div class="card-section-desc">Los datos para que Brumexa se conecte con tu cuenta. Estos se guardan con el botón.</div>
         </div>
       </div>
 
@@ -299,7 +299,7 @@
         </div>
       </div>
       <div class="field">
-        <label class="field-label" for="inp-api-key">Clave de acceso (API key)</label>
+        <label class="field-label" for="inp-api-key">Clave de acceso</label>
         <div class="setup-token-row">
           <input type="password" id="inp-api-key" name="brumexa-device-secret" class="setup-input" placeholder="brx_..." autocomplete="new-password" spellcheck="false" data-lpignore="true" data-1p-ignore="true" />
           <button class="btn-ghost" id="btn-toggle-key" type="button" title="Mostrar/ocultar">👁</button>
@@ -308,8 +308,8 @@
       </div>
 
       <div class="connect-row">
-        <button class="btn-connect" id="btn-save-creds" style="flex:none; padding:9px 20px">💾 Guardar credenciales</button>
-        <button class="btn-ghost" id="btn-test-creds" type="button" style="flex:none; padding:9px 20px; font-size:13px">🔌 Probar conexión</button>
+        <button class="btn-connect" id="btn-save-creds" style="flex:none; padding:9px 20px">Guardar</button>
+        <button class="btn-ghost" id="btn-test-creds" type="button" style="flex:none; padding:9px 20px; font-size:13px">Probar conexión</button>
       </div>
       <div id="creds-save-result" style="margin-top:10px"></div>
       <div id="creds-test-result" style="margin-top:10px"></div>
@@ -320,7 +320,7 @@
            "Guardar acá" toma lo que hay tipeado AHORA arriba y lo guarda en
            ese slot, con el nombre puesto al lado. -->
       <details class="tech-details" style="margin-top:14px">
-        <summary>Presets de credenciales (para probar/switchear rápido)</summary>
+        <summary>Cuentas guardadas</summary>
         <div id="creds-presets-list" style="display:flex; flex-direction:column; gap:8px; margin-top:0.75rem"></div>
       </details>
     </div>
@@ -334,15 +334,15 @@
       <div class="card-section-hdr">
         <span class="card-section-icon"><svg viewBox="0 0 24 24"><path d="M2 8.5a16 16 0 0 1 20 0"/><path d="M5.5 12a11 11 0 0 1 13 0"/><path d="M9 15.5a6 6 0 0 1 6 0"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/></svg></span>
         <div>
-          <div class="card-section-title">WiFi</div>
-          <div class="card-section-desc">Red a la que está conectada la Raspberry</div>
+          <div class="card-section-title">Wi‑Fi</div>
+          <div class="card-section-desc">La red a la que está conectada Brumexa</div>
         </div>
       </div>
 
       <div class="kv" id="kv-wifi-current"><div class="field-hint">Consultando…</div></div>
 
-      <button class="btn-ghost" id="btn-wifi-toggle" type="button" style="margin-top:12px">🔄 Cambiar red</button>
-      <button class="btn-ghost" id="btn-wifi-forget" type="button" style="margin-top:8px; display:none">🚫 Olvidar red / Forzar AP</button>
+      <button class="btn-ghost" id="btn-wifi-toggle" type="button" style="margin-top:12px">Cambiar de red</button>
+      <button class="btn-ghost" id="btn-wifi-forget" type="button" style="margin-top:8px; display:none">Olvidar esta red</button>
       <div id="wifi-forget-result" style="margin-top:10px"></div>
 
       <div id="wifi-change-panel" class="wifi-change-panel" style="display:none">
@@ -350,7 +350,7 @@
 
         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px">
           <div class="field-group-label" style="margin:0">Redes disponibles</div>
-          <button class="btn-ghost" id="btn-wifi-rescan" type="button">↺ Buscar</button>
+          <button class="btn-ghost" id="btn-wifi-rescan" type="button">Buscar</button>
         </div>
         <div id="wifi-scan-status" class="wifi-scan-status"><span class="spinner"></span> Buscando redes…</div>
         <input type="search" id="inp-wifi-filter" class="setup-input" placeholder="Filtrar por nombre…" autocomplete="off" style="display:none; margin-bottom:8px" />
@@ -359,7 +359,7 @@
 
         <div class="field-row" style="margin-top:12px">
           <div class="field">
-            <label class="field-label" for="inp-wifi-ssid">Nombre de red (SSID)</label>
+            <label class="field-label" for="inp-wifi-ssid">Nombre de la red</label>
             <input type="text" id="inp-wifi-ssid" class="setup-input" placeholder="Nombre de tu WiFi" autocomplete="off" spellcheck="false" />
           </div>
           <div class="field">
@@ -372,8 +372,8 @@
         </div>
 
         <div class="connect-row">
-          <button class="btn-connect" id="btn-wifi-connect" style="flex:none; padding:9px 20px">📶 Conectar</button>
-          <p class="field-hint" style="margin:0">Al conectar a una red nueva la Raspberry puede cambiar de IP — si estás viendo esta página desde la red vieja, es normal perder la conexión un momento.</p>
+          <button class="btn-connect" id="btn-wifi-connect" style="flex:none; padding:9px 20px">Conectar</button>
+          <p class="field-hint" style="margin:0">Al cambiar de red, esta página puede desconectarse un momento. Es normal.</p>
         </div>
         <div id="wifi-connect-result" style="margin-top:10px"></div>
       </div>
@@ -391,8 +391,8 @@
       <div class="card-section-hdr">
         <span class="card-section-icon"><svg viewBox="0 0 24 24"><rect x="3" y="14" width="18" height="7" rx="1.5"/><circle cx="7" cy="17.5" r="0.8" fill="currentColor" stroke="none"/><path d="M9 9a4 4 0 0 1 6 0"/><path d="M7 6.5a8 8 0 0 1 10 0"/></svg></span>
         <div>
-          <div class="card-section-title">Access Point de respaldo</div>
-          <div class="card-section-desc">La red que Brumexa prende sola cuando se queda sin WiFi, para poder reconectarla</div>
+          <div class="card-section-title">Red de emergencia</div>
+          <div class="card-section-desc">Si se queda sin Wi‑Fi, Brumexa crea esta red para que puedas entrar y volver a conectarla</div>
         </div>
       </div>
 
@@ -407,14 +407,14 @@
         <div class="field">
           <label class="field-label" for="inp-ap-pass">Contraseña de esta red</label>
           <div class="setup-token-row">
-            <input type="password" id="inp-ap-pass" class="setup-input" placeholder="Contraseña del AP" autocomplete="off" spellcheck="false" minlength="8" maxlength="63" />
+            <input type="password" id="inp-ap-pass" class="setup-input" placeholder="Contraseña" autocomplete="off" spellcheck="false" minlength="8" maxlength="63" />
             <button class="btn-ghost" id="btn-toggle-ap-pass" type="button" title="Mostrar/ocultar">👁</button>
           </div>
         </div>
       </div>
-      <p class="field-hint">Entre 8 y 63 caracteres (mínimo que exige WiFi/WPA2). Vacío = volver a la contraseña por default.</p>
+      <p class="field-hint">De 8 a 63 caracteres. Dejala vacía para usar la de fábrica.</p>
       <div class="connect-row">
-        <button class="btn-ghost" id="btn-save-ap-name" type="button" style="flex:none; padding:9px 20px">💾 Guardar cambios del AP</button>
+        <button class="btn-ghost" id="btn-save-ap-name" type="button" style="flex:none; padding:9px 20px">Guardar</button>
       </div>
       <div id="ap-name-save-result" style="margin-top:10px"></div>
     </div>
@@ -426,19 +426,19 @@
       <div class="card-section-hdr">
         <span class="card-section-icon"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></span>
         <div>
-          <div class="card-section-title">Estado en el admin</div>
-          <div class="card-section-desc">Para que el admin muestre si esta Brumexa está online — se aplica al toque</div>
+          <div class="card-section-title">Aviso de conexión</div>
+          <div class="card-section-desc">Para que el panel de administración sepa que Brumexa está en línea</div>
         </div>
       </div>
       <div class="field">
-        <label class="field-label" for="inp-heartbeat">Cada cuánto avisa "estoy online"</label>
+        <label class="field-label" for="inp-heartbeat">Cada cuánto avisa</label>
         <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
           <div class="gain-row" style="grid-template-columns:1fr 55px">
             <input type="range" id="inp-heartbeat" class="gain-slider" min="10" max="300" step="10" value="30" />
             <span class="gain-val" id="val-heartbeat">30 s</span>
           </div>
         </div>
-        <p class="field-hint">Cada cuánto la Pi le avisa al admin que está conectada. Más corto = el admin se entera antes si se desconecta; el costo es mínimo igual.</p>
+        <p class="field-hint">Más seguido, antes se nota si se desconecta.</p>
       </div>
 
     </div>
@@ -500,21 +500,20 @@
       <div class="card-section-hdr">
         <span class="card-section-icon"><svg viewBox="0 0 24 24"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.5.4.8 1 .8 1.6v.5h5.4v-.5c0-.6.3-1.2.8-1.6A6 6 0 0 0 12 3Z"/></svg></span>
         <div>
-          <div class="card-section-title">Ritmo de LEDs</div>
-          <div class="card-section-desc">Se aplica al toque, sin reiniciar — arrastrá y mirá el dispositivo para sentir el cambio</div>
+          <div class="card-section-title">Respiración de la luz</div>
+          <div class="card-section-desc">Mové la barra y mirá a Brumexa</div>
         </div>
       </div>
 
       <div class="field" style="margin-bottom:0">
-        <label class="field-label" for="inp-led-breathe">Ritmo de la respiración</label>
+        <label class="field-label" for="inp-led-breathe">Velocidad</label>
         <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
           <div class="gain-row" style="grid-template-columns:1fr 70px">
             <input type="range" id="inp-led-breathe" class="gain-slider" min="600" max="8000" step="50" value="1900" />
             <span class="gain-val" id="val-led-breathe">1900 ms</span>
           </div>
         </div>
-        <p class="field-hint">Cuánto dura una respiración de la luz. Más bajo = más rápida.</p>
-        <p class="field-hint">Cuándo se apaga la luz al terminar de hablar se ajusta en Conversación → "Pausa para darte por terminado" (también decide qué audio se manda).</p>
+        <p class="field-hint">Hacia la izquierda respira más rápido.</p>
       </div>
     </div>
 
@@ -528,7 +527,7 @@
         <span class="card-section-icon"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 5V4L8 9H4Z"/><path d="M16.5 9.5a3 3 0 0 1 0 5"/><path d="M19.5 7a7 7 0 0 1 0 10"/></svg></span>
         <div>
           <div class="card-section-title">Sonido</div>
-          <div class="card-section-desc">Todo acá se aplica al toque, sin reiniciar ni tocar "Guardar"</div>
+          <div class="card-section-desc">Los cambios se aplican al instante</div>
         </div>
       </div>
 
@@ -549,7 +548,7 @@
           </div>
         </div>
         <div class="field">
-          <label class="field-label" for="inp-speaker-gain">Volumen del agente</label>
+          <label class="field-label" for="inp-speaker-gain">Volumen de Brumexa</label>
           <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
             <div class="gain-row" style="grid-template-columns:1fr 55px">
               <input type="range" id="inp-speaker-gain" class="gain-slider" min="0.5" max="4" step="0.1" value="3" />
@@ -558,7 +557,7 @@
           </div>
         </div>
         <div class="field">
-          <label class="field-label" for="inp-notification-volume">Volumen de notificaciones</label>
+          <label class="field-label" for="inp-notification-volume">Volumen de los avisos</label>
           <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
             <div class="gain-row" style="grid-template-columns:1fr 55px">
               <input type="range" id="inp-notification-volume" class="gain-slider" min="0" max="3" step="0.1" value="1" />
@@ -587,22 +586,22 @@
           <div class="field">
             <label class="field-label" style="display:flex; align-items:center; gap:8px; cursor:pointer">
               <input type="checkbox" id="inp-notification-sounds-enabled" checked style="width:auto" />
-              Sonidos de notificación
+              Sonidos de aviso
             </label>
-            <p class="field-hint">Los sonidos de conectar y desconectar. Para bajarlos sin apagarlos, usá "Volumen de notificaciones".</p>
+            <p class="field-hint">Los sonidos al conectarse y desconectarse.</p>
           </div>
 
           <div>
-            <label class="field-label" for="sel-alsa-mic">Dispositivo de micrófono</label>
+            <label class="field-label" for="sel-alsa-mic">Micrófono</label>
             <select id="sel-alsa-mic" class="select-input"></select>
           </div>
           <div>
-            <label class="field-label" for="sel-alsa-speaker">Dispositivo de parlante</label>
+            <label class="field-label" for="sel-alsa-speaker">Parlante</label>
             <select id="sel-alsa-speaker" class="select-input"></select>
           </div>
           <div id="alsa-device-result"></div>
 
-          <p class="field-hint">El umbral de sensibilidad y "Recalibrar" están en <a href="/diagnostico" style="color:var(--accent)">Diagnóstico → Panorama de sonido</a>.</p>
+          <p class="field-hint">Para recalibrar el micrófono, andá a <a href="/diagnostico" style="color:var(--accent)">Diagnóstico → Panorama de sonido</a>.</p>
         </div>
       </details>
     </div>
@@ -615,7 +614,7 @@
         <span class="card-section-icon"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"/><path d="M8.5 11.5h.01M12 11.5h.01M15.5 11.5h.01"/></svg></span>
         <div>
           <div class="card-section-title">Conversación</div>
-          <div class="card-section-desc">Cómo arranca y cuándo termina una charla — se aplica al toque</div>
+          <div class="card-section-desc">Cómo te escucha y cuándo termina la charla</div>
         </div>
       </div>
 
@@ -630,11 +629,11 @@
           <button type="button" class="info-btn" aria-label="Cómo funciona">i</button>
         </label>
         <p class="field-hint">Recomendado: prendido.</p>
-        <div class="info-box" hidden>Solo manda tu audio al servidor cuando confirma que es voz; el resto lo manda en silencio. <b>Apagado:</b> manda todo, sin espera (responde un poco antes), pero un ruido fuerte puede hacer que Brumexa conteste sola.</div>
+        <div class="info-box" hidden>Brumexa solo escucha cuando está segura de que es una voz. <b>Si lo apagás,</b> responde un poco antes, pero un ruido fuerte puede hacer que conteste sola.</div>
       </div>
 
       <div class="field">
-        <label class="field-label" for="inp-mic-preroll">Margen para no perder el comienzo
+        <label class="field-label" for="inp-mic-preroll">No perder el comienzo
           <button type="button" class="info-btn" aria-label="Cómo funciona">i</button>
         </label>
         <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
@@ -643,12 +642,12 @@
             <span class="gain-val" id="val-mic-preroll">300 ms</span>
           </div>
         </div>
-        <p class="field-hint">Recomendado: 300 ms. Más bajo responde antes, pero puede perder la primera sílaba.</p>
-        <div class="info-box" hidden>La Pi tarda ~300 ms en confirmar que lo que escucha es voz y no ruido. Mientras tanto guarda el audio, así no se pierde el comienzo. Ejemplo: decís "Hola, ¿cuánto sale?"; con poco margen llega "…la, ¿cuánto sale?". <b>Este tiempo se suma a cada respuesta.</b></div>
+        <p class="field-hint">Recomendado: 300 ms. Con menos responde antes, pero puede cortar la primera sílaba.</p>
+        <div class="info-box" hidden>Antes de mandar tu voz, Brumexa se asegura de que no sea ruido, y mientras tanto guarda lo que decís. Con poco margen, "Hola, ¿cuánto sale?" llega como "…la, ¿cuánto sale?". <b>Este tiempo se suma a cada respuesta.</b></div>
       </div>
 
       <div class="field">
-        <label class="field-label" for="inp-led-hangover">Pausa para darte por terminado
+        <label class="field-label" for="inp-led-hangover">Pausa antes de responder
           <button type="button" class="info-btn" aria-label="Cómo funciona">i</button>
         </label>
         <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
@@ -657,8 +656,8 @@
             <span class="gain-val" id="val-led-hangover">600 ms</span>
           </div>
         </div>
-        <p class="field-hint">Recomendado: 600 ms. Maneja la luz y cuándo deja de mandar tu audio.</p>
-        <div class="info-box" hidden>Cuando dejás de hablar, la Pi espera este tiempo antes de apagar la luz y dejar de mandar tu audio. Si retomás antes, sigue siendo la misma frase. Cuándo responder lo decide el servidor (~0,35 s de silencio), así que en general no suma demora; <b>con ruido de fondo, un valor alto sí puede atrasar la respuesta.</b></div>
+        <p class="field-hint">Recomendado: 600 ms.</p>
+        <div class="info-box" hidden>Cuando hacés una pausa, Brumexa espera este tiempo antes de dar por terminada tu frase. Si seguís hablando antes, lo toma como la misma frase. <b>Con mucho ruido de fondo, un valor alto puede atrasar la respuesta.</b></div>
       </div>
 
       <div class="field-group-label">Charla</div>
@@ -667,20 +666,20 @@
       <div class="field">
         <label class="field-label" style="display:flex; align-items:center; gap:8px; cursor:pointer">
           <input type="checkbox" id="inp-wakeword-enabled" style="width:auto" />
-          Conectar diciendo "ei brúmexa" (experimental)
+          Despertar diciendo "hey Brumexa"
         </label>
-        <p class="field-hint">Usa bastante procesador. Dejalo apagado salvo para probar.</p>
+        <p class="field-hint">Escucha su nombre todo el tiempo para despertarse.</p>
       </div>
 
       <div class="field">
-        <label class="field-label" for="inp-silence-timeout">Corte automático por silencio</label>
+        <label class="field-label" for="inp-silence-timeout">Terminar la charla si nadie habla</label>
         <div class="gain-controls" style="border:none; padding:2px 0 0; margin:0">
           <div class="gain-row" style="grid-template-columns:1fr 55px">
             <input type="range" id="inp-silence-timeout" class="gain-slider" min="0" max="120" step="5" value="20" />
             <span class="gain-val" id="val-silence-timeout">20 s</span>
           </div>
         </div>
-        <p class="field-hint">Si nadie habla este tiempo, corta la charla. Todo a la izquierda = nunca.</p>
+        <p class="field-hint">Todo a la izquierda: nunca la termina sola.</p>
       </div>
 
     </div>
@@ -697,7 +696,7 @@
           <span class="card-section-icon"><svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg></span>
           <div>
             <div class="card-section-title">Actualizar Brumexa</div>
-            <div class="card-section-desc">Trae los últimos cambios y reinicia solo si hubo novedades</div>
+            <div class="card-section-desc">Busca la última versión y se reinicia solo si hay algo nuevo</div>
           </div>
         </div>
         <!-- Chico y a un costado a propósito — no es la acción principal de
@@ -706,15 +705,15 @@
              preseleccionado (ver loadVersion() y el <option selected> de
              abajo) — nunca se acuerda de una elección de "dev" entre
              visitas. -->
-        <select id="sel-update-branch" class="select-input select-input--mini" title="Branch de actualización">
-          <option value="main" selected>main — estable</option>
-          <option value="dev">dev — para probar cosas</option>
+        <select id="sel-update-branch" class="select-input select-input--mini" title="Versión">
+          <option value="main" selected>Estable</option>
+          <option value="dev">Pruebas</option>
         </select>
       </div>
       <div class="kv" id="kv-version" style="margin-bottom:14px"></div>
 
       <div class="connect-row">
-        <button class="btn-connect" id="btn-update" style="flex:none; padding:9px 20px">⬇️ Buscar actualizaciones</button>
+        <button class="btn-connect" id="btn-update" style="flex:none; padding:9px 20px">Buscar actualizaciones</button>
       </div>
       <div id="update-result"></div>
       <!-- Log en vivo del proceso — se llena solo mientras "Actualizar" está
@@ -731,8 +730,8 @@
       <div class="divider"></div>
 
       <div class="field" style="margin-bottom:0">
-        <button class="btn-ghost" id="btn-restart" style="width:auto; padding:9px 20px">🔄 Reiniciar Brumexa</button>
-        <p class="field-hint">Apaga y prende el proceso sin tocar código ni configuración.</p>
+        <button class="btn-ghost" id="btn-restart" style="width:auto; padding:9px 20px">Reiniciar Brumexa</button>
+        <p class="field-hint">La apaga y la vuelve a prender. No borra nada.</p>
       </div>
     </div>
   </div>
@@ -1211,7 +1210,7 @@
       // fondo o entrar por SSH.
       forgetBtn.style.display = (s.available && (s.connectedSSID || (s.apActive && s.lastKnownSSID))) ? '' : 'none';
       if (!s.available) {
-        kv.innerHTML = '<div class="field-hint">No disponible — este server no está corriendo en la Raspberry.</div>';
+        kv.innerHTML = '<div class="field-hint">No disponible en este equipo.</div>';
       } else if (s.apActive) {
         // Todo en una línea (pedido explícito, antes eran 2-3 kv-row
         // apiladas) — mismo puntito de estado que ya usa la barra de arriba
@@ -1233,7 +1232,7 @@
           </div>
         `;
       } else {
-        kv.innerHTML = '<div class="field-hint">Sin WiFi configurado todavía.</div>';
+        kv.innerHTML = '<div class="field-hint">Todavía no hay una red Wi‑Fi.</div>';
       }
     } catch (e) {
       kv.innerHTML = `<div class="field-hint">Error: ${esc(e.message)}</div>`;
@@ -1247,7 +1246,7 @@
     const toggle = document.getElementById('btn-wifi-toggle');
     const opening = panel.style.display === 'none';
     panel.style.display = opening ? '' : 'none';
-    toggle.textContent = opening ? '✕ Cerrar' : '🔄 Cambiar red';
+    toggle.textContent = opening ? '✕ Cerrar' : 'Cambiar de red';
     if (opening && !_wifiScanned) { _wifiScanned = true; scanWifiNetworks(); }
   });
   document.getElementById('btn-wifi-rescan').addEventListener('click', scanWifiNetworks);
@@ -1255,10 +1254,10 @@
   document.getElementById('btn-wifi-forget').addEventListener('click', async () => {
     const btn    = document.getElementById('btn-wifi-forget');
     const result = document.getElementById('wifi-forget-result');
-    if (!confirm('¿Olvidar esta red y forzar el Access Point de respaldo? Vas a tener que volver a elegir una red desde "Cambiar red".')) return;
+    if (!confirm('¿Olvidar esta red? Brumexa va a crear su red de emergencia y vas a tener que elegir una red de nuevo.')) return;
 
     btn.disabled = true;
-    btn.textContent = '🚫 Olvidando red…';
+    btn.textContent = 'Olvidando…';
     result.innerHTML = '';
 
     // apSsid/apIp son config fija (no dependen de si el AP ya está activo
@@ -1282,7 +1281,7 @@
       </div>
     `;
     btn.disabled = false;
-    btn.textContent = '🚫 Olvidar red / Forzar AP';
+    btn.textContent = 'Olvidar esta red';
 
     // El pedido de la imagen puede perder la carrera contra el propio corte
     // de red — justo acá el dispositivo está bajando el WiFi cliente para
@@ -1327,7 +1326,7 @@
       const { networks, raw } = await fetch('/wifi/scan').then(r => r.json());
       renderWifiNetworks(networks || [], raw);
     } catch {
-      status.innerHTML = '<span class="field-hint">No se pudo escanear redes.</span>';
+      status.innerHTML = '<span class="field-hint">No se pudieron buscar redes.</span>';
     }
     btn.disabled = false;
   }
@@ -1383,7 +1382,7 @@
     if (!ssid) { ssidInp.focus(); return; }
 
     btn.disabled = true;
-    btn.textContent = '📶 Conectando…';
+    btn.textContent = 'Conectando…';
     result.innerHTML = `<div class="flow-note">Conectando a "${esc(ssid)}"…</div>`;
 
     let started;
@@ -1399,7 +1398,7 @@
       started = false;
       result.innerHTML = `<div class="flow-note bad">✘ ${esc(e.message)}</div>`;
     }
-    if (!started) { btn.disabled = false; btn.textContent = '📶 Conectar'; return; }
+    if (!started) { btn.disabled = false; btn.textContent = 'Conectar'; return; }
 
     if (_wifiPolling) clearInterval(_wifiPolling);
     const start = Date.now();
@@ -1412,17 +1411,17 @@
         const s = await fetch('/wifi/connect/status').then(r => r.json());
         if (s.status === 'connected') {
           clearInterval(_wifiPolling); _wifiPolling = null;
-          result.innerHTML = `<div class="flow-note ok">✔ Conectado a "${esc(s.ssid)}" — IP: ${esc(s.ip || '—')}</div>`;
-          btn.disabled = false; btn.textContent = '📶 Conectar';
+          result.innerHTML = `<div class="flow-note ok">✔ Conectada a "${esc(s.ssid)}" — IP: ${esc(s.ip || '—')}</div>`;
+          btn.disabled = false; btn.textContent = 'Conectar';
           loadWifiCurrent();
         } else if (s.status === 'error') {
           clearInterval(_wifiPolling); _wifiPolling = null;
           result.innerHTML = `<div class="flow-note bad">✘ ${esc(s.error || 'No se pudo conectar')}</div>`;
-          btn.disabled = false; btn.textContent = '📶 Conectar';
+          btn.disabled = false; btn.textContent = 'Conectar';
         } else if (Date.now() - start > 35000) {
           clearInterval(_wifiPolling); _wifiPolling = null;
-          result.innerHTML = '<div class="flow-note bad">✘ Tiempo de espera agotado — revisá la contraseña e intentá de nuevo.</div>';
-          btn.disabled = false; btn.textContent = '📶 Conectar';
+          result.innerHTML = '<div class="flow-note bad">✘ No se pudo conectar. Revisá la contraseña y probá de nuevo.</div>';
+          btn.disabled = false; btn.textContent = 'Conectar';
         }
       } catch {
         // ver comentario de arriba — puede ser solo la Pi cambiando de red
@@ -1548,7 +1547,7 @@
           headers: { 'Content-Type': 'application/json' },
           body:    JSON.stringify({ [bodyKey]: e.target.value }),
         });
-        result.innerHTML = '<div class="flow-note ok">✔ Guardado — se aplica en la próxima sesión</div>';
+        result.innerHTML = '<div class="flow-note ok">✔ Listo. Se usa desde la próxima charla</div>';
       } catch (err) {
         result.innerHTML = `<div class="flow-note bad">✘ ${esc(err.message)}</div>`;
       }
@@ -1559,7 +1558,7 @@
 
   async function loadVersion() {
     const kv = document.getElementById('kv-version');
-    kv.innerHTML = '<div class="field-hint">Consultando versión…</div>';
+    kv.innerHTML = '<div class="field-hint">Buscando la versión…</div>';
     try {
       const res  = await fetch('/configuracion/version', { cache: 'no-store' });
       const data = await res.json();
@@ -1601,7 +1600,7 @@
       }
       kv.innerHTML = kvRows(rows) + banner;
     } catch (e) {
-      kv.innerHTML = `<div class="field-hint">Error consultando versión: ${esc(e.message)}</div>`;
+      kv.innerHTML = `<div class="field-hint">No se pudo ver la versión: ${esc(e.message)}</div>`;
     }
   }
 
@@ -1655,7 +1654,7 @@
     const result = document.getElementById('update-result');
     const branch = document.getElementById('sel-update-branch')?.value || 'main';
     btn.disabled = true;
-    btn.textContent = '⬇️ Buscando…';
+    btn.textContent = 'Buscando…';
     result.innerHTML = '';
     _startUpdateLog();
     let data;
@@ -1667,21 +1666,21 @@
       }).then(r => r.json());
     } catch (e) {
       _stopUpdateLog();
-      result.innerHTML = `<div class="flow-note bad">✘ No se pudo conectar con el servidor: ${esc(e.message)}</div>`;
+      result.innerHTML = `<div class="flow-note bad">✘ No se pudo conectar: ${esc(e.message)}</div>`;
       btn.disabled = false;
-      btn.textContent = '⬇️ Buscar actualizaciones';
+      btn.textContent = 'Buscar actualizaciones';
       return;
     }
 
     if (data.ok && data.upToDate) {
       _stopUpdateLog();
-      result.innerHTML = '<div class="flow-note ok">✔ Ya estás en la última versión — nada para traer.</div>';
+      result.innerHTML = '<div class="flow-note ok">✔ Ya tenés la última versión.</div>';
       btn.disabled = false;
-      btn.textContent = '⬇️ Buscar actualizaciones';
+      btn.textContent = 'Buscar actualizaciones';
       loadVersion();
     } else if (data.ok) {
-      result.innerHTML = `<div class="flow-note ok">✔ Actualizado — reiniciando el servidor…</div>${techDetails(data.output)}`;
-      pollServerBack(result, btn, '⬇️ Buscar actualizaciones');
+      result.innerHTML = `<div class="flow-note ok">✔ Actualizada. Reiniciando…</div>${techDetails(data.output)}`;
+      pollServerBack(result, btn, 'Buscar actualizaciones');
     } else if (data.reason === 'local-changes') {
       // La causa más común NO es que alguien haya editado código a mano —
       // es algo que el propio dispositivo generó (una grabación de prueba,
@@ -1700,12 +1699,12 @@
       `;
       document.getElementById('btn-stash-retry').addEventListener('click', stashAndRetry);
       btn.disabled = false;
-      btn.textContent = '⬇️ Buscar actualizaciones';
+      btn.textContent = 'Buscar actualizaciones';
     } else {
       _stopUpdateLog();
       result.innerHTML = `<div class="flow-note bad">✘ ${esc(data.error || 'No se pudo actualizar')}</div>${techDetails(data.output)}`;
       btn.disabled = false;
-      btn.textContent = '⬇️ Buscar actualizaciones';
+      btn.textContent = 'Buscar actualizaciones';
     }
   }
   document.getElementById('btn-update').addEventListener('click', runUpdate);
@@ -1737,24 +1736,24 @@
     const btn    = document.getElementById('btn-restart');
     const result = document.getElementById('update-result');
     btn.disabled = true;
-    btn.textContent = '🔄 Reiniciando…';
+    btn.textContent = 'Reiniciando…';
     result.innerHTML = '';
     let data;
     try {
       data = await fetch('/configuracion/restart', { method: 'POST' }).then(r => r.json());
     } catch (e) {
-      result.innerHTML = `<div class="flow-note bad">✘ No se pudo conectar con el servidor: ${esc(e.message)}</div>`;
+      result.innerHTML = `<div class="flow-note bad">✘ No se pudo conectar: ${esc(e.message)}</div>`;
       btn.disabled = false;
-      btn.textContent = '🔄 Reiniciar Brumexa';
+      btn.textContent = 'Reiniciar Brumexa';
       return;
     }
     if (data.ok) {
-      result.innerHTML = '<div class="flow-note ok">✔ Reiniciando el servidor…</div>';
-      pollServerBack(result, btn, '🔄 Reiniciar Brumexa');
+      result.innerHTML = '<div class="flow-note ok">✔ Reiniciando…</div>';
+      pollServerBack(result, btn, 'Reiniciar Brumexa');
     } else {
       result.innerHTML = `<div class="flow-note bad">✘ ${esc(data.error || 'No se pudo reiniciar')}</div>`;
       btn.disabled = false;
-      btn.textContent = '🔄 Reiniciar Brumexa';
+      btn.textContent = 'Reiniciar Brumexa';
     }
   }
   document.getElementById('btn-restart').addEventListener('click', runRestart);
@@ -1775,15 +1774,15 @@
       }).then(r => r.json());
     } catch (e) {
       _stopUpdateLog();
-      result.innerHTML = `<div class="flow-note bad">✘ No se pudo conectar con el servidor: ${esc(e.message)}</div>`;
+      result.innerHTML = `<div class="flow-note bad">✘ No se pudo conectar: ${esc(e.message)}</div>`;
       return;
     }
     if (data.ok && data.upToDate) {
       _stopUpdateLog();
-      result.innerHTML = '<div class="flow-note ok">✔ Cambios guardados aparte — ya estabas en la última versión.</div>';
+      result.innerHTML = '<div class="flow-note ok">✔ Ya tenés la última versión.</div>';
     } else if (data.ok) {
-      result.innerHTML = `<div class="flow-note ok">✔ Cambios guardados aparte y actualizado — reiniciando el servidor…</div>${techDetails(data.output)}`;
-      pollServerBack(result, document.getElementById('btn-update'), '⬇️ Buscar actualizaciones');
+      result.innerHTML = `<div class="flow-note ok">✔ Actualizada. Reiniciando…</div>${techDetails(data.output)}`;
+      pollServerBack(result, document.getElementById('btn-update'), 'Buscar actualizaciones');
     } else {
       _stopUpdateLog();
       result.innerHTML = `<div class="flow-note bad">✘ ${esc(data.error || 'No se pudo actualizar')}</div>${techDetails(data.output)}`;
@@ -1819,10 +1818,10 @@
       if (!data.ok) throw new Error(data.error || 'error desconocido');
 
       if (data.restarting) {
-        result.innerHTML = `<div class="flow-note ok">✔ Guardado — ${restartLabel || 'reiniciando el servidor'}…</div>`;
+        result.innerHTML = `<div class="flow-note ok">✔ Guardado — ${restartLabel || 'reiniciando'}…</div>`;
         pollServerBack(result, btn, restoreText);
       } else {
-        flash(result, `<div class="flow-note ok">✔ ${okMsg || 'Guardado y aplicado, sin reiniciar'}</div>`);
+        flash(result, `<div class="flow-note ok">✔ ${okMsg || 'Listo, guardado'}</div>`);
         btn.disabled = false;
       }
     } catch (e) {
@@ -1839,7 +1838,7 @@
     }, {
       btn:    document.getElementById('btn-save-creds'),
       result: document.getElementById('creds-save-result'),
-      okMsg:  'Guardado y aplicado — probá "Probar conexión" para confirmar',
+      okMsg:  'Guardado. Tocá "Probar conexión" para confirmar',
     });
   });
 
@@ -1855,7 +1854,7 @@
       if (!auth.ok) throw new Error(auth.error || 'falló la autenticación');
       const token = await fetch('/configuracion/force-token', { method: 'POST' }).then(r => r.json());
       if (!token.ok) throw new Error(token.error || 'falló el token de LiveKit');
-      flash(result, `<div class="flow-note ok">✔ Conecta OK — negocio "${esc(auth.status?.businessId || '—')}"</div>`);
+      flash(result, `<div class="flow-note ok">✔ Conectada — negocio "${esc(auth.status?.businessId || '—')}"</div>`);
     } catch (e) {
       flash(result, `<div class="flow-note bad">✘ ${esc(e.message)}</div>`);
     } finally {
@@ -1882,7 +1881,7 @@
     try {
       ({ presets } = await fetch('/setup/creds-presets').then(r => r.json()));
     } catch {
-      list.innerHTML = '<div class="field-hint">No se pudieron cargar los presets.</div>';
+      list.innerHTML = '<div class="field-hint">No se pudieron cargar las cuentas guardadas.</div>';
       return;
     }
 
