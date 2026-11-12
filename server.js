@@ -970,6 +970,29 @@ app.get('/diag/leds/live', async (_req, res) => {
 
 // POST /diag/leds/test — verde fijo unos segundos para confirmar a ojo que el
 // hardware responde; vuelve solo al estado normal al terminar.
+// ─── Estilos de luces para probar (rama dev; página oculta /luces.html) ──────
+app.get('/diag/leds/estilos', (_req, res) => {
+  res.json({ ok: true, styles: leds.listStyles(), active: leds.getStyle() });
+});
+app.post('/diag/leds/estilo', express.json(), (req, res) => {
+  const key = String(req.body?.style || '');
+  if (!leds.setStyle(key)) return res.status(400).json({ ok: false, error: 'estilo desconocido' });
+  // Se guarda en el .env: sobrevive a un reinicio.
+  const envFile = path.join(__dirname, '.env');
+  try {
+    let content = '';
+    try { content = require('fs').readFileSync(envFile, 'utf8'); } catch {}
+    require('fs').writeFileSync(envFile, setEnvLine(content, 'LED_STYLE', key), 'utf8');
+  } catch (e) { console.warn('[leds] no se pudo guardar LED_STYLE:', e.message); }
+  res.json({ ok: true, style: key });
+});
+// Ver un estado sin hablarle: dormida | despierta | escucha | piensa | espera | duerme
+app.post('/diag/leds/demo', express.json(), (req, res) => {
+  if (lkSession.isActive()) return res.status(409).json({ ok: false, error: 'Hay una charla en curso: probá cuando termine.' });
+  if (!leds.demo(String(req.body?.state || ''))) return res.status(400).json({ ok: false, error: 'estado desconocido' });
+  res.json({ ok: true });
+});
+
 app.post('/diag/leds/test', (_req, res) => {
   const ok = leds.test();
   res.json({ ok, error: ok ? null : 'LEDs no configurados — ver /diag/leds' });
@@ -1366,9 +1389,16 @@ async function startSession({ micDevice, speakerDevice, listenFirst = false }) {
 
 // "Uy, no me pude conectar…" con la voz del agente (frase grabada, se edita
 // en el admin).
+// "No me pude conectar": una sola vez por corte (2026-11-11). Si la siguen
+// llamando sin conexión, solo se pone roja. Se rearma cuando la conexión vuelve
+// a andar (una charla que conecta, o la API que vuelve a responder).
+let _connErrorSaid = false;
+function _connectionWorks() { _connErrorSaid = false; }
 function _sayConnectionError() {
+  if (_connErrorSaid) { console.log('[greeting] sin conexión: la frase ya se dijo en este corte, solo luces rojas'); return; }
   const phrase = localGreeting.get('error');
   if (!phrase) return;
+  _connErrorSaid = true;
   const speakerDevice = getEnvVal('SPEAKER_ALSA_DEVICE') || 'brumexa_speaker';
   console.log(`[greeting] no se pudo conectar → "${phrase.text}"`);
   lkSession.playChime(_scalePcm(phrase.pcm, lkSession.getSpeakerGain() * agentLevel.matchGain(phrase.pcm)), speakerDevice);
@@ -1594,6 +1624,7 @@ lkSession.on('agent-ready', () => {
 lkSession.on('agent-audio',   () => {
   const yaEstabaConfirmado = _agentConfirmed;
   _agentConfirmed = true;
+  _connectionWorks();
   // Escuchando / pensando ("hey brumexa"): las luces siguen en ese estado.
   if (!_listen.phase) leds.waiting(lkSession.getSilenceTimeout());
   // Sin chime de "conectado": con "hey brumexa" se conecta en silencio.
@@ -1917,6 +1948,7 @@ httpServer.listen(PORT, async () => {
       onChange: (up) => {
         leds.setServerHealth(up);
         if (up) {
+          _connectionWorks();
           ragAuth.ensureAuth().catch(e => console.warn('[server] login al volver:', e.message));
           setTimeout(() => localGreeting.refresh(), 1000);
         }
