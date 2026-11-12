@@ -1615,8 +1615,12 @@ lkSession.on('agent-end', () => {
   }, 200);
 });
 lkSession.on('agent-state', (state) => {
-  if (_listen.phase || !lkSession.isActive()) return;
+  if (_listen.phase || !lkSession.isActive()) {
+    console.log(`[luces] agente ${state} → sin cambio (${_listen.phase ? 'todavía escuchando la pregunta' : 'sin charla'})`);
+    return;
+  }
   const wait = lkSession.getSilenceTimeout();
+  console.log(`[luces] agente ${state} → ${{ thinking: 'piensa', speaking: 'piensa hasta que suena, después sigue la voz', listening: 'te espera' }[state] || 'sin cambio'} (estilo ${leds.getStyle()})`);
   if (state === 'thinking') leds.thinking();
   else if (state === 'speaking') leds.waiting(wait, { render: false });
   else if (state === 'listening') leds.waiting(wait);
