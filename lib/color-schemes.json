@@ -1,10 +1,12 @@
 {
   "roles": [
-    { "key": "respiracion", "label": "Respiración (en espera)" },
-    { "key": "voz",         "label": "Tu voz" },
-    { "key": "agente",      "label": "Voz del agente" },
-    { "key": "calibracion", "label": "Calibración" },
-    { "key": "loading",     "label": "Cargando / conectando" }
+    { "key": "respiracion", "label": "Dormida",          "state": "dormida",  "desc": "Respira tenue mientras espera que la llames" },
+    { "key": "escucha",     "label": "Te escucha",       "state": "escucha",  "desc": "Se despertó y está atenta a lo que decís" },
+    { "key": "voz",         "label": "Vos hablás",       "state": null,       "desc": "Sigue tu voz mientras le hablás" },
+    { "key": "piensa",      "label": "Piensa",           "state": "piensa",   "desc": "Terminaste de hablar y está armando la respuesta" },
+    { "key": "agente",      "label": "Brumexa habla",    "state": "habla",    "desc": "Acompaña su voz cuando te contesta" },
+    { "key": "loading",     "label": "Conectando",       "state": null,       "desc": "Mientras se conecta al servidor" },
+    { "key": "calibracion", "label": "Calibración",      "state": null,       "desc": "Mientras mide el ruido del ambiente" }
   ],
   "colors": {
     "purpura": {
@@ -12,7 +14,9 @@
       "swatch": "#6d3fd1",
       "leds": {
         "respiracion": { "hue": 270, "sat": 1,    "swatch": "#8000ff", "name": "Violeta" },
+        "escucha":     { "hue": 270, "sat": 0.18, "swatch": "#e8d1ff", "name": "Blanco lila" },
         "voz":         { "hue": 40,  "sat": 1,    "swatch": "#ff5500", "name": "Ámbar" },
+        "piensa":      { "hue": 340, "sat": 0.95, "swatch": "#ff0dae", "name": "Magenta" },
         "agente":      { "hue": 290, "sat": 1,    "swatch": "#2b00ff", "name": "Índigo" },
         "calibracion": { "hue": null, "sat": 0,   "swatch": "#ffffff", "name": "Blanco" },
         "loading":     { "hue": 200, "sat": 1,    "swatch": "#00aaff", "name": "Cian" }
@@ -23,7 +27,9 @@
       "swatch": "#16a34a",
       "leds": {
         "respiracion": { "hue": 150, "sat": 1,    "swatch": "#00ff80", "name": "Esmeralda" },
+        "escucha":     { "hue": 150, "sat": 0.18, "swatch": "#d1ffe8", "name": "Blanco menta" },
         "voz":         { "hue": 40,  "sat": 1,    "swatch": "#ff5500", "name": "Ámbar" },
+        "piensa":      { "hue": 265, "sat": 0.95, "swatch": "#9a0dff", "name": "Violeta" },
         "agente":      { "hue": 100, "sat": 1,    "swatch": "#aaff00", "name": "Lima" },
         "calibracion": { "hue": null, "sat": 0,   "swatch": "#ffffff", "name": "Blanco" },
         "loading":     { "hue": 200, "sat": 1,    "swatch": "#00aaff", "name": "Cian" }
@@ -34,7 +40,9 @@
       "swatch": "#141414",
       "leds": {
         "respiracion": { "hue": 234, "sat": 1,    "swatch": "#00e5ff", "name": "Cian" },
+        "escucha":     { "hue": 234, "sat": 0.18, "swatch": "#d1faff", "name": "Blanco hielo" },
         "voz":         { "hue": 40,  "sat": 1,    "swatch": "#ff5500", "name": "Ámbar" },
+        "piensa":      { "hue": 265, "sat": 0.95, "swatch": "#9a0dff", "name": "Violeta" },
         "agente":      { "hue": 120, "sat": 1,    "swatch": "#00ffff", "name": "Cian" },
         "calibracion": { "hue": null, "sat": 0,   "swatch": "#ffffff", "name": "Blanco" },
         "loading":     { "hue": 200, "sat": 1,    "swatch": "#00aaff", "name": "Cian" }
@@ -45,7 +53,9 @@
       "swatch": "#68c5dd",
       "leds": {
         "respiracion": { "hue": 227.7, "sat": 0.53, "swatch": "#68c5dd", "name": "Celeste Brumelab" },
+        "escucha":     { "hue": 227.7, "sat": 0.15, "swatch": "#e6f6fa", "name": "Blanco celeste" },
         "voz":         { "hue": null,  "sat": 0,    "swatch": "#ffffff", "name": "Blanco mate" },
+        "piensa":      { "hue": 265,   "sat": 0.95, "swatch": "#9a0dff", "name": "Violeta" },
         "agente":      { "hue": 190,   "sat": 1,    "swatch": "#002aff", "name": "Azul" },
         "calibracion": { "hue": null,  "sat": 0,    "swatch": "#ffffff", "name": "Blanco" },
         "loading":     { "hue": 200,   "sat": 1,    "swatch": "#00aaff", "name": "Cian" }

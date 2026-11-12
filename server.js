@@ -970,7 +970,13 @@ app.get('/diag/leds/live', async (_req, res) => {
 
 // POST /diag/leds/test — verde fijo unos segundos para confirmar a ojo que el
 // hardware responde; vuelve solo al estado normal al terminar.
-// ─── Estilos de luces para probar (rama dev; página oculta /luces.html) ──────
+// ─── Estilos de luces (se eligen en /configuracion → Apariencia) ────────────
+// Los mismos estilos que anima la tira, para que la página los dibuje en vivo.
+app.get('/led-styles.js', (_req, res) => {
+  const code = require('fs').readFileSync(path.join(__dirname, 'lib', 'led-styles.js'), 'utf8');
+  res.type('application/javascript').set('Cache-Control', 'no-cache')
+    .send(`window.LedStyles = (function () { var module = { exports: {} };\n${code}\nreturn module.exports; })();`);
+});
 app.get('/diag/leds/estilos', (_req, res) => {
   res.json({ ok: true, styles: leds.listStyles(), active: leds.getStyle() });
 });
