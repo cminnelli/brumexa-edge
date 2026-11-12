@@ -817,7 +817,8 @@
     STATES: [
       { key: 'dormida',   label: 'Dormida',       desc: 'Respira tenue mientras espera que la llames', ms: 2600 },
       { key: 'despierta', label: 'Se despierta',  desc: 'Escuchó "hey brumexa"', ms: 1000 },
-      { key: 'escucha',   label: 'Te escucha',    desc: 'Atenta a lo que decís', ms: 3000 },
+      { key: 'escucha',   label: 'Te escucha',    desc: 'Atenta a lo que decís', ms: 2600 },
+      { key: 'vos',       label: 'Vos hablás',    desc: 'La luz sigue tu voz', ms: 2800 },
       { key: 'piensa',    label: 'Piensa',        desc: 'Terminaste de hablar: arma la respuesta', ms: 2800 },
       { key: 'habla',     label: 'Habla',         desc: 'La luz acompaña su voz', ms: 3600 },
       { key: 'espera',    label: 'Te espera',     desc: 'Sigue escuchando; se apaga de a poco antes de dormirse', ms: 4500 },
@@ -845,6 +846,7 @@
         listen: (v, w = 0)  => { const c = R('escucha');     return this.hsv(c.h, c.s * (1 - 0.8 * Math.max(0, Math.min(1, w))), v); },
         think:  (v, dh = 0) => { const c = R('piensa');      return this.hsv(c.h + dh, c.s, v); },
         voice:  (v)         => { const c = R('agente');      return this.hsv(c.h, c.s, v); },
+        user:   (v)         => { const c = R('voz');         return this.hsv(c.h, c.s, v); },
         tint:   (v, dh = 0, s = 1) => { const c = R('respiracion'); return this.hsv(c.h + dh, c.s * s, v); },
       };
     },
@@ -886,7 +888,12 @@
       el.innerHTML = Array.from({ length: 8 }, () => '<span class="ap-led"></span>').join('');
       this.ledEls = [...el.children];
     },
-    pixel(t, i) {
+    // Volumen simulado de una voz (sílabas que suben y bajan), suave.
+    voiceLevel(t, endMs) {
+      if (t > endMs) return Math.max(0, 1 - (t - endMs) / 400) * 0.2;
+      return Math.pow(Math.abs(Math.sin(t / 165)), 0.9) * (0.55 + 0.45 * Math.sin(t / 900));
+    },
+    pixel(state, t, i) {
       const st = this.styles[this.styleKey] || {}, c = this.colors();
       const d = Math.abs(i - 3.5) / 3.5, x = i / 7;
       const ease = (p) => (p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2);
@@ -896,17 +903,20 @@
         const b = ph < 0.42 ? Math.pow(ph / 0.42, 1.1) : Math.pow(1 - (ph - 0.42) / 0.58, 1.9);
         return c.base((0.35 + 0.65 * b) * 0.22);
       };
-      switch (this.state) {
+      switch (state) {
         case 'dormida': return idle();
         case 'despierta':
           if (st.wake && t < (st.wakeMs || 1000)) return st.wake(t / (st.wakeMs || 1000), i, d, x, c);
           return st.listen ? st.listen(t - (st.wakeMs || 1000), i, d, x, c) : c.listen(0.8);
         case 'escucha': return st.listen ? st.listen(t, i, d, x, c) : c.listen(0.8);
         case 'piensa':  return st.think ? st.think(t, i, d, x, c) : c.think(0.6);
-        case 'habla': {                               // una voz simulada: sílabas que suben y bajan
-          const syl = t > 3400 ? 0 : Math.abs(Math.sin(t / 140)) * (0.55 + 0.45 * Math.sin(t / 900));
-          this._lvl = (this._lvl ?? 0) + (syl - (this._lvl ?? 0)) * (syl > (this._lvl ?? 0) ? 0.14 : 0.045);
-          return st.speak ? st.speak(t, i, d, x, c, this._lvl) : c.voice(0.2 + 0.8 * this._lvl);
+        case 'vos': {
+          const lv = this.voiceLevel(t, 2500);
+          return st.user ? st.user(t, i, d, x, c, lv) : c.user(0.2 + 0.8 * lv);
+        }
+        case 'habla': {
+          const lv = this.voiceLevel(t, 3300);
+          return st.speak ? st.speak(t, i, d, x, c, lv) : c.voice(0.2 + 0.8 * lv);
         }
         case 'espera':  return st.wait ? st.wait(t, i, d, x, c, Math.exp(-t / (12000 * 0.52))) : c.listen(0.5);
         case 'duerme': {
@@ -921,10 +931,17 @@
     },
     frame() {
       if (!this.ledEls) return;
-      const t = performance.now() - this.stateT0;
+      const now = performance.now(), t = now - this.stateT0;
+      const k = this.prev ? Math.min(1, t / this.blendMs) : 1;
+      const kk = k * k * k * (k * (k * 6 - 15) + 10);           // smootherstep, igual que la tira
+      if (k >= 1) this.prev = null;
       let maxV = 0;
       this.ledEls.forEach((el, i) => {
-        const p = this.pixel(t, i);
+        let p = this.pixel(this.state, t, i);
+        if (this.prev) {
+          const a = this.pixel(this.prev.state, now - this.prev.t0, i);
+          p = { r: Math.round(a.r + (p.r - a.r) * kk), g: Math.round(a.g + (p.g - a.g) * kk), b: Math.round(a.b + (p.b - a.b) * kk) };
+        }
         const v = Math.max(p.r, p.g, p.b) / 255; maxV = Math.max(maxV, v);
         // El LED real "brilla": el punto toma el color y un halo proporcional al brillo.
         el.style.background = this.css(p);
@@ -935,7 +952,11 @@
 
     setState(key, { device = true } = {}) {
       this.fromV = this._lastV ?? 0.3;
-      this.state = key; this.stateT0 = performance.now(); this._lvl = 0;
+      // Mismos tiempos de fundido que la tira (lib/leds.js).
+      const st = this.styles[this.styleKey] || {};
+      const BLEND = { dormida: 1200, despierta: 220, escucha: 550, vos: 350, piensa: 650, habla: 500, espera: 800, duerme: st.sleep ? 350 : 1800 };
+      if (this.state && this.state !== key) { this.prev = { state: this.state, t0: this.stateT0 }; this.blendMs = BLEND[key] || 500; }
+      this.state = key; this.stateT0 = performance.now();
       const s = this.STATES.find(x => x.key === key);
       document.getElementById('ap-now-label').textContent = s?.label || '';
       document.querySelectorAll('#ap-timeline .ap-dot').forEach(el => el.classList.toggle('on', el.dataset.k === key));
