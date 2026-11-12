@@ -44,7 +44,7 @@
 <script>
 const STATES = [
   ['dormida', 'Dormida'], ['despierta', 'Se despierta'], ['escucha', 'Te escucha'],
-  ['piensa', 'Piensa'], ['espera', 'Te espera'], ['duerme', 'Se duerme'],
+  ['piensa', 'Piensa'], ['habla', 'Habla'], ['espera', 'Te espera'], ['duerme', 'Se duerme'],
 ];
 const $ = (id) => document.getElementById(id);
 const say = (t, err) => { $('msg').textContent = t; $('msg').className = err ? 'err' : ''; };
@@ -87,7 +87,7 @@ for (const [k, label] of STATES) {
 }
 
 // Una charla típica: dormida → la llamás → te escucha → piensa → (habla) → te espera → se duerme.
-const CYCLE = [['dormida', 4000], ['despierta', 900], ['escucha', 3500], ['piensa', 3500], ['espera', 6000], ['duerme', 1800], ['dormida', 0]];
+const CYCLE = [['dormida', 4000], ['despierta', 900], ['escucha', 3500], ['piensa', 3500], ['habla', 4500], ['espera', 6000], ['duerme', 1800], ['dormida', 0]];
 $('cycle').onclick = () => {
   clearTimeout(cycleTimer);
   let i = 0;
