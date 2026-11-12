@@ -1594,6 +1594,20 @@ lkSession.on('mic-stats',     ({ peak, dbfs }) => {
   _micLevel = { level, peak, updatedAt: Date.now(), source: 'session' };
   if (_agentConfirmed && Date.now() - _sessionConnectedAt > 2000) leds.speaking(level);
 });
+// Luces según el estado nativo del agente (ver 'agent-state' en livekit-session):
+//   thinking  → piensa (también en las repreguntas, no solo en la primera)
+//   speaking  → se queda en "piensa" hasta que el audio suena de verdad en la
+//               Pi (~0,5 s después); al terminar de hablar, aterriza en "te espera"
+//   listening → te espera (el agente terminó y espera tu repregunta)
+// Mientras la Pi graba la primera pregunta ("hey brumexa") o está en reposo,
+// manda ella: el agente todavía no sabe que estás hablando.
+lkSession.on('agent-state', (state) => {
+  if (_listen.phase || !lkSession.isActive()) return;
+  const wait = lkSession.getSilenceTimeout();
+  if (state === 'thinking') leds.thinking();
+  else if (state === 'speaking') leds.waiting(wait, { render: false });
+  else if (state === 'listening') leds.waiting(wait);
+});
 lkSession.on('speaker-stats', ({ peak }) => {
   // El log ya lo hace lib/livekit-session.js — acá solo sincronizamos el LED
   // (verde) con el volumen real de la voz del agente, mismo patrón que 'mic-stats'.
