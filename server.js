@@ -1641,7 +1641,7 @@ lkSession.on('speaker-stats', ({ peak }) => {
 // la Pi (el audio espera hasta ~1 s en la cola del parlante): se muestrea el
 // volumen alineado a la reproducción cada 50 ms.
 setInterval(() => {
-  if (lkSession.isActive()) leds.agentSpeaking(lkSession.speakerPeakAt(Date.now(), 60));
+  if (lkSession.isActive()) leds.agentSpeaking(lkSession.speakerPeakAt(Date.now(), 120));
 }, 50);
 // 'connected' es solo la SALA (room.connect() resuelto) — el agente puede
 // tardar hasta AGENT_DETECT_TIMEOUT_MS más en aparecer (o ni aparecer, y

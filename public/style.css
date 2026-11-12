@@ -1765,3 +1765,120 @@ body {
 .admin-link-row:last-child { margin-bottom: 0; }
 .admin-link-row__inputs { display: flex; gap: 8px; margin-top: 4px; }
 .admin-link-row__inputs .setup-input { flex: 1; min-width: 0; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Refinamiento 2026-11-12 — más minimalista y elegante.
+   Capa aparte que solo pisa tokens y la piel de los componentes (no cambia
+   estructura ni clases): tipografía del sistema, superficies suaves sin
+   bordes duros, esquinas más redondeadas, encabezado translúcido, controles
+   más finos. El violeta de Brumexa sigue siendo el acento.
+   ═══════════════════════════════════════════════════════════════════════ */
+:root {
+  --bg:        #f5f5f7;
+  --surface:   #ffffff;
+  --surface2:  #f2f2f5;
+  --border:    rgba(0, 0, 0, 0.07);
+  --border2:   rgba(0, 0, 0, 0.12);
+  --accent:    #6a4cf5;
+  --accent-h:  #5a3de6;
+  --text:      #1d1d1f;
+  --text2:     #6e6e73;
+  --muted:     #8e8e93;
+  --r:         16px;
+  --r-sm:      10px;
+  --tr:        0.2s cubic-bezier(.25, .1, .25, 1);
+  --shadow:    0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 20px rgba(0, 0, 0, 0.035);
+  --font-sans:    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', Roboto, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Segoe UI', Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b0b0d; --surface: #161618; --surface2: #202023;
+    --border: rgba(255, 255, 255, 0.07); --border2: rgba(255, 255, 255, 0.12);
+    --accent: #8b74ff; --accent-h: #9d8aff;
+    --text: #f5f5f7; --text2: #a1a1a6; --muted: #6e6e73;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b0b0d; --surface: #161618; --surface2: #202023;
+  --border: rgba(255, 255, 255, 0.07); --border2: rgba(255, 255, 255, 0.12);
+  --accent: #8b74ff; --accent-h: #9d8aff;
+  --text: #f5f5f7; --text2: #a1a1a6; --muted: #6e6e73;
+  --shadow: none;
+}
+
+body { font-size: 14.5px; letter-spacing: -0.003em; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+/* Encabezado translúcido */
+.site-header {
+  background: rgba(255, 255, 255, 0.72);
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 0.5px solid var(--border);
+}
+.brand-name { letter-spacing: -0.02em; }
+.tab-btn { font-weight: 500; font-size: 13px; transition: color var(--tr), background var(--tr); }
+.tab-btn.active { font-weight: 600; background: var(--surface2); }
+.theme-toggle { border-color: transparent; border-radius: 50%; }
+
+/* Tarjetas: superficie limpia, sombra mínima, sin borde duro */
+.page-wrap { gap: 1rem; }
+.card {
+  border: 0.5px solid var(--border); border-radius: var(--r);
+  box-shadow: var(--shadow); padding: 1.25rem 1.375rem;
+}
+.card-section-hdr { gap: 12px; align-items: center; }
+.card-section-icon {
+  width: 30px; height: 30px; margin-top: 0; border-radius: 9px; flex: none;
+  display: grid; place-items: center; background: var(--surface2); color: var(--text2); font-size: 15px;
+}
+.card-section-icon svg { width: 16px; height: 16px; }
+.card-section-title { font-size: 15.5px; font-weight: 600; letter-spacing: -0.015em; }
+.card-section-desc { font-size: 12.5px; color: var(--text2); line-height: 1.4; margin-top: 1px; }
+
+/* Grupos de secciones: rótulo chico, sin la línea */
+.section-group-label { font-size: 11.5px; font-weight: 600; letter-spacing: 0.05em; color: var(--muted); padding: 10px 4px 0; }
+.section-group-label::after { display: none; }
+
+/* Campos */
+.field-label { font-size: 13px; font-weight: 500; color: var(--text); }
+.field-hint { font-size: 12px; color: var(--text2); line-height: 1.45; }
+.setup-input, .select-input {
+  font-family: var(--font-sans); font-size: 14px; padding: 10px 12px;
+  background: var(--surface2); border: 1px solid transparent; border-radius: var(--r-sm);
+  transition: border-color var(--tr), box-shadow var(--tr), background var(--tr);
+}
+.setup-input:focus, .select-input:focus {
+  background: var(--surface); border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(106, 76, 245, 0.18);
+}
+
+/* Botones */
+.btn-connect {
+  border-radius: var(--r-sm); padding: 9px 16px; font-size: 13.5px; font-weight: 600; letter-spacing: -0.005em;
+}
+.btn-ghost {
+  border-radius: 8px; padding: 5px 11px; font-size: 12px; font-weight: 500;
+  border-color: var(--border2); color: var(--text);
+}
+.btn-ghost:hover { border-color: var(--border2); background: var(--surface2); color: var(--text); }
+.btn-ghost--accent { border-color: transparent; background: rgba(106, 76, 245, 0.1); color: var(--accent); }
+.btn-ghost--accent:hover { background: var(--accent); color: #fff; }
+
+/* Sliders: pista fina, perilla blanca con sombra */
+.gain-slider { height: 4px; border-radius: 99px; }
+.gain-slider::-webkit-slider-thumb {
+  width: 22px; height: 22px; margin-top: -9px; background: #fff; border: 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+}
+.gain-slider:hover::-webkit-slider-thumb { background: #fff; transform: scale(1.05); }
+.gain-slider:active::-webkit-slider-thumb { transform: scale(1.12); }
+.gain-slider::-moz-range-track { height: 4px; border-radius: 99px; }
+.gain-slider::-moz-range-progress { height: 4px; border-radius: 99px; }
+.gain-slider::-moz-range-thumb { width: 22px; height: 22px; background: #fff; border: 0; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28); }
+.gain-val { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text2); }
+
+/* Desplegables y avisos */
+.tech-details summary { font-size: 12.5px; color: var(--text2); }
+.flow-note { border-radius: var(--r-sm); }

@@ -20,7 +20,7 @@
        emergencia, sin internet real, y un <link rel=stylesheet> normal a
        un dominio externo sin ruta a internet traba el render entero. -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
-  <link rel="stylesheet" href="/style.css?v=25" />
+  <link rel="stylesheet" href="/style.css?v=26" />
   <style>
     #card-update.highlight-pulse {
       animation: card-highlight-pulse 1.3s ease-out;
@@ -906,7 +906,7 @@
         case 'piensa':  return st.think ? st.think(t, i, d, x, c) : c.think(0.6);
         case 'habla': {                               // una voz simulada: sílabas que suben y bajan
           const syl = t > 3400 ? 0 : Math.abs(Math.sin(t / 140)) * (0.55 + 0.45 * Math.sin(t / 900));
-          this._lvl = (this._lvl ?? 0) + (syl - (this._lvl ?? 0)) * (syl > (this._lvl ?? 0) ? 0.35 : 0.09);
+          this._lvl = (this._lvl ?? 0) + (syl - (this._lvl ?? 0)) * (syl > (this._lvl ?? 0) ? 0.14 : 0.045);
           return st.speak ? st.speak(t, i, d, x, c, this._lvl) : c.voice(0.2 + 0.8 * this._lvl);
         }
         case 'espera':  return st.wait ? st.wait(t, i, d, x, c, Math.exp(-t / (12000 * 0.52))) : c.listen(0.5);
