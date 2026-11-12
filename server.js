@@ -1630,8 +1630,13 @@ lkSession.on('speaker-stats', ({ peak }) => {
   // (verde) con el volumen real de la voz del agente, mismo patrón que 'mic-stats'.
   // "hey brumexa": la respuesta empezó a sonar → se termina el "pensando".
   if (_listen.phase === 'thinking' && peak / 32767 > 0.03) { _listen.phase = null; leds.waiting(lkSession.getSilenceTimeout()); }
-  leds.agentSpeaking(peak / 32767);
 });
+// Las luces de "Brumexa habla" siguen la voz cuando SUENA, no cuando llega a
+// la Pi (el audio espera hasta ~1 s en la cola del parlante): se muestrea el
+// volumen alineado a la reproducción cada 50 ms.
+setInterval(() => {
+  if (lkSession.isActive()) leds.agentSpeaking(lkSession.speakerPeakAt(Date.now(), 60));
+}, 50);
 // 'connected' es solo la SALA (room.connect() resuelto) — el agente puede
 // tardar hasta AGENT_DETECT_TIMEOUT_MS más en aparecer (o ni aparecer, y
 // disparar un reintento). El cometa tiene que seguir hasta la conexión
