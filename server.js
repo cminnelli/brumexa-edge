@@ -1601,6 +1601,19 @@ lkSession.on('mic-stats',     ({ peak, dbfs }) => {
 //   listening → te espera (el agente terminó y espera tu repregunta)
 // Mientras la Pi graba la primera pregunta ("hey brumexa") o está en reposo,
 // manda ella: el agente todavía no sabe que estás hablando.
+// Te despediste ("chau"): el agente avisa por brumexa.end. Se espera a que la
+// despedida termine de sonar en el parlante y se cierra igual que en el corte
+// por silencio (exhala, suena "desconectado", queda la ventana caliente).
+lkSession.on('agent-end', () => {
+  const t0 = Date.now();
+  const tick = setInterval(() => {
+    if (!lkSession.isActive()) return clearInterval(tick);
+    if (lkSession.isSpeakerBusy() && Date.now() - t0 < 10000) return;
+    clearInterval(tick);
+    console.log('[lk-session-evt] te despediste: cierro la charla');
+    lkSession.rest('goodbye').catch(() => {});
+  }, 200);
+});
 lkSession.on('agent-state', (state) => {
   if (_listen.phase || !lkSession.isActive()) return;
   const wait = lkSession.getSilenceTimeout();
