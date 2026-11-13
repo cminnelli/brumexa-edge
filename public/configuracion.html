@@ -195,6 +195,14 @@
     .ap-toast.show { opacity: 1; transform: translate(-50%, 0); }
     .ap-toast.bad { background: rgba(255,69,58,.85); }
 
+    .ap-alerts { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; padding: 0 4px; font: 11px/1.4 var(--ap-font); color: var(--muted); }
+    .ap-alert { display: inline-flex; align-items: center; gap: 5px; }
+    .ap-alert i { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+    .ap-alert small { font-size: 10px; opacity: .8; }
+    .ap-alert__seek { animation: ap-seek 2.1s ease-in-out infinite alternate; }
+    @keyframes ap-seek { from { transform: translateX(-2px); } to { transform: translateX(2px); } }
+    @media (prefers-reduced-motion: reduce) { .ap-alert__seek { animation: none; } }
+
     .ap-group { margin-top: 12px; border-radius: 12px; background: var(--surface2); overflow: hidden; font-family: var(--ap-font); }
     .ap-item {
       display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding: 6px 12px 6px 14px;
@@ -488,6 +496,14 @@
           <span class="ap-item__end"><span class="ap-stack" id="ap-stack"></span><svg class="ap-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
         </button>
         <div class="ap-collapse" id="ap-colors"><div class="ap-collapse__in"><div class="ap-roles" id="ap-roles"></div></div></div>
+      </div>
+
+      <!-- Avisos fijos (no se personalizan, valen para todos los estilos) —
+           mismos colores que lib/leds.js: brumexaError, wifiWeak, _serverDownBreathe. -->
+      <div class="ap-alerts" aria-label="Avisos de las luces">
+        <span class="ap-alert"><i style="background:#e8193a"></i>Sin Wi-Fi</span>
+        <span class="ap-alert"><i style="background:#e8702a"></i>Wi-Fi débil</span>
+        <span class="ap-alert"><i class="ap-alert__seek" style="background:#c41a80"></i>Sin servidor <small>(va y viene)</small></span>
       </div>
     </div>
 
