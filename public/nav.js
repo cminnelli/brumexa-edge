@@ -94,7 +94,7 @@
 // archivo, así no hay que sumarla a cada .html.
 (function () {
   const s = document.createElement('script');
-  s.src = '/update-overlay.js?v=1';
+  s.src = '/update-overlay.js?v=2';
   s.defer = true;
   document.head.appendChild(s);
 })();

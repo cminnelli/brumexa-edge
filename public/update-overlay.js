@@ -64,6 +64,15 @@
     background:var(--accent,#6d28d9);color:#fff;font:600 13px/1 -apple-system,system-ui,sans-serif}
   #bx-up .btn:focus-visible{outline:3px solid color-mix(in srgb,var(--accent,#6d28d9) 40%,transparent);outline-offset:2px}
   #bx-up[data-phase="failed"] .btn{display:inline-block}
+  #bx-up .cancel{display:none;margin:16px auto 0;padding:8px 18px;border-radius:99px;cursor:pointer;background:transparent;
+    border:1px solid color-mix(in srgb,var(--text,#000) 14%,transparent);color:var(--text,#1d1d1f);font:500 13px/1 -apple-system,system-ui,sans-serif;transition:background .2s}
+  #bx-up .cancel:hover:not(:disabled){background:color-mix(in srgb,var(--text,#000) 6%,transparent)}
+  #bx-up .cancel:disabled{opacity:.5;cursor:default}
+  #bx-up .cancel:focus-visible{outline:3px solid color-mix(in srgb,var(--accent,#6d28d9) 40%,transparent);outline-offset:2px}
+  #bx-up[data-cancel="1"] .cancel{display:inline-block}
+  #bx-up[data-phase="cancelled"] .icon{background:linear-gradient(145deg,#8e8e93,#636366);box-shadow:0 12px 28px -10px rgba(99,99,102,.5)}
+  #bx-up[data-phase="cancelled"] .leds,#bx-up[data-phase="cancelled"] .bar,#bx-up[data-phase="cancelled"] .step{display:none}
+  #bx-up[data-phase="cancelled"] .icon::after{content:"";width:22px;height:3px;border-radius:2px;background:#fff}
   #bx-up[data-phase="done"] .step,#bx-up[data-phase="failed"] .step{display:none}
   #bx-pill{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:2147482999;
     display:flex;align-items:center;gap:9px;max-width:calc(100% - 32px);padding:10px 16px;border-radius:99px;
@@ -103,9 +112,11 @@
         <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"><div class="fill"></div></div>
         <div class="step" aria-live="polite"><span></span><span></span></div>
         <p class="note">No la desenchufes. Tarda alrededor de un minuto y vuelve sola.</p>
+        <button type="button" class="cancel">Cancelar</button>
         <button type="button" class="btn">Entendido</button>
       </div>`;
     root.querySelector('.btn').addEventListener('click', unmount);
+    root.querySelector('.cancel').addEventListener('click', cancel);
     document.body.appendChild(root);
     for (const c of document.body.children) if (c !== root && c.id !== 'bx-pill') c.inert = true;
     document.documentElement.style.overflow = 'hidden';
@@ -126,17 +137,27 @@
   function render(pct, stepText, stepCount) {
     mount();
     root.dataset.phase = phase;
-    const title = phase === 'done' ? 'Lista' : phase === 'failed' ? 'No se pudo actualizar' : 'Actualizando Brumexa';
+    const title = phase === 'done' ? 'Lista' : phase === 'failed' ? 'No se pudo actualizar'
+      : phase === 'cancelled' ? 'Actualización cancelada' : 'Actualizando Brumexa';
     root.querySelector('h2').textContent = title;
     const v = short(info.newVersion || info.target);
+    const channel = info.branch === 'dev' ? 'canal Pruebas' : 'canal Estable';
     const who = info.source === 'admin' ? 'pedida desde el panel de administración' : 'pedida desde esta Brumexa';
     root.querySelector('.sub').textContent =
       phase === 'done' ? `Ya tiene la versión ${short(info.doneVersion)}. Recargando…`
       : phase === 'failed' ? (info.error || 'Algo falló durante la instalación.')
-      : `${v ? 'Versión ' + v : 'Última versión de ' + (info.branch || 'main')} · ${who}`;
+      : phase === 'cancelled' ? 'No se instaló nada.'
+      : `${v ? 'Versión ' + v : 'Última versión'} · ${channel} · ${who}`;
     root.querySelector('.note').textContent = phase === 'failed'
       ? 'Sigue funcionando con la versión que tenía. Podés volver a intentarlo.'
+      : phase === 'cancelled' ? 'Sigue funcionando con la versión que tenía.'
       : phase === 'done' ? 'Todo listo.' : 'No la desenchufes. Tarda alrededor de un minuto y vuelve sola.';
+    // Cancelar: solo mientras se puede (antes del cambio de carpetas).
+    const canCancel = phase === 'running' && (info.cancellable || info.cancelling);
+    root.dataset.cancel = canCancel ? '1' : '0';
+    const cb = root.querySelector('.cancel');
+    cb.disabled = !!info.cancelling;
+    cb.textContent = info.cancelling ? 'Cancelando…' : 'Cancelar';
     root.querySelector('.fill').style.width = pct + '%';
     root.querySelector('.bar').setAttribute('aria-valuenow', String(Math.round(pct)));
     const [a, b] = root.querySelectorAll('.step span');
@@ -174,6 +195,17 @@
     } else if (pill) { pill.remove(); pill = null; }
   }
 
+  async function cancel() {
+    info = { ...info, cancelling: true };
+    showRunning();
+    try {
+      const r = await fetch('/configuracion/update/cancel', { method: 'POST' });
+      if (!r.ok) info = { ...info, cancelling: false, cancellable: false };   // ya estaba terminando
+    } catch { info = { ...info, cancelling: false }; }
+    showRunning();
+    poll();
+  }
+
   async function poll() {
     let s = null;
     try {
@@ -200,6 +232,12 @@
         setTimeout(() => location.reload(), 2400);
         return;
       }
+      if (s.cancelled) {
+        phase = 'cancelled';
+        render(0, '', '');
+        setTimeout(unmount, 2600);
+        return;
+      }
       if (s.failed) {
         phase = 'failed';
         info = { ...info, error: s.error };
@@ -214,12 +252,12 @@
 
   function schedule() {
     clearTimeout(timer);
-    if (phase === 'done' || phase === 'failed') return;
+    if (phase === 'done' || phase === 'failed' || phase === 'cancelled') return;
     timer = setTimeout(poll, phase === 'running' || phase === 'restarting' ? 1000 : 4000);
   }
 
   // Si la pestaña estaba en segundo plano, mirar apenas vuelve.
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && phase !== 'done' && phase !== 'failed') poll(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && phase !== 'done' && phase !== 'failed' && phase !== 'cancelled') poll(); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', poll);
   else poll();
 })();

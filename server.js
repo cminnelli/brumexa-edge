@@ -1904,11 +1904,12 @@ setupLocalDebug(app, {
     livekitHealth:   _lastLivekitHealth,
   }),
 });
-const { requestUpdate } = setupConfiguracion(app, { lkSession, ragAuth, requestRoomToken, runCalibration, getLastCalibration, getEnvVal, leds, startMicMonitor, stopMicMonitor });
+const { requestUpdate, cancelUpdate } = setupConfiguracion(app, { lkSession, ragAuth, requestRoomToken, runCalibration, getLastCalibration, getEnvVal, leds, startMicMonitor, stopMicMonitor });
 // Admin → actualización a distancia (llega por el latido) y estado de la Pi
 // para el admin (versión, Wi-Fi, último error, última charla).
 require('./lib/remote-update').init({
   requestUpdate,
+  cancelUpdate,
   isBusy: () => lkSession.isActive() || questionCapture.isActive() || !!_listen.phase,
 });
 require('./lib/device-health').init({ lkSession, getWifiStatus: getWifiStatusAsync, getNetworkHealth: getWifiNetworkHealth });
