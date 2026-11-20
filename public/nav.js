@@ -89,3 +89,12 @@
   // Admin abre un diálogo (admin-link.js), no navega — cerrar el menú igual.
   menu.addEventListener('click', (e) => { if (e.target.closest('a')) setOpen(false); });
 })();
+
+// Pantalla "Actualizando Brumexa": la cargan todas las páginas a través de este
+// archivo, así no hay que sumarla a cada .html.
+(function () {
+  const s = document.createElement('script');
+  s.src = '/update-overlay.js?v=1';
+  s.defer = true;
+  document.head.appendChild(s);
+})();
