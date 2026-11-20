@@ -8,11 +8,11 @@
   const $ = (id) => document.getElementById(id);
 
   const STATES = {
-    ready:       { title: 'Lista para charlar', sub: 'Decí "Ei, Brumexa" para empezar.' },
-    talking:     { title: 'Charlando',          sub: 'Brumexa está en una conversación.' },
-    'weak-wifi': { title: 'Lista, con Wi-Fi débil', sub: 'Puede tardar un poco más en responder.' },
-    'no-server': { title: 'Sin servidor',       sub: 'Hay Wi-Fi, pero no llega a la nube de Brumexa. Se reconecta sola.' },
-    'no-wifi':   { title: 'Sin Wi-Fi',          sub: 'Revisá la red en Configuración.' },
+    ready:       { tab: 'Lista',        title: 'Lista para charlar', sub: 'Decí "Ei, Brumexa" para empezar.' },
+    talking:     { tab: 'Charlando',    title: 'Charlando',          sub: 'Brumexa está en una conversación.' },
+    'weak-wifi': { tab: 'Wi-Fi débil',  title: 'Lista, con Wi-Fi débil', sub: 'Puede tardar un poco más en responder.' },
+    'no-server': { tab: 'Sin servidor', title: 'Sin servidor',       sub: 'Hay Wi-Fi, pero no llega a la nube de Brumexa. Se reconecta sola.' },
+    'no-wifi':   { tab: 'Sin Wi-Fi',    title: 'Sin Wi-Fi',          sub: 'Revisá la red en Configuración.' },
   };
 
   function ago(iso) {
@@ -49,6 +49,7 @@
 
     const s = STATES[st.state] || STATES.ready;
     hero.dataset.state = st.state;
+    document.title = `Brumexa · ${s.tab}`;
     $('hero-title').textContent = s.title;
     $('hero-sub').textContent = s.sub;
     const c = orbColor(st.led);
