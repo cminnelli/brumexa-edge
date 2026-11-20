@@ -28,6 +28,7 @@
        un dominio externo sin ruta a internet traba el render entero. -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
   <link rel="stylesheet" href="/style.css?v=27" />
+  <link rel="stylesheet" href="/panel.css?v=1" />
 </head>
 <body>
 
@@ -87,6 +88,40 @@
   <!-- ── Layout principal — una sola columna, centrada, más minimalista ── -->
   <div class="panel-layout">
     <div class="panel-main">
+
+      <!-- § Cómo está Brumexa — lo principal del Panel (ver panel.js) -->
+      <section class="hero" id="hero" data-state="ready">
+        <div class="orb" aria-hidden="true"></div>
+        <h1 class="hero__title" id="hero-title">Brumexa</h1>
+        <p class="hero__sub" id="hero-sub">Mirando cómo está…</p>
+        <div class="hero__tiles">
+          <div class="tile">
+            <div class="tile__label"><span class="tile__dot" id="t-wifi-dot"></span>Wi-Fi</div>
+            <div class="tile__val" id="t-wifi-val">—</div>
+            <div class="tile__sub" id="t-wifi-sub"></div>
+          </div>
+          <div class="tile">
+            <div class="tile__label"><span class="tile__dot" id="t-server-dot"></span>Servidor</div>
+            <div class="tile__val" id="t-server-val">—</div>
+            <div class="tile__sub" id="t-server-sub"></div>
+          </div>
+          <div class="tile">
+            <div class="tile__label"><span class="tile__dot" id="t-talk-dot"></span>Última charla</div>
+            <div class="tile__val" id="t-talk-val">—</div>
+            <div class="tile__sub" id="t-talk-sub"></div>
+          </div>
+          <div class="tile">
+            <div class="tile__label"><span class="tile__dot" id="t-ver-dot"></span>Versión</div>
+            <div class="tile__val mono" id="t-ver-val">—</div>
+            <div class="tile__sub" id="t-ver-sub"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Conexión manual de voz y log — plegados: la Pi es para mirar, no para conectar -->
+      <details class="panel-advanced">
+        <summary>Conexión manual y registro <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></summary>
+        <div class="panel-advanced__body">
 
       <!-- § Conexión a LiveKit — todo lo de esta sesión vive acá adentro -->
       <div class="card">
@@ -254,6 +289,9 @@
         <ul id="log" class="event-log"></ul>
       </div>
 
+        </div>
+      </details>
+
     </div><!-- /panel-main -->
 
   </div><!-- /panel-layout -->
@@ -265,5 +303,6 @@
 <script src="/session-quick.js?v=1"></script>
 <script src="/admin-link.js?v=1"></script>
 <script src="/app.js?v=34"></script>
+<script src="/panel.js?v=1"></script>
 </body>
 </html>

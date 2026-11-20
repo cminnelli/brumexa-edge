@@ -1799,6 +1799,28 @@ app.get('/session/status', (_req, res) => {
   res.json(lkSession.getStatus());
 });
 
+// ─── GET /panel/status — lo que muestra la tarjeta grande del Panel ─────────
+// Una sola foto para "ver cómo está Brumexa": estado en palabras, color real
+// de la tira, Wi-Fi, servidor, última charla y versión.
+app.get('/panel/status', async (_req, res) => {
+  const health = await require('./lib/device-health').snapshot();
+  const offline = _offlineReason();
+  const talking = lkSession.isActive() || questionCapture.isActive() || !!_listen.phase;
+  const state = offline === 'wifi' ? 'no-wifi'
+    : offline === 'server' ? 'no-server'
+    : talking ? 'talking'
+    : getWifiNetworkHealth() === 'weak' ? 'weak-wifi'
+    : 'ready';
+  const last = leds.getRenderDiagnostics().lastRender;
+  res.json({
+    state,
+    led: last ? { r: last.r, g: last.g, b: last.b } : null,
+    serverUp: serverHealth.isUp(),
+    version: require('./lib/device-health').version(),
+    ...health,
+  });
+});
+
 // ─── GET /session/diag — estado detallado del pipeline de audio en la Pi ─────
 app.get('/session/diag', (_req, res) => {
   const status = lkSession.getStatus();
