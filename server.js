@@ -1985,6 +1985,7 @@ httpServer.listen(PORT, async () => {
   console.log(`\n  Brumexa-Edge corriendo en → http://localhost:${PORT}`);
   console.log(`  RAG API                 → ${process.env.RAG_API_URL || 'http://localhost:4000'}`);
   console.log(`  Device                  → ${DEVICE_CONFIGURED ? `✔ ${process.env.BRUMEXA_DEVICE_ID}` : '(no configurado)'}`);
+  console.log(`  Versión                 → ${(require('./lib/device-health').version() || '(sin git)').slice(0, 7)}`);
   console.log(`  Setup WiFi              → http://localhost:${PORT}/setup\n`);
 
   if (DEVICE_CONFIGURED) {
