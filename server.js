@@ -1927,6 +1927,21 @@ setupLocalDebug(app, {
   }),
 });
 const { requestUpdate, cancelUpdate } = setupConfiguracion(app, { lkSession, ragAuth, requestRoomToken, runCalibration, getLastCalibration, getEnvVal, leds, startMicMonitor, stopMicMonitor });
+// Recién actualizada (lib/configuracion.js deja data/just-updated.json antes de
+// reiniciar): chime de "conectada" + cometa de festejo, para que se note que
+// volvió con la versión nueva.
+function _celebrateIfJustUpdated() {
+  const fs = require('fs');
+  const marker = path.join(__dirname, 'data', 'just-updated.json');
+  if (!fs.existsSync(marker)) return;
+  try { fs.unlinkSync(marker); } catch { /* que no festeje dos veces */ }
+  console.log('[update] arrancó con la versión nueva → festejo');
+  setTimeout(() => {
+    try { leds.calibrationDone(true); } catch {}
+    try { soundEffects.playSound('livekit_conectado.wav'); } catch {}
+  }, 2500);
+}
+
 // Admin → actualización a distancia (llega por el latido) y estado de la Pi
 // para el admin (versión, Wi-Fi, último error, última charla).
 require('./lib/remote-update').init({
@@ -1934,6 +1949,8 @@ require('./lib/remote-update').init({
   cancelUpdate,
   isBusy: () => lkSession.isActive() || questionCapture.isActive() || !!_listen.phase,
 });
+// Cada cambio de etapa (tomó el pedido, instalando, falló…) sale en un latido ya.
+require('./lib/remote-update').onChange(() => deviceHeartbeat.nudge());
 require('./lib/device-health').init({ lkSession, getWifiStatus: getWifiStatusAsync, getNetworkHealth: getWifiNetworkHealth });
 setupSystemFixes(app);
 
@@ -2041,6 +2058,7 @@ httpServer.listen(PORT, async () => {
   // httpServer esté escuchando, los dos procesos pelearían por el mismo
   // GPIO al mismo tiempo. Ver scripts/boot.js para el detalle del handoff.
   leds.init();
+  _celebrateIfJustUpdated();
 
   // En Linux: maximizar el gain de captura ALSA (Capture/Mic/ADC → 100% cap)
   // Así el mic anda aunque no se haya abierto nunca la UI de grabación.
